@@ -5,6 +5,7 @@ from tp1_search.config import load_config, SearchConfig
 from tp1_search.sokoban.parser import parse_board
 from tp1_search.search.bfs import bfs
 from tp1_search.metrics.result import SearchResult
+from tp1_search.output.writer import write_replay
 
 
 # Mapeo de nombre de algoritmo a función de búsqueda
@@ -13,8 +14,8 @@ ALGORITHMS = {
 }
 
 
-def run_search(config: SearchConfig) -> SearchResult:
-    """Ejecuta la búsqueda según la configuración dada."""
+def run_search(config: SearchConfig):
+    """Ejecuta la búsqueda según la configuración dada. Retorna (result, board, initial_state)."""
     search_fn = ALGORITHMS.get(config.algorithm)
     if search_fn is None:
         raise NotImplementedError(
@@ -23,7 +24,8 @@ def run_search(config: SearchConfig) -> SearchResult:
         )
 
     board, initial_state = parse_board(config.board_path)
-    return search_fn(board, initial_state)
+    result = search_fn(board, initial_state)
+    return result, board, initial_state
 
 
 def print_result(result: SearchResult) -> None:
@@ -50,6 +52,11 @@ def main() -> None:
         "config",
         help="Ruta al archivo de configuración .toml",
     )
+    parser.add_argument(
+        "--save-replay",
+        action="store_true",
+        help="Guarda un archivo JSON de replay en results/raw/ para animar con tp1-animate",
+    )
     args = parser.parse_args()
 
     try:
@@ -64,8 +71,19 @@ def main() -> None:
         print(f"Heurística: {config.heuristic}")
     print()
 
-    result = run_search(config)
+    result, board, initial_state = run_search(config)
     print_result(result)
+
+    if args.save_replay:
+        replay_path = write_replay(
+            result=result,
+            board=board,
+            initial_state=initial_state,
+            board_path=config.board_path,
+            algorithm=config.algorithm,
+        )
+        print(f"\nReplay guardado en: {replay_path}")
+        print(f"Animar con: uv run tp1-animate {replay_path}")
 
 
 if __name__ == "__main__":
