@@ -3,7 +3,7 @@
 Sprites:
   - Caja:            ferno.png  (Fernet-Branca)
   - Objetivo:        vaso.png   (vaso con hielo)
-  - Caja en goal:    vaso (80 %) + ferno encima
+  - Caja en goal:    llenito.png
   - Pared:           rectángulo gris oscuro
   - Jugador:         joven (cabeza + cuerpo + piernas, dibujado)
   - HUD:             paso actual, algoritmo, resultado
@@ -80,7 +80,7 @@ def load_replay(path: str | Path) -> ReplayData:
 @dataclass
 class Sprites:
     box: pygame.Surface  # ferno normal
-    box_on_goal: pygame.Surface  # vaso (pequeño) + ferno encima
+    box_on_goal: pygame.Surface  # llenito
     goal: pygame.Surface  # vaso solo
 
 
@@ -89,24 +89,17 @@ def _scale(img: pygame.Surface, size: int) -> pygame.Surface:
 
 
 def load_sprites(cell: int) -> Sprites | None:
-    """Carga ferno.png y vaso.png desde assets/. Retorna None si faltan."""
+    """Carga ferno.png, vaso.png y llenito.png desde assets/. Retorna None si faltan."""
     try:
         raw_ferno = pygame.image.load(ASSETS_DIR / "ferno.png").convert_alpha()
         raw_vaso = pygame.image.load(ASSETS_DIR / "vaso.png").convert_alpha()
+        raw_llenito = pygame.image.load(ASSETS_DIR / "llenito.png").convert_alpha()
     except (FileNotFoundError, pygame.error):
         return None
 
     box = _scale(raw_ferno, cell)
     goal = _scale(raw_vaso, cell)
-
-    # Caja sobre objetivo: vaso al 75 % centrado + ferno encima
-    box_on_goal = pygame.Surface((cell, cell), pygame.SRCALPHA)
-    vaso_small = _scale(raw_vaso, int(cell * 0.75))
-    offset = (cell - vaso_small.get_width()) // 2
-    box_on_goal.blit(vaso_small, (offset, offset))
-    box_on_goal.blit(box, (0, 0))
-    # Borde verde para destacar que está en el objetivo
-    pygame.draw.rect(box_on_goal, C_ON_GOAL, (0, 0, cell, cell), 3)
+    box_on_goal = _scale(raw_llenito, cell)
 
     return Sprites(box=box, box_on_goal=box_on_goal, goal=goal)
 
