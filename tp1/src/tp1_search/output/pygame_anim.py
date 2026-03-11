@@ -3,7 +3,7 @@
 Sprites:
   - Caja:            ferno.png  (Fernet-Branca)
   - Objetivo:        vaso.png   (vaso con hielo)
-  - Caja en goal:    vaso (80 %) + ferno encima
+  - Caja en goal:    llenito.png
   - Pared:           rectángulo gris oscuro
   - Jugador:         joven (cabeza + cuerpo + piernas, dibujado)
   - HUD:             paso actual, algoritmo, resultado
@@ -79,9 +79,9 @@ def load_replay(path: str | Path) -> ReplayData:
 # ---------------------------------------------------------------------------
 @dataclass
 class Sprites:
-    box: pygame.Surface  # ferno.png
-    box_on_goal: pygame.Surface  # llenito.png (vaso con fernet)
-    goal: pygame.Surface  # vaso.png
+    box: pygame.Surface  # ferno normal
+    box_on_goal: pygame.Surface  # llenito
+    goal: pygame.Surface  # vaso solo
 
 
 def _scale(img: pygame.Surface, size: int) -> pygame.Surface:
@@ -97,11 +97,11 @@ def load_sprites(cell: int) -> Sprites | None:
     except (FileNotFoundError, pygame.error):
         return None
 
-    return Sprites(
-        box=_scale(raw_ferno, cell),
-        box_on_goal=_scale(raw_llenito, cell),
-        goal=_scale(raw_vaso, cell),
-    )
+    box = _scale(raw_ferno, cell)
+    goal = _scale(raw_vaso, cell)
+    box_on_goal = _scale(raw_llenito, cell)
+
+    return Sprites(box=box, box_on_goal=box_on_goal, goal=goal)
 
 
 # ---------------------------------------------------------------------------
