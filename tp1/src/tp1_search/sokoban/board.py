@@ -5,7 +5,7 @@ import numpy as np
 
 from tp1_search.types import Position
 
-
+# @TODO hablar en la presentación de esto
 def _compute_dead_squares(
     rows: int,
     cols: int,

@@ -24,7 +24,9 @@ def run_search(config: SearchConfig):
         )
 
     board, initial_state = parse_board(config.board_path)
-    result = search_fn(board, initial_state)
+    result = search_fn(
+        board, initial_state, dead_square_pruning=config.dead_square_pruning
+    )
     return result, board, initial_state
 
 
@@ -69,6 +71,7 @@ def main() -> None:
     print(f"Tablero:   {config.board_path}")
     if config.heuristic:
         print(f"Heurística: {config.heuristic}")
+    print(f"Dead square pruning: {'sí' if config.dead_square_pruning else 'no'}")
     print()
 
     result, board, initial_state = run_search(config)
