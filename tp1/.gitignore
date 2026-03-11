@@ -1,0 +1,25 @@
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual env
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Results (regenerables)
+results/raw/
+results/plots/
+results/animations/
