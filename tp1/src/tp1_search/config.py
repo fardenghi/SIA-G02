@@ -13,7 +13,6 @@ class SearchConfig:
     algorithm: str
     board_path: str
     heuristic: str | None = None  # solo para greedy / astar
-    dead_square_pruning: bool = True  # False para deshabilitar la poda de dead squares
 
     def validate(self) -> None:
         if self.algorithm not in VALID_ALGORITHMS:
@@ -44,7 +43,6 @@ def load_config(path: str | Path) -> SearchConfig:
         algorithm=search.get("algorithm", ""),
         board_path=search.get("board", ""),
         heuristic=search.get("heuristic"),
-        dead_square_pruning=search.get("dead_square_pruning", True),
     )
     config.validate()
     return config

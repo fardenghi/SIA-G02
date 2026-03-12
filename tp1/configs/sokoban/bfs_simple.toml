@@ -1,4 +1,3 @@
 [search]
 algorithm = "bfs"
-board = "boards/sokoban/level_04.txt"
-dead_square_pruning = true   # ← deshabilitar para comparar
+board = "boards/sokoban/level_05.txt"

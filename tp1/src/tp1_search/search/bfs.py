@@ -33,15 +33,12 @@ def _log(expanded: int, frontier: QueueFrontier, visited: set, start: float) -> 
     sys.stderr.flush()
 
 
-def bfs(
-    board: Board, initial_state: SokobanState, dead_square_pruning: bool = True
-) -> SearchResult:
+def bfs(board: Board, initial_state: SokobanState) -> SearchResult:
     """Breadth-First Search (graph-search).
 
     Explora el árbol nivel por nivel usando una cola FIFO.
     Garantiza encontrar la solución con menor cantidad de pasos.
     Usa un conjunto de visitados con bytes key para eficiencia de hashing.
-    Si dead_square_pruning=True, poda estados con cajas en dead squares.
     """
     start_time = time.time()
     expanded = 0
@@ -77,9 +74,7 @@ def bfs(
         if expanded % _LOG_INTERVAL == 0:
             _log(expanded, frontier, visited, start_time)
 
-        for child_state, action, step_cost in get_successors(
-            board, node.state, dead_square_pruning
-        ):
+        for child_state, action, step_cost in get_successors(board, node.state):
             key = _state_key(child_state, cols)
             if key in visited:
                 continue
