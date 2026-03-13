@@ -37,13 +37,14 @@ Todos los algoritmos usan **graph-search** con un conjunto de visitados para evi
 
 ## Heuristicas disponibles
 
-Para los algoritmos informados (Greedy y A*) se implementaron 3 heuristicas:
+Para los algoritmos informados (Greedy y A*) se implementaron 4 heuristicas:
 
 | Heuristica | Valor en config | Admisible | Descripcion |
 |------------|-----------------|-----------|-------------|
-| **Manhattan** | `manhattan` | Si | Suma de distancias Manhattan desde cada caja a su objetivo mas cercano. Es la heuristica mas informativa de las tres. |
+| **Manhattan** | `manhattan` | Si | Suma de distancias Manhattan desde cada caja a su objetivo mas cercano. |
 | **Euclidean** | `euclidean` | Si | Suma de distancias Euclidianas desde cada caja a su objetivo mas cercano. Siempre da valores <= Manhattan, por lo que guia menos la busqueda. |
 | **Dead Square** | `dead_square` | Si | Retorna infinito si alguna caja esta en un "dead square" (celda desde la cual ninguna caja puede llegar a ningun objetivo), sino retorna 0. Funciona como mecanismo de poda mas que como estimador de distancia. |
+| **Hungarian** | `hungarian` | Si | Suma de distancias Manhattan asignando de manera optima cajas a metas minimizando la distancia neta (Algoritmo Hungaro), incluyendo chequeo de Dead Squares. Requiere Scipy. |
 
 ### Deteccion de dead squares
 
@@ -103,14 +104,14 @@ heuristic = "<heuristica>"                 # Requerido solo para greedy y astar
 |-------|----------|
 | `algorithm` | `bfs`, `dfs`, `iddfs`, `greedy`, `astar` |
 | `board` | Ruta a cualquier archivo `.txt` en `boards/sokoban/` |
-| `heuristic` | `manhattan`, `euclidean`, `dead_square` |
+| `heuristic` | `manhattan`, `euclidean`, `dead_square`,`hungarian` |
 
 ### Validaciones
 
 - El algoritmo debe ser uno de los 5 listados
 - El archivo de tablero debe existir
 - Los algoritmos informados (`greedy`, `astar`) **deben** tener una heuristica
-- La heuristica debe ser una de las 3 listadas
+- La heuristica debe ser una de las 4 listadas
 
 ---
 
@@ -162,9 +163,9 @@ Camino (6 pasos): UP -> LEFT -> UP -> UP -> RIGHT -> DOWN
 | BFS | — | 7 | 7 |
 | DFS | — | 7 | 7 |
 | IDDFS | — | 7 | 7 |
-| Greedy | 3 | 7 | 21 |
-| A* | 3 | 7 | 21 |
-| **Total** | | | **63** |
+| Greedy | 4 | 7 | 28 |
+| A* | 4 | 7 | 28 |
+| **Total** | | | **77** |
 
 ---
 
@@ -173,7 +174,7 @@ Camino (6 pasos): UP -> LEFT -> UP -> UP -> RIGHT -> DOWN
 Crear un archivo TOML por nivel. Ejemplo para level_01:
 
 ```toml
-# configs/sokoban/bfs_l1.toml
+# configs/sokoban/bfs.toml
 [search]
 algorithm = "bfs"
 board = "boards/sokoban/level_01.txt"
@@ -182,7 +183,7 @@ board = "boards/sokoban/level_01.txt"
 Ejecutar:
 
 ```bash
-uv run tp1-search configs/sokoban/bfs_l1.toml
+uv run tp1-search configs/sokoban/bfs.toml
 ```
 
 Repetir cambiando `board` para cada nivel (`level_01.txt` a `level_07.txt`).
@@ -192,14 +193,14 @@ Repetir cambiando `board` para cada nivel (`level_01.txt` a `level_07.txt`).
 ### 2. DFS (sin heuristica) — 7 ejecuciones
 
 ```toml
-# configs/sokoban/dfs_l1.toml
+# configs/sokoban/dfs.toml
 [search]
 algorithm = "dfs"
 board = "boards/sokoban/level_01.txt"
 ```
 
 ```bash
-uv run tp1-search configs/sokoban/dfs_l1.toml
+uv run tp1-search configs/sokoban/dfs.toml
 ```
 
 Repetir para cada nivel.
@@ -209,26 +210,26 @@ Repetir para cada nivel.
 ### 3. IDDFS (sin heuristica) — 7 ejecuciones
 
 ```toml
-# configs/sokoban/iddfs_l1.toml
+# configs/sokoban/iddfs.toml
 [search]
 algorithm = "iddfs"
 board = "boards/sokoban/level_01.txt"
 ```
 
 ```bash
-uv run tp1-search configs/sokoban/iddfs_l1.toml
+uv run tp1-search configs/sokoban/iddfs.toml
 ```
 
 Repetir para cada nivel.
 
 ---
 
-### 4. Greedy (requiere heuristica) — 21 ejecuciones
+### 4. Greedy (requiere heuristica) — 28 ejecuciones
 
-3 heuristicas x 7 niveles. Ejemplo para manhattan + level_01:
+4 heuristicas x 7 niveles. Ejemplo para manhattan + level_01:
 
 ```toml
-# configs/sokoban/greedy_manhattan_l1.toml
+# configs/sokoban/greedy.toml
 [search]
 algorithm = "greedy"
 board = "boards/sokoban/level_01.txt"
@@ -236,7 +237,7 @@ heuristic = "manhattan"
 ```
 
 ```bash
-uv run tp1-search configs/sokoban/greedy_manhattan_l1.toml
+uv run tp1-search configs/sokoban/greedy.toml
 ```
 
 Variantes de heuristica para el mismo nivel:
@@ -257,16 +258,16 @@ board = "boards/sokoban/level_01.txt"
 heuristic = "dead_square"
 ```
 
-Repetir las 3 heuristicas para cada nivel (`level_01` a `level_07`).
+Repetir las 4 heuristicas para cada nivel (`level_01` a `level_07`).
 
 ---
 
-### 5. A* (requiere heuristica) — 21 ejecuciones
+### 5. A* (requiere heuristica) — 28 ejecuciones
 
-3 heuristicas x 7 niveles. Ejemplo para manhattan + level_01:
+4 heuristicas x 7 niveles. Ejemplo para manhattan + level_01:
 
 ```toml
-# configs/sokoban/astar_manhattan_l1.toml
+# configs/sokoban/astar.toml
 [search]
 algorithm = "astar"
 board = "boards/sokoban/level_01.txt"
@@ -274,7 +275,7 @@ heuristic = "manhattan"
 ```
 
 ```bash
-uv run tp1-search configs/sokoban/astar_manhattan_l1.toml
+uv run tp1-search configs/sokoban/astar.toml
 ```
 
 Variantes de heuristica para el mismo nivel:
@@ -295,7 +296,7 @@ board = "boards/sokoban/level_01.txt"
 heuristic = "dead_square"
 ```
 
-Repetir las 3 heuristicas para cada nivel (`level_01` a `level_07`).
+Repetir las 4 heuristicas para cada nivel (`level_01` a `level_07`).
 
 ---
 
@@ -350,7 +351,7 @@ uv run python scripts/make_plots.py --input results/benchmark/benchmark.csv --ou
 ### Paso 1: guardar el replay
 
 ```bash
-uv run tp1-search configs/sokoban/bfs_l1.toml --save-replay
+uv run tp1-search configs/sokoban/bfs.toml --save-replay
 ```
 
 Esto genera un archivo JSON en `results/raw/`.
@@ -481,7 +482,7 @@ tp1/
 │   ├── test_state.py           # Tests de Position y SokobanState
 │   ├── test_successors.py      # Tests de apply_action, get_successors, is_goal
 │   ├── test_search.py          # Tests de los 5 algoritmos
-│   └── test_heuristics.py      # Tests de las 3 heuristicas
+│   └── test_heuristics.py      # Tests de las 4 heuristicas
 └── src/tp1_search/
     ├── cli.py                  # Entry point (tp1-search)
     ├── config.py               # Carga y validacion de configuracion TOML
@@ -502,7 +503,7 @@ tp1/
     │   ├── actions.py          # apply_action (reglas de movimiento)
     │   ├── successors.py       # get_successors (generar movimientos validos)
     │   ├── goal.py             # is_goal (todas las cajas en objetivos)
-    │   └── heuristics.py       # 3 heuristicas + registro HEURISTICS
+    │   └── heuristics.py       # 4 heuristicas + registro HEURISTICS
     ├── output/
     │   ├── writer.py           # Serializador de replays JSON
     │   ├── animator_cli.py     # Entry point (tp1-animate)

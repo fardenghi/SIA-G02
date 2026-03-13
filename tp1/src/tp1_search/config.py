@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 VALID_ALGORITHMS = {"bfs", "dfs", "greedy", "astar", "iddfs"}
-VALID_HEURISTICS = {"manhattan", "euclidean", "dead_square"}
+VALID_HEURISTICS = {"manhattan", "euclidean", "dead_square", "hungarian"}
 
 
 @dataclass
