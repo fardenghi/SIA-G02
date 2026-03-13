@@ -1,0 +1,4 @@
+[search]
+algorithm = "astar"
+board = "boards/sokoban/level_04.txt"
+heuristic = "euclidean"
