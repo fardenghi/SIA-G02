@@ -95,7 +95,9 @@ Los archivos de configuracion viven en `configs/sokoban/`. Estructura:
 [search]
 algorithm = "<algoritmo>"                  # Requerido
 board = "boards/sokoban/<nivel>.txt"       # Requerido
-heuristic = "<heuristica>"                 # Requerido solo para greedy y astar
+heuristic = "<heuristica>"                 # String (1 heuristica)
+# o
+heuristic = ["<h1>", "<h2>"]              # Array (se combina con max(h1, h2, ...))
 ```
 
 ### Valores validos
@@ -104,14 +106,15 @@ heuristic = "<heuristica>"                 # Requerido solo para greedy y astar
 |-------|----------|
 | `algorithm` | `bfs`, `dfs`, `iddfs`, `greedy`, `astar` |
 | `board` | Ruta a cualquier archivo `.txt` en `boards/sokoban/` |
-| `heuristic` | `manhattan`, `euclidean`, `dead_square`,`hungarian` |
+| `heuristic` | String o array con `manhattan`, `euclidean`, `dead_square`, `hungarian` |
 
 ### Validaciones
 
 - El algoritmo debe ser uno de los 5 listados
 - El archivo de tablero debe existir
 - Los algoritmos informados (`greedy`, `astar`) **deben** tener una heuristica
-- La heuristica debe ser una de las 4 listadas
+- Si `heuristic` es array, se usa una heuristica compuesta: `max(h1, ..., hn)`
+- Cada heuristica del array debe ser una de las 3 listadas
 
 ---
 

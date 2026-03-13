@@ -5,7 +5,11 @@ from tp1_search.config import load_config, SearchConfig
 from tp1_search.sokoban.parser import parse_board
 from tp1_search.sokoban.board import Board
 from tp1_search.sokoban.state import SokobanState
-from tp1_search.sokoban.heuristics import HEURISTICS
+from tp1_search.sokoban.heuristics import (
+    HEURISTICS,
+    HeuristicFn,
+    combine_heuristics_max,
+)
 from tp1_search.search.bfs import bfs
 from tp1_search.search.dfs import dfs
 from tp1_search.search.iddfs import iddfs
@@ -27,6 +31,19 @@ INFORMED_ALGORITHMS = {
     "greedy": greedy,
     "astar": astar,
 }
+
+
+def _format_heuristics(names: tuple[str, ...]) -> str:
+    if len(names) == 1:
+        return names[0]
+    return f"max({', '.join(names)})"
+
+
+def _build_heuristic_fn(config: SearchConfig) -> tuple[HeuristicFn, str]:
+    heuristic_names = config.heuristics
+    heuristic_fns = [HEURISTICS[name] for name in heuristic_names]
+    heuristic_fn = combine_heuristics_max(heuristic_fns)
+    return heuristic_fn, _format_heuristics(heuristic_names)
 
 
 def render_board(board: Board, state: SokobanState, show_dead: bool = False) -> str:
@@ -109,7 +126,7 @@ def run_search(config: SearchConfig):
     board, initial_state = parse_board(config.board_path)
 
     if config.algorithm in INFORMED_ALGORITHMS:
-        heuristic_fn = HEURISTICS[config.heuristic]  # type: ignore[index]
+        heuristic_fn, _ = _build_heuristic_fn(config)
         result = INFORMED_ALGORITHMS[config.algorithm](
             board, initial_state, heuristic_fn
         )
@@ -163,8 +180,8 @@ def main() -> None:
 
     print(f"Algoritmo: {config.algorithm}")
     print(f"Tablero:   {config.board_path}")
-    if config.heuristic:
-        print(f"Heurística: {config.heuristic}")
+    if config.heuristics:
+        print(f"Heurística: {_format_heuristics(config.heuristics)}")
     print()
 
     board, initial_state = parse_board(config.board_path)
@@ -173,7 +190,7 @@ def main() -> None:
         print_dead_squares(board, initial_state)
 
     if config.algorithm in INFORMED_ALGORITHMS:
-        heuristic_fn = HEURISTICS[config.heuristic]  # type: ignore[index]
+        heuristic_fn, _ = _build_heuristic_fn(config)
         result = INFORMED_ALGORITHMS[config.algorithm](
             board, initial_state, heuristic_fn
         )

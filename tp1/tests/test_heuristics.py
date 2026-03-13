@@ -8,6 +8,7 @@ from tp1_search.sokoban.heuristics import (
     manhattan_heuristic,
     euclidean_heuristic,
     dead_square_heuristic,
+    combine_heuristics_max,
 )
 
 
@@ -141,3 +142,15 @@ class TestDeadSquare:
             boxes=frozenset({Position(3, 2)}),
         )
         assert dead_square_heuristic(board, state) == 0.0
+
+
+class TestCombinedHeuristics:
+    def test_max_of_manhattan_and_euclidean(self):
+        board, state = _simple_board()
+        combined = combine_heuristics_max([manhattan_heuristic, euclidean_heuristic])
+        assert combined(board, state) == manhattan_heuristic(board, state)
+
+    def test_inf_if_any_component_is_inf(self):
+        board, state = _dead_corner_board()
+        combined = combine_heuristics_max([manhattan_heuristic, dead_square_heuristic])
+        assert combined(board, state) == math.inf

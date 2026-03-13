@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Callable
+from typing import Callable, Sequence
 
 from tp1_search.sokoban.board import Board
 from tp1_search.sokoban.state import SokobanState
@@ -116,3 +116,20 @@ HEURISTICS: dict[str, HeuristicFn] = {
     "dead_square": dead_square_heuristic,
     "hungarian": hungarian_heuristic
 }
+
+
+def combine_heuristics_max(heuristics: Sequence[HeuristicFn]) -> HeuristicFn:
+    """Combina múltiples heurísticas usando max(h1, ..., hn).
+
+    Esta estrategia mantiene el lower bound más informativo de todas.
+    """
+    if not heuristics:
+        raise ValueError("Se requiere al menos una heurística para combinar")
+
+    if len(heuristics) == 1:
+        return heuristics[0]
+
+    def _combined(board: Board, state: SokobanState) -> float:
+        return max(h(board, state) for h in heuristics)
+
+    return _combined
