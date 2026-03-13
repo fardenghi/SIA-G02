@@ -1,4 +1,4 @@
 [search]
 algorithm = "astar"
-board = "boards/sokoban/level_04.txt"
-heuristic = "euclidean"
+board = "boards/sokoban/level_08.txt"
+heuristic = "manhattan"

@@ -50,6 +50,17 @@ def _impossible_board():
     return parse_board_string("#####\n#$  #\n#   #\n#  .#\n# @ #\n#####")
 
 
+def _astar_counterexample_board():
+    """Tablero donde A* con visited-al-generar puede dar subóptimo.
+
+    Este caso regresiona a costo 22 con la versión incorrecta de A* y
+    debe devolver 20 (igual que BFS/IDDFS) con la implementación correcta.
+    """
+    return parse_board_string(
+        "########\n#@     #\n#  $   #\n#     .#\n#  $####\n# .  # #\n########"
+    )
+
+
 def _validate_path(board, initial_state, result):
     """Helper: verifica que el camino retornado lleva al goal."""
     current = initial_state
@@ -297,3 +308,14 @@ class TestAStar:
         astar_result = astar(board, state, manhattan_heuristic)
         assert astar_result.cost == bfs_result.cost  # misma optimalidad
         assert astar_result.expanded_nodes <= bfs_result.expanded_nodes
+
+    def test_optimality_regression_case(self):
+        """A* con manhattan debe empatar costo óptimo de BFS en este caso."""
+        board, state = _astar_counterexample_board()
+        bfs_result = bfs(board, state)
+        astar_result = astar(board, state, manhattan_heuristic)
+
+        assert bfs_result.success is True
+        assert astar_result.success is True
+        assert bfs_result.cost == 20
+        assert astar_result.cost == bfs_result.cost
