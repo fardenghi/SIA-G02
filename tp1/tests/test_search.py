@@ -2,6 +2,15 @@ from tp1_search.sokoban.parser import parse_board_string
 from tp1_search.sokoban.actions import apply_action
 from tp1_search.sokoban.goal import is_goal
 from tp1_search.search.bfs import bfs
+from tp1_search.search.dfs import dfs
+from tp1_search.search.iddfs import iddfs
+from tp1_search.search.greedy import greedy
+from tp1_search.search.astar import astar
+from tp1_search.sokoban.heuristics import (
+    manhattan_heuristic,
+    euclidean_heuristic,
+    dead_square_heuristic,
+)
 
 
 def _simple_board():
@@ -41,6 +50,20 @@ def _impossible_board():
     return parse_board_string("#####\n#$  #\n#   #\n#  .#\n# @ #\n#####")
 
 
+def _validate_path(board, initial_state, result):
+    """Helper: verifica que el camino retornado lleva al goal."""
+    current = initial_state
+    for direction in result.path:
+        current = apply_action(board, current, direction)
+        assert current is not None
+    assert is_goal(board, current)
+
+
+# =========================================================================
+# BFS
+# =========================================================================
+
+
 class TestBFS:
     def test_finds_solution(self):
         board, state = _simple_board()
@@ -54,14 +77,7 @@ class TestBFS:
         board, state = _simple_board()
         result = bfs(board, state)
         assert result.success
-
-        # Reproducir el camino
-        current = state
-        for direction in result.path:
-            current = apply_action(board, current, direction)
-            assert current is not None
-
-        assert is_goal(board, current)
+        _validate_path(board, state, result)
 
     def test_solution_is_optimal(self):
         """BFS debe encontrar el camino más corto."""
@@ -89,3 +105,195 @@ class TestBFS:
         result = bfs(board, state)
         assert result.expanded_nodes > 0
         assert result.time_elapsed >= 0
+
+
+# =========================================================================
+# DFS
+# =========================================================================
+
+
+class TestDFS:
+    def test_finds_solution(self):
+        board, state = _simple_board()
+        result = dfs(board, state)
+        assert result.success is True
+        assert result.cost > 0
+        assert len(result.path) == result.cost
+
+    def test_solution_is_valid(self):
+        board, state = _simple_board()
+        result = dfs(board, state)
+        assert result.success
+        _validate_path(board, state, result)
+
+    def test_already_solved(self):
+        board, state = _already_solved()
+        result = dfs(board, state)
+        assert result.success is True
+        assert result.cost == 0
+        assert result.path == []
+
+    def test_impossible_returns_failure(self):
+        board, state = _impossible_board()
+        result = dfs(board, state)
+        assert result.success is False
+        assert result.path == []
+
+    def test_metrics_populated(self):
+        board, state = _simple_board()
+        result = dfs(board, state)
+        assert result.expanded_nodes > 0
+        assert result.time_elapsed >= 0
+
+
+# =========================================================================
+# IDDFS
+# =========================================================================
+
+
+class TestIDDFS:
+    def test_finds_solution(self):
+        board, state = _simple_board()
+        result = iddfs(board, state)
+        assert result.success is True
+        assert result.cost > 0
+        assert len(result.path) == result.cost
+
+    def test_solution_is_valid(self):
+        board, state = _simple_board()
+        result = iddfs(board, state)
+        assert result.success
+        _validate_path(board, state, result)
+
+    def test_solution_is_optimal(self):
+        """IDDFS debe encontrar la solución con menor profundidad."""
+        board, state = _simple_board()
+        result = iddfs(board, state)
+        assert result.cost == 6
+
+    def test_already_solved(self):
+        board, state = _already_solved()
+        result = iddfs(board, state)
+        assert result.success is True
+        assert result.cost == 0
+        assert result.path == []
+
+    def test_impossible_returns_failure(self):
+        board, state = _impossible_board()
+        result = iddfs(board, state)
+        assert result.success is False
+        assert result.path == []
+
+    def test_metrics_populated(self):
+        board, state = _simple_board()
+        result = iddfs(board, state)
+        assert result.expanded_nodes > 0
+        assert result.time_elapsed >= 0
+
+
+# =========================================================================
+# Greedy (con manhattan)
+# =========================================================================
+
+
+class TestGreedy:
+    def test_finds_solution(self):
+        board, state = _simple_board()
+        result = greedy(board, state, manhattan_heuristic)
+        assert result.success is True
+        assert result.cost > 0
+
+    def test_solution_is_valid(self):
+        board, state = _simple_board()
+        result = greedy(board, state, manhattan_heuristic)
+        assert result.success
+        _validate_path(board, state, result)
+
+    def test_already_solved(self):
+        board, state = _already_solved()
+        result = greedy(board, state, manhattan_heuristic)
+        assert result.success is True
+        assert result.cost == 0
+        assert result.path == []
+
+    def test_impossible_returns_failure(self):
+        board, state = _impossible_board()
+        result = greedy(board, state, manhattan_heuristic)
+        assert result.success is False
+        assert result.path == []
+
+    def test_euclidean_finds_solution(self):
+        board, state = _simple_board()
+        result = greedy(board, state, euclidean_heuristic)
+        assert result.success is True
+        _validate_path(board, state, result)
+
+    def test_dead_square_finds_solution(self):
+        board, state = _simple_board()
+        result = greedy(board, state, dead_square_heuristic)
+        assert result.success is True
+        _validate_path(board, state, result)
+
+    def test_metrics_populated(self):
+        board, state = _simple_board()
+        result = greedy(board, state, manhattan_heuristic)
+        assert result.expanded_nodes > 0
+        assert result.time_elapsed >= 0
+
+
+# =========================================================================
+# A*
+# =========================================================================
+
+
+class TestAStar:
+    def test_finds_solution(self):
+        board, state = _simple_board()
+        result = astar(board, state, manhattan_heuristic)
+        assert result.success is True
+        assert result.cost > 0
+
+    def test_solution_is_valid(self):
+        board, state = _simple_board()
+        result = astar(board, state, manhattan_heuristic)
+        assert result.success
+        _validate_path(board, state, result)
+
+    def test_solution_is_optimal(self):
+        """A* con heurística admisible debe encontrar la solución óptima."""
+        board, state = _simple_board()
+        result = astar(board, state, manhattan_heuristic)
+        assert result.cost == 6
+
+    def test_optimal_with_euclidean(self):
+        """A* con euclidiana (admisible) también debe dar óptimo."""
+        board, state = _simple_board()
+        result = astar(board, state, euclidean_heuristic)
+        assert result.cost == 6
+
+    def test_already_solved(self):
+        board, state = _already_solved()
+        result = astar(board, state, manhattan_heuristic)
+        assert result.success is True
+        assert result.cost == 0
+        assert result.path == []
+
+    def test_impossible_returns_failure(self):
+        board, state = _impossible_board()
+        result = astar(board, state, manhattan_heuristic)
+        assert result.success is False
+        assert result.path == []
+
+    def test_metrics_populated(self):
+        board, state = _simple_board()
+        result = astar(board, state, manhattan_heuristic)
+        assert result.expanded_nodes > 0
+        assert result.time_elapsed >= 0
+
+    def test_astar_expands_less_than_bfs(self):
+        """A* con buena heurística debe expandir menos nodos que BFS."""
+        board, state = _simple_board()
+        bfs_result = bfs(board, state)
+        astar_result = astar(board, state, manhattan_heuristic)
+        assert astar_result.cost == bfs_result.cost  # misma optimalidad
+        assert astar_result.expanded_nodes <= bfs_result.expanded_nodes

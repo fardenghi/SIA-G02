@@ -5,14 +5,27 @@ from tp1_search.config import load_config, SearchConfig
 from tp1_search.sokoban.parser import parse_board
 from tp1_search.sokoban.board import Board
 from tp1_search.sokoban.state import SokobanState
+from tp1_search.sokoban.heuristics import HEURISTICS
 from tp1_search.search.bfs import bfs
+from tp1_search.search.dfs import dfs
+from tp1_search.search.iddfs import iddfs
+from tp1_search.search.greedy import greedy
+from tp1_search.search.astar import astar
 from tp1_search.metrics.result import SearchResult
 from tp1_search.output.writer import write_replay
 
 
-# Mapeo de nombre de algoritmo a función de búsqueda
-ALGORITHMS = {
+# Algoritmos no informados: (board, state) -> SearchResult
+UNINFORMED_ALGORITHMS = {
     "bfs": bfs,
+    "dfs": dfs,
+    "iddfs": iddfs,
+}
+
+# Algoritmos informados: (board, state, heuristic) -> SearchResult
+INFORMED_ALGORITHMS = {
+    "greedy": greedy,
+    "astar": astar,
 }
 
 
@@ -86,15 +99,23 @@ def print_dead_squares(board: Board, state: SokobanState) -> None:
 
 def run_search(config: SearchConfig):
     """Ejecuta la búsqueda según la configuración dada. Retorna (result, board, initial_state)."""
-    search_fn = ALGORITHMS.get(config.algorithm)
-    if search_fn is None:
+    all_algorithms = set(UNINFORMED_ALGORITHMS) | set(INFORMED_ALGORITHMS)
+    if config.algorithm not in all_algorithms:
         raise NotImplementedError(
             f"Algoritmo '{config.algorithm}' aún no implementado. "
-            f"Disponibles: {', '.join(sorted(ALGORITHMS))}"
+            f"Disponibles: {', '.join(sorted(all_algorithms))}"
         )
 
     board, initial_state = parse_board(config.board_path)
-    result = search_fn(board, initial_state)
+
+    if config.algorithm in INFORMED_ALGORITHMS:
+        heuristic_fn = HEURISTICS[config.heuristic]  # type: ignore[index]
+        result = INFORMED_ALGORITHMS[config.algorithm](
+            board, initial_state, heuristic_fn
+        )
+    else:
+        result = UNINFORMED_ALGORITHMS[config.algorithm](board, initial_state)
+
     return result, board, initial_state
 
 
@@ -151,8 +172,13 @@ def main() -> None:
     if args.show_dead_squares:
         print_dead_squares(board, initial_state)
 
-    search_fn = ALGORITHMS[config.algorithm]
-    result = search_fn(board, initial_state)
+    if config.algorithm in INFORMED_ALGORITHMS:
+        heuristic_fn = HEURISTICS[config.heuristic]  # type: ignore[index]
+        result = INFORMED_ALGORITHMS[config.algorithm](
+            board, initial_state, heuristic_fn
+        )
+    else:
+        result = UNINFORMED_ALGORITHMS[config.algorithm](board, initial_state)
 
     print_result(result)
 

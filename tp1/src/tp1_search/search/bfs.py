@@ -1,4 +1,3 @@
-import struct
 import sys
 import time
 
@@ -8,17 +7,10 @@ from tp1_search.sokoban.successors import get_successors
 from tp1_search.sokoban.goal import is_goal
 from tp1_search.search.node import SearchNode
 from tp1_search.search.frontier import QueueFrontier
+from tp1_search.search.state_key import state_key
 from tp1_search.metrics.result import SearchResult
 
 _LOG_INTERVAL = 10_000  # imprimir progreso cada N nodos expandidos
-
-
-def _state_key(state: SokobanState, cols: int) -> bytes:
-    """Convierte un estado a bytes para hashing eficiente en el visited set."""
-    player_idx = state.player.row * cols + state.player.col
-    box_idxs = sorted(b.row * cols + b.col for b in state.boxes)
-    n = len(box_idxs)
-    return struct.pack(f"{1 + n}H", player_idx, *box_idxs)
 
 
 def _log(expanded: int, frontier: QueueFrontier, visited: set, start: float) -> None:
@@ -59,7 +51,7 @@ def bfs(board: Board, initial_state: SokobanState) -> SearchResult:
 
     frontier = QueueFrontier()
     frontier.push(root)
-    visited: set[bytes] = {_state_key(initial_state, cols)}
+    visited: set[bytes] = {state_key(initial_state, cols)}
 
     print(
         f"[BFS] inicio — tablero {board.rows}×{board.cols}, "
@@ -75,7 +67,7 @@ def bfs(board: Board, initial_state: SokobanState) -> SearchResult:
             _log(expanded, frontier, visited, start_time)
 
         for child_state, action, step_cost in get_successors(board, node.state):
-            key = _state_key(child_state, cols)
+            key = state_key(child_state, cols)
             if key in visited:
                 continue
 

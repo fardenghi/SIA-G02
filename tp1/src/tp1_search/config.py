@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 VALID_ALGORITHMS = {"bfs", "dfs", "greedy", "astar", "iddfs"}
+VALID_HEURISTICS = {"manhattan", "euclidean", "dead_square"}
 
 
 @dataclass
@@ -24,6 +25,11 @@ class SearchConfig:
             raise FileNotFoundError(f"Tablero no encontrado: {self.board_path}")
         if self.algorithm in {"greedy", "astar"} and self.heuristic is None:
             raise ValueError(f"El algoritmo '{self.algorithm}' requiere una heurística")
+        if self.heuristic is not None and self.heuristic not in VALID_HEURISTICS:
+            raise ValueError(
+                f"Heurística '{self.heuristic}' no válida. "
+                f"Opciones: {', '.join(sorted(VALID_HEURISTICS))}"
+            )
 
 
 def load_config(path: str | Path) -> SearchConfig:
