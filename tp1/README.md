@@ -365,7 +365,7 @@ uv run tp1-animate results/raw/<archivo_generado>.json
 
 | Parametro | Default | Descripcion |
 |-----------|---------|-------------|
-| `--speed` | 2.0 | Frames por segundo |
+| `--speed` | 2.0 | Frames por segundo (velocidad inicial) |
 | `--cell-size` | 64 | Tamanio en pixeles de cada celda |
 
 Ejemplo:
@@ -373,6 +373,20 @@ Ejemplo:
 ```bash
 uv run tp1-animate results/raw/replay.json --speed 3 --cell-size 64
 ```
+
+### Controles de teclado durante la animacion
+
+| Tecla | Accion |
+|-------|--------|
+| `UP` | Aumentar velocidad (+0.5 FPS) |
+| `DOWN` | Disminuir velocidad (-0.5 FPS) |
+| `SPACE` | Pausar / reanudar |
+| `RIGHT` | Avanzar un frame (solo en pausa) |
+| `LEFT` | Retroceder un frame (solo en pausa) |
+| `R` | Reiniciar animacion desde el inicio |
+| `Q` | Salir |
+
+La velocidad actual se muestra en el HUD inferior. Rango permitido: 0.5 a 30.0 FPS.
 
 ---
 

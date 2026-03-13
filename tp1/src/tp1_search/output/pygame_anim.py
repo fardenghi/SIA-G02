@@ -23,6 +23,7 @@ C_WALL = (60, 60, 60)
 C_WALL_HI = (90, 90, 90)
 C_GOAL_RING = (218, 165, 32)  # aro dorado cuando no hay sprite
 C_PLAYER_SKIN = (255, 200, 140)
+C_PLAYER_HAIR = (190, 40, 30)
 C_PLAYER_SHIRT = (30, 100, 200)
 C_PLAYER_PANTS = (40, 40, 100)
 C_HUD_BG = (30, 30, 30)
@@ -104,6 +105,15 @@ def load_sprites(cell: int) -> Sprites | None:
     return Sprites(box=box, box_on_goal=box_on_goal, goal=goal)
 
 
+def load_background(width: int, height: int) -> pygame.Surface | None:
+    """Carga y escala el fondo bolo.png al tamaño del tablero."""
+    try:
+        raw_bg = pygame.image.load(ASSETS_DIR / "bolo.png").convert()
+    except (FileNotFoundError, pygame.error):
+        return None
+    return pygame.transform.smoothscale(raw_bg, (width, height))
+
+
 # ---------------------------------------------------------------------------
 # Funciones de dibujo
 # ---------------------------------------------------------------------------
@@ -177,6 +187,7 @@ def draw_player(surf: pygame.Surface, row: int, col: int, cell: int) -> None:
     head_r = int(10 * s)
     head_cy = cy - int(14 * s)
     pygame.draw.circle(surf, C_PLAYER_SKIN, (cx, head_cy), head_r)
+    pygame.draw.circle(surf, C_PLAYER_HAIR, (cx, head_cy - int(3 * s)), int(7 * s))
 
     body_top = head_cy + head_r
     body_h = int(18 * s)
@@ -207,6 +218,7 @@ def draw_hud(
     board_h: int,
     font: pygame.font.Font,
     small_font: pygame.font.Font,
+    current_fps: float | None = None,
 ) -> None:
     total_steps = len(replay.frames) - 1
     pygame.draw.rect(surf, C_HUD_BG, (0, board_h, surf.get_width(), hud_h))
@@ -235,6 +247,13 @@ def draw_hud(
         (surf.get_width() - 90, board_h + 28),
     )
 
+    if current_fps is not None:
+        speed_txt = f"Velocidad: {current_fps:.1f} FPS  [UP/DOWN]"
+        surf.blit(
+            small_font.render(speed_txt, True, C_HUD_TEXT),
+            (surf.get_width() - 250, board_h + 46),
+        )
+
 
 def draw_frame(
     surf: pygame.Surface,
@@ -245,13 +264,18 @@ def draw_frame(
     small_font: pygame.font.Font,
     hud_h: int,
     sprites: Sprites | None,
+    current_fps: float | None = None,
+    board_bg: pygame.Surface | None = None,
 ) -> None:
     board_h = replay.rows * cell
     frame = replay.frames[frame_idx]
     player_pos = tuple(frame["player"])
     box_set = {tuple(b) for b in frame["boxes"]}
 
-    surf.fill(C_BG)
+    if board_bg is not None:
+        surf.blit(board_bg, (0, 0))
+    else:
+        surf.fill(C_BG)
 
     for r in range(replay.rows):
         for c in range(replay.cols):
@@ -267,12 +291,17 @@ def draw_frame(
                 draw_box(surf, r, c, cell, on_goal=False, sprites=sprites)
 
     draw_player(surf, int(player_pos[0]), int(player_pos[1]), cell)
-    draw_hud(surf, replay, frame_idx, hud_h, board_h, font, small_font)
+    draw_hud(surf, replay, frame_idx, hud_h, board_h, font, small_font, current_fps)
 
 
 # ---------------------------------------------------------------------------
 # Loop principal
 # ---------------------------------------------------------------------------
+
+
+_FPS_MIN = 0.5
+_FPS_MAX = 30.0
+_FPS_STEP = 0.5
 
 
 def run_animation(
@@ -292,8 +321,9 @@ def run_animation(
     height = replay.rows * cell_size + hud_h
 
     screen = pygame.display.set_mode((width, height))
+    board_bg = load_background(width, replay.rows * cell_size)
 
-    # load_sprites DEBE ir después de set_mode: convert_alpha() necesita el display
+    # load_sprites DEBE ir despues de set_mode: convert_alpha() necesita el display
     sprites = load_sprites(cell_size)
     clock = pygame.time.Clock()
 
@@ -302,8 +332,10 @@ def run_animation(
 
     frame_idx = 0
     total_frames = len(replay.frames)
-    ms_per_frame = int(1000 / fps)
+    current_fps = max(_FPS_MIN, min(_FPS_MAX, fps))
+    ms_per_frame = int(1000 / current_fps)
     elapsed = 0
+    paused = False
     finished = False
 
     running = True
@@ -313,10 +345,30 @@ def run_animation(
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    running = False
+                elif event.key == pygame.K_UP:
+                    current_fps = min(_FPS_MAX, current_fps + _FPS_STEP)
+                    ms_per_frame = int(1000 / current_fps)
+                elif event.key == pygame.K_DOWN:
+                    current_fps = max(_FPS_MIN, current_fps - _FPS_STEP)
+                    ms_per_frame = int(1000 / current_fps)
+                elif event.key == pygame.K_SPACE:
+                    paused = not paused
+                elif event.key == pygame.K_r:
+                    frame_idx = 0
+                    elapsed = 0
+                    finished = False
+                    paused = False
+                elif event.key == pygame.K_RIGHT and paused:
+                    if frame_idx < total_frames - 1:
+                        frame_idx += 1
+                elif event.key == pygame.K_LEFT and paused:
+                    if frame_idx > 0:
+                        frame_idx -= 1
 
-        if not finished:
+        if not finished and not paused:
             elapsed += dt
             if elapsed >= ms_per_frame:
                 elapsed = 0
@@ -326,7 +378,16 @@ def run_animation(
                     finished = True
 
         draw_frame(
-            screen, replay, frame_idx, cell_size, font, small_font, hud_h, sprites
+            screen,
+            replay,
+            frame_idx,
+            cell_size,
+            font,
+            small_font,
+            hud_h,
+            sprites,
+            current_fps,
+            board_bg,
         )
         pygame.display.flip()
 

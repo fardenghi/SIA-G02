@@ -118,10 +118,11 @@ def _depth_limited_search(
     expanded = 0
     cutoff_occurred = False
 
-    # Stack iterativo: (nodo, ya_expandido)
     stack: list[SearchNode] = [root]
-    # Visited set local a esta iteración para graph-search
-    visited: set[bytes] = {state_key(root.state, cols)}
+    # Visited dict: state_key -> menor profundidad a la que fue alcanzado.
+    # Permite re-explorar un estado si se llega por un camino mas corto,
+    # lo cual es necesario para garantizar optimalidad en IDDFS.
+    visited: dict[bytes, int] = {state_key(root.state, cols): 0}
 
     while stack:
         node = stack.pop()
@@ -134,10 +135,13 @@ def _depth_limited_search(
 
         for child_state, action, step_cost in get_successors(board, node.state):
             key = state_key(child_state, cols)
-            if key in visited:
+            child_depth = node.depth + 1
+
+            prev_depth = visited.get(key)
+            if prev_depth is not None and prev_depth <= child_depth:
                 continue
 
-            visited.add(key)
+            visited[key] = child_depth
             child_node = node.expand_child(child_state, action, step_cost)
 
             if is_goal(board, child_state):
