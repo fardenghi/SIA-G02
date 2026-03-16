@@ -3,28 +3,136 @@ import sys
 
 from tp1_search.config import load_config, SearchConfig
 from tp1_search.sokoban.parser import parse_board
+from tp1_search.sokoban.board import Board
+from tp1_search.sokoban.state import SokobanState
+from tp1_search.sokoban.heuristics import (
+    HEURISTICS,
+    HeuristicFn,
+    combine_heuristics_max,
+)
 from tp1_search.search.bfs import bfs
+from tp1_search.search.dfs import dfs
+from tp1_search.search.iddfs import iddfs
+from tp1_search.search.greedy import greedy
+from tp1_search.search.astar import astar
 from tp1_search.metrics.result import SearchResult
 from tp1_search.output.writer import write_replay
 
 
-# Mapeo de nombre de algoritmo a función de búsqueda
-ALGORITHMS = {
+# Algoritmos no informados: (board, state) -> SearchResult
+UNINFORMED_ALGORITHMS = {
     "bfs": bfs,
+    "dfs": dfs,
+    "iddfs": iddfs,
 }
+
+# Algoritmos informados: (board, state, heuristic) -> SearchResult
+INFORMED_ALGORITHMS = {
+    "greedy": greedy,
+    "astar": astar,
+}
+
+
+def _format_heuristics(names: tuple[str, ...]) -> str:
+    if len(names) == 1:
+        return names[0]
+    return f"max({', '.join(names)})"
+
+
+def _build_heuristic_fn(config: SearchConfig) -> tuple[HeuristicFn, str]:
+    heuristic_names = config.heuristics
+    heuristic_fns = [HEURISTICS[name] for name in heuristic_names]
+    heuristic_fn = combine_heuristics_max(heuristic_fns)
+    return heuristic_fn, _format_heuristics(heuristic_names)
+
+
+def render_board(board: Board, state: SokobanState, show_dead: bool = False) -> str:
+    """Renderiza el tablero como texto.
+
+    Leyenda:
+      #   pared
+      .   objetivo
+      @   jugador
+      +   jugador sobre objetivo
+      $   caja
+      *   caja sobre objetivo
+      X   dead square (solo si show_dead=True)
+          celda libre
+    """
+    lines = []
+    for r in range(board.rows):
+        row = ""
+        for c in range(board.cols):
+            pos = (r, c)
+            is_wall = board._walls_np[r, c]  # type: ignore[attr-defined]
+            is_goal = board._goals_np[r, c]  # type: ignore[attr-defined]
+            is_dead = board._dead_sq[r, c]  # type: ignore[attr-defined]
+            is_player = state.player.row == r and state.player.col == c
+            is_box = any(b.row == r and b.col == c for b in state.boxes)
+
+            if is_wall:
+                row += "#"
+            elif is_player and is_goal:
+                row += "+"
+            elif is_player:
+                row += "@"
+            elif is_box and is_goal:
+                row += "*"
+            elif is_box:
+                row += "$"
+            elif is_goal:
+                row += "."
+            elif show_dead and is_dead:
+                row += "X"
+            else:
+                row += " "
+        lines.append(row)
+    return "\n".join(lines)
+
+
+def print_dead_squares(board: Board, state: SokobanState) -> None:
+    """Imprime el tablero sin y con dead squares marcados lado a lado."""
+    normal = render_board(board, state, show_dead=False).splitlines()
+    with_dead = render_board(board, state, show_dead=True).splitlines()
+
+    dead_count = int(board._dead_sq.sum())  # type: ignore[attr-defined]
+    total_free = int((~board._walls_np).sum())  # type: ignore[attr-defined]
+
+    sep = "     "
+    title_l = "Tablero normal"
+    title_r = f"Dead squares (X = celda muerta)"
+    border = "─" * board.cols
+
+    print(f"{title_l}{sep}{title_r}")
+    print(f"{border}{sep}{border}")
+    for l, r in zip(normal, with_dead):
+        print(f"{l}{sep}{r}")
+    print(f"{border}{sep}{border}")
+    print(
+        f"\nCeldas dead: {dead_count} / {total_free} libres "
+        f"({100 * dead_count / total_free:.1f}% del espacio podado)\n"
+    )
 
 
 def run_search(config: SearchConfig):
     """Ejecuta la búsqueda según la configuración dada. Retorna (result, board, initial_state)."""
-    search_fn = ALGORITHMS.get(config.algorithm)
-    if search_fn is None:
+    all_algorithms = set(UNINFORMED_ALGORITHMS) | set(INFORMED_ALGORITHMS)
+    if config.algorithm not in all_algorithms:
         raise NotImplementedError(
             f"Algoritmo '{config.algorithm}' aún no implementado. "
-            f"Disponibles: {', '.join(sorted(ALGORITHMS))}"
+            f"Disponibles: {', '.join(sorted(all_algorithms))}"
         )
 
     board, initial_state = parse_board(config.board_path)
-    result = search_fn(board, initial_state)
+
+    if config.algorithm in INFORMED_ALGORITHMS:
+        heuristic_fn, _ = _build_heuristic_fn(config)
+        result = INFORMED_ALGORITHMS[config.algorithm](
+            board, initial_state, heuristic_fn
+        )
+    else:
+        result = UNINFORMED_ALGORITHMS[config.algorithm](board, initial_state)
+
     return result, board, initial_state
 
 
@@ -57,6 +165,11 @@ def main() -> None:
         action="store_true",
         help="Guarda un archivo JSON de replay en results/raw/ para animar con tp1-animate",
     )
+    parser.add_argument(
+        "--show-dead-squares",
+        action="store_true",
+        help="Muestra el tablero con las celdas dead marcadas con X antes de buscar",
+    )
     args = parser.parse_args()
 
     try:
@@ -67,11 +180,23 @@ def main() -> None:
 
     print(f"Algoritmo: {config.algorithm}")
     print(f"Tablero:   {config.board_path}")
-    if config.heuristic:
-        print(f"Heurística: {config.heuristic}")
+    if config.heuristics:
+        print(f"Heurística: {_format_heuristics(config.heuristics)}")
     print()
 
-    result, board, initial_state = run_search(config)
+    board, initial_state = parse_board(config.board_path)
+
+    if args.show_dead_squares:
+        print_dead_squares(board, initial_state)
+
+    if config.algorithm in INFORMED_ALGORITHMS:
+        heuristic_fn, _ = _build_heuristic_fn(config)
+        result = INFORMED_ALGORITHMS[config.algorithm](
+            board, initial_state, heuristic_fn
+        )
+    else:
+        result = UNINFORMED_ALGORITHMS[config.algorithm](board, initial_state)
+
     print_result(result)
 
     if args.save_replay:

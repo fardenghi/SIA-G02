@@ -1,3 +1,0 @@
-[search]
-algorithm = "bfs"
-board = "boards/sokoban/level_03.txt"

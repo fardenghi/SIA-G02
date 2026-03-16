@@ -6,10 +6,9 @@ from tp1_search.sokoban.state import SokobanState
 def get_successors(
     board: Board, state: SokobanState
 ) -> list[tuple[SokobanState, Direction, int]]:
-    """Genera todos los estados sucesores válidos con poda de dead squares.
+    """Genera todos los estados sucesores válidos.
 
-    Prueba las 4 direcciones y retorna las que producen un movimiento válido
-    y no llevan una caja a una celda dead (donde nunca puede llegar a un goal).
+    Prueba las 4 direcciones y retorna las que producen un movimiento válido.
 
     Returns:
         Lista de tuplas (nuevo_estado, dirección, costo).
@@ -51,10 +50,6 @@ def get_successors(
                 continue
 
             new_box = Position(br, bc)
-
-            # Dead square pruning: descartar si la caja acaba en celda muerta
-            if board._dead_sq[br, bc]:  # type: ignore[attr-defined]
-                continue
 
             new_boxes = (state.boxes - {new_player}) | {new_box}
             new_state = SokobanState(player=new_player, boxes=new_boxes)

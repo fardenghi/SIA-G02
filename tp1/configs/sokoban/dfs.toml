@@ -1,0 +1,3 @@
+[search]
+algorithm = "dfs"
+board = "boards/sokoban/level_04.txt"

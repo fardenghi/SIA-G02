@@ -1,0 +1,108 @@
+import sys
+import time
+
+from tp1_search.sokoban.board import Board
+from tp1_search.sokoban.state import SokobanState
+from tp1_search.sokoban.successors import get_successors
+from tp1_search.sokoban.goal import is_goal
+from tp1_search.search.node import SearchNode
+from tp1_search.search.frontier import StackFrontier
+from tp1_search.search.state_key import state_key
+from tp1_search.metrics.result import SearchResult
+
+_LOG_INTERVAL = 10_000
+
+
+def _log(expanded: int, frontier: StackFrontier, visited: set, start: float) -> None:
+    elapsed = time.time() - start
+    msg = (
+        f"\r[DFS] expandidos: {expanded:>8,}  |  "
+        f"frontera: {len(frontier):>8,}  |  "
+        f"visitados: {len(visited):>8,}  |  "
+        f"tiempo: {elapsed:6.1f}s"
+    )
+    sys.stderr.write(msg)
+    sys.stderr.flush()
+
+
+def dfs(board: Board, initial_state: SokobanState) -> SearchResult:
+    """Depth-First Search (graph-search).
+
+    Explora en profundidad usando una pila LIFO.
+    No garantiza encontrar la solución óptima.
+    Usa un conjunto de visitados con bytes key para eficiencia de hashing.
+    """
+    start_time = time.time()
+    expanded = 0
+    cols = board.cols
+
+    root = SearchNode.root(initial_state)
+
+    if is_goal(board, initial_state):
+        return SearchResult(
+            success=True,
+            path=root.reconstruct_path(),
+            cost=root.path_cost,
+            expanded_nodes=expanded,
+            frontier_nodes=0,
+            time_elapsed=time.time() - start_time,
+        )
+
+    frontier = StackFrontier()
+    frontier.push(root)
+    visited: set[bytes] = {state_key(initial_state, cols)}
+
+    print(
+        f"[DFS] inicio — tablero {board.rows}×{board.cols}, "
+        f"{len(board.goals)} objetivo(s)",
+        file=sys.stderr,
+    )
+
+    while not frontier.is_empty():
+        node = frontier.pop()
+        expanded += 1
+
+        if expanded % _LOG_INTERVAL == 0:
+            _log(expanded, frontier, visited, start_time)
+
+        for child_state, action, step_cost in get_successors(board, node.state):
+            key = state_key(child_state, cols)
+            if key in visited:
+                continue
+
+            visited.add(key)
+            child_node = node.expand_child(child_state, action, step_cost)
+
+            if is_goal(board, child_state):
+                elapsed = time.time() - start_time
+                sys.stderr.write(
+                    f"\r[DFS] ¡solución encontrada! "
+                    f"expandidos: {expanded:,}  |  "
+                    f"costo: {child_node.path_cost}  |  "
+                    f"tiempo: {elapsed:.3f}s\n"
+                )
+                sys.stderr.flush()
+                return SearchResult(
+                    success=True,
+                    path=child_node.reconstruct_path(),
+                    cost=child_node.path_cost,
+                    expanded_nodes=expanded,
+                    frontier_nodes=len(frontier),
+                    time_elapsed=elapsed,
+                )
+
+            frontier.push(child_node)
+
+    elapsed = time.time() - start_time
+    sys.stderr.write(
+        f"\r[DFS] sin solución. expandidos: {expanded:,}  |  tiempo: {elapsed:.3f}s\n"
+    )
+    sys.stderr.flush()
+    return SearchResult(
+        success=False,
+        path=[],
+        cost=0,
+        expanded_nodes=expanded,
+        frontier_nodes=0,
+        time_elapsed=elapsed,
+    )
