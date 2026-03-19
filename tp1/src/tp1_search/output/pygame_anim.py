@@ -523,6 +523,90 @@ def export_gif(
     return output_path
 
 
+def export_video(
+    replay_path: str | Path,
+    cell_size: int = 64,
+    fps: float = 2.0,
+    output_dir: str | Path = "results/animations",
+) -> Path:
+    """Renderiza un replay completo y lo exporta como video MP4.
+    
+    Args:
+        replay_path: Ruta al archivo JSON de replay
+        cell_size: Tamaño de cada celda en píxeles (default: 64)
+        fps: Frames por segundo (default: 2.0)
+        output_dir: Directorio de salida (default: results/animations)
+    
+    Returns:
+        Path al archivo MP4 generado
+    """
+    import cv2
+    from datetime import datetime
+
+    replay = load_replay(replay_path)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generar nombre de archivo automático
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    board_name = Path(replay.board_path).stem
+    filename = f"{replay.algorithm}_{board_name}.mp4"
+    output_path = output_dir / filename
+
+    current_fps = max(_FPS_MIN, min(_FPS_MAX, fps))
+
+    pygame.init()
+    try:
+        pygame.display.set_mode((1, 1), pygame.HIDDEN)
+        width, height, hud_h, board_bg, sprites, font, small_font = (
+            _build_render_assets(replay, cell_size)
+        )
+        frame_surface = pygame.Surface((width, height)).convert()
+
+        # Configurar VideoWriter de OpenCV
+        # Codec H.264 (mp4v) para calidad media
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video_writer = cv2.VideoWriter(
+            str(output_path),
+            fourcc,
+            current_fps,
+            (width, height)
+        )
+
+        if not video_writer.isOpened():
+            raise RuntimeError(f"No se pudo abrir el VideoWriter para {output_path}")
+
+        # Renderizar cada frame y escribirlo al video
+        for frame_idx in range(len(replay.frames)):
+            draw_frame(
+                frame_surface,
+                replay,
+                frame_idx,
+                cell_size,
+                font,
+                small_font,
+                hud_h,
+                sprites,
+                current_fps,
+                board_bg,
+            )
+            
+            # Convertir superficie pygame a array numpy en formato BGR (OpenCV)
+            raw = pygame.image.tobytes(frame_surface, "RGB")
+            import numpy as np
+            frame_array = np.frombuffer(raw, dtype=np.uint8).reshape((height, width, 3))
+            # Convertir RGB a BGR para OpenCV
+            frame_bgr = cv2.cvtColor(frame_array, cv2.COLOR_RGB2BGR)
+            
+            video_writer.write(frame_bgr)
+
+        video_writer.release()
+    finally:
+        pygame.quit()
+
+    return output_path
+
+
 # ---------------------------------------------------------------------------
 # Loop principal
 # ---------------------------------------------------------------------------

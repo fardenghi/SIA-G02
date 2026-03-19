@@ -1,14 +1,14 @@
 """Entry point para tp1-animate.
 
 Uso:
-    uv run tp1-animate <replay.json> [--speed FPS] [--cell-size PX] [--save-gif OUT.gif]
+    uv run tp1-animate <replay.json> [--speed FPS] [--cell-size PX] [--save-gif OUT.gif] [--save-video]
 """
 
 import argparse
 import sys
 from pathlib import Path
 
-from tp1_search.output.pygame_anim import export_gif, run_animation
+from tp1_search.output.pygame_anim import export_gif, export_video, run_animation
 
 
 def main() -> None:
@@ -38,12 +38,26 @@ def main() -> None:
         metavar="OUT.gif",
         help="Exporta la animación a un GIF y termina sin abrir la ventana",
     )
+    parser.add_argument(
+        "--save-video",
+        action="store_true",
+        help="Exporta la animación a MP4 en results/animations/ y termina sin abrir la ventana",
+    )
     args = parser.parse_args()
 
     replay_path = Path(args.replay)
     if not replay_path.exists():
         print(f"Error: archivo de replay no encontrado: {replay_path}", file=sys.stderr)
         sys.exit(1)
+
+    if args.save_video:
+        output_path = export_video(
+            replay_path=replay_path,
+            cell_size=args.cell_size,
+            fps=args.speed,
+        )
+        print(f"Video guardado en: {output_path}")
+        return
 
     if args.save_gif:
         output_path = export_gif(
