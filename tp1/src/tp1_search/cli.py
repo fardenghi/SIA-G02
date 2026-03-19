@@ -5,6 +5,7 @@ from tp1_search.config import load_config, SearchConfig
 from tp1_search.sokoban.parser import parse_board
 from tp1_search.sokoban.board import Board
 from tp1_search.sokoban.state import SokobanState
+from tp1_search.types import Position
 from tp1_search.sokoban.heuristics import (
     HEURISTICS,
     HeuristicFn,
@@ -63,10 +64,10 @@ def render_board(board: Board, state: SokobanState, show_dead: bool = False) -> 
     for r in range(board.rows):
         row = ""
         for c in range(board.cols):
-            pos = (r, c)
+            pos = Position(r, c)
             is_wall = board._walls_np[r, c]  # type: ignore[attr-defined]
             is_goal = board._goals_np[r, c]  # type: ignore[attr-defined]
-            is_dead = board._dead_sq[r, c]  # type: ignore[attr-defined]
+            is_dead = board.is_dead_square(pos)
             is_player = state.player.row == r and state.player.col == c
             is_box = any(b.row == r and b.col == c for b in state.boxes)
 
@@ -95,7 +96,12 @@ def print_dead_squares(board: Board, state: SokobanState) -> None:
     normal = render_board(board, state, show_dead=False).splitlines()
     with_dead = render_board(board, state, show_dead=True).splitlines()
 
-    dead_count = int(board._dead_sq.sum())  # type: ignore[attr-defined]
+    dead_count = sum(
+        1
+        for r in range(board.rows)
+        for c in range(board.cols)
+        if board.is_dead_square(Position(r, c))
+    )
     total_free = int((~board._walls_np).sum())  # type: ignore[attr-defined]
 
     sep = "     "

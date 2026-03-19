@@ -7,7 +7,7 @@ from typing import Callable, Sequence
 
 from tp1_search.sokoban.board import Board
 from tp1_search.sokoban.state import SokobanState
-from scipy.optimize import linear_sum_assignment #hungarian heuristic
+from scipy.optimize import linear_sum_assignment  # hungarian heuristic
 
 
 # ---------------------------------------------------------------------------
@@ -17,10 +17,10 @@ HeuristicFn = Callable[[Board, SokobanState], float]
 
 
 def dead_square_heuristic(board: Board, state: SokobanState) -> float:
-    """Devuelve inf si alguna caja está en una celda muerta, 0 en caso contrario.
+    """Devuelve inf si alguna caja no-goal está atrapada en una esquina.
 
-    Una celda es "muerta" si una caja ubicada ahí nunca puede llegar a ningún
-    goal (precomputado por backward BFS en Board.__post_init__).
+    Esta versión detecta deadlocks locales de esquina al momento de evaluar
+    el estado, sin preprocesar el tablero completo.
 
     Es admisible: si el estado es irresolvible el costo real también es inf;
     si no, devolver 0 nunca sobreestima.
@@ -66,19 +66,19 @@ def euclidean_heuristic(board: Board, state: SokobanState) -> float:
 
 def hungarian_heuristic(board: Board, state: SokobanState) -> float:
     """Suma de distancias Manhattan usando asignación óptima (Algoritmo Húngaro).
-    
+
     Empareja cada caja con un goal único de forma tal que la suma total
     de las distancias sea la mínima posible. Retorna infinito si detecta
-    una caja en un dead square para podar la rama tempranamente.
+    una caja atrapada en una esquina para podar la rama tempranamente.
     """
     boxes = state.boxes
     goals = board.goals
-    
+
     # 1. Poda temprana: Si hay cajas en celdas muertas, el costo es infinito.
     for box in boxes:
         if board.is_dead_square(box):
             return math.inf
-            
+
     # Casos borde (aunque en Sokoban estándar siempre hay cajas y goals)
     if not boxes or not goals:
         return 0.0
@@ -114,7 +114,7 @@ HEURISTICS: dict[str, HeuristicFn] = {
     "manhattan": manhattan_heuristic,
     "euclidean": euclidean_heuristic,
     "dead_square": dead_square_heuristic,
-    "hungarian": hungarian_heuristic
+    "hungarian": hungarian_heuristic,
 }
 
 

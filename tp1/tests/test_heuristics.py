@@ -143,6 +143,24 @@ class TestDeadSquare:
         )
         assert dead_square_heuristic(board, state) == 0.0
 
+    def test_corner_goal_is_not_dead(self):
+        board = Board(
+            rows=5,
+            cols=5,
+            walls=frozenset(
+                Position(r, c)
+                for r in range(5)
+                for c in range(5)
+                if r in (0, 4) or c in (0, 4)
+            ),
+            goals=frozenset({Position(1, 1)}),
+        )
+        state = SokobanState(
+            player=Position(2, 2),
+            boxes=frozenset({Position(1, 1)}),
+        )
+        assert dead_square_heuristic(board, state) == 0.0
+
 
 class TestCombinedHeuristics:
     def test_max_of_manhattan_and_euclidean(self):

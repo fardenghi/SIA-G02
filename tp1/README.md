@@ -43,12 +43,12 @@ Para los algoritmos informados (Greedy y A*) se implementaron 4 heuristicas:
 |------------|-----------------|-----------|-------------|
 | **Manhattan** | `manhattan` | Si | Suma de distancias Manhattan desde cada caja a su objetivo mas cercano. |
 | **Euclidean** | `euclidean` | Si | Suma de distancias Euclidianas desde cada caja a su objetivo mas cercano. Siempre da valores <= Manhattan, por lo que guia menos la busqueda. |
-| **Dead Square** | `dead_square` | Si | Retorna infinito si alguna caja esta en un "dead square" (celda desde la cual ninguna caja puede llegar a ningun objetivo), sino retorna 0. Funciona como mecanismo de poda mas que como estimador de distancia. |
-| **Hungarian** | `hungarian` | Si | Suma de distancias Manhattan asignando de manera optima cajas a metas minimizando la distancia neta (Algoritmo Hungaro), incluyendo chequeo de Dead Squares. Requiere Scipy. |
+| **Dead Square** | `dead_square` | Si | Retorna infinito si alguna caja que no esta en objetivo queda atrapada en una esquina; sino retorna 0. Funciona como mecanismo de poda mas que como estimador de distancia. |
+| **Hungarian** | `hungarian` | Si | Suma de distancias Manhattan asignando de manera optima cajas a metas minimizando la distancia neta (Algoritmo Hungaro), incluyendo chequeo de esquinas muertas. Requiere Scipy. |
 
 ### Deteccion de dead squares
 
-La clase `Board` precomputa los dead squares al inicializarse usando un **BFS reverso desde todos los objetivos**. Una celda es "viva" si una caja colocada ahi podria eventualmente llegar a algun objetivo mediante empujes validos. Cualquier celda que no sea pared ni sea "viva" es un dead square. Esta informacion se almacena en un array booleano de NumPy para consultas O(1).
+En esta version no se preprocesa el tablero. La deteccion se hace al momento de consultar una celda: se considera "dead square" a una esquina no objetivo formada por dos paredes perpendiculares o por el borde del tablero. Es una aproximacion mas simple que la deteccion global por BFS, pero cumple con la idea de podar estados obviamente irresolubles sin precomputacion.
 
 ---
 
@@ -367,10 +367,10 @@ uv run tp1-animate results/raw/<archivo_generado>.json
 
 **Parametros opcionales:**
 
-| Parametro | Default | Descripcion |
-|-----------|---------|-------------|
+| Parametro | Default | Descripcion                            |
+|-----------|---------|----------------------------------------|
 | `--speed` | 2.0 | Frames por segundo (velocidad inicial) |
-| `--cell-size` | 64 | Tamanio en pixeles de cada celda |
+| `--cell-size` | 64 | Tamaño en pixeles de cada celda        |
 
 Ejemplo:
 
