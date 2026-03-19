@@ -10,7 +10,9 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import csv
 import io
+import statistics
 import sys
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -33,25 +35,110 @@ from tp1_search.sokoban.parser import parse_board  # noqa: E402
 
 
 def _run_case(board_path: Path) -> dict[str, dict[str, float]]:
+    return _run_case_n(board_path, runs=1)
+
+
+def _run_case_n(board_path: Path, runs: int) -> dict[str, dict[str, float]]:
     board, state = parse_board(board_path)
 
-    with redirect_stderr(io.StringIO()):
-        manhattan = astar(board, state, manhattan_heuristic)
-    with redirect_stderr(io.StringIO()):
-        weighted = astar(board, state, weighted_hungarian_heuristic)
+    raw: dict[str, list[dict[str, float]]] = {
+        "manhattan": [],
+        "weighted_hungarian": [],
+    }
+    for _ in range(runs):
+        with redirect_stderr(io.StringIO()):
+            manhattan = astar(board, state, manhattan_heuristic)
+        with redirect_stderr(io.StringIO()):
+            weighted = astar(board, state, weighted_hungarian_heuristic)
+        raw["manhattan"].append(
+            {
+                "cost": float(manhattan.cost),
+                "expanded_nodes": float(manhattan.expanded_nodes),
+                "time_elapsed": float(manhattan.time_elapsed),
+            }
+        )
+        raw["weighted_hungarian"].append(
+            {
+                "cost": float(weighted.cost),
+                "expanded_nodes": float(weighted.expanded_nodes),
+                "time_elapsed": float(weighted.time_elapsed),
+            }
+        )
 
     return {
         "manhattan": {
-            "cost": float(manhattan.cost),
-            "expanded_nodes": float(manhattan.expanded_nodes),
-            "time_elapsed": float(manhattan.time_elapsed),
+            "cost": statistics.fmean(item["cost"] for item in raw["manhattan"]),
+            "expanded_nodes": statistics.fmean(
+                item["expanded_nodes"] for item in raw["manhattan"]
+            ),
+            "time_elapsed": statistics.fmean(
+                item["time_elapsed"] for item in raw["manhattan"]
+            ),
+            "time_std": statistics.pstdev(
+                item["time_elapsed"] for item in raw["manhattan"]
+            )
+            if len(raw["manhattan"]) > 1
+            else 0.0,
         },
         "weighted_hungarian": {
-            "cost": float(weighted.cost),
-            "expanded_nodes": float(weighted.expanded_nodes),
-            "time_elapsed": float(weighted.time_elapsed),
+            "cost": statistics.fmean(
+                item["cost"] for item in raw["weighted_hungarian"]
+            ),
+            "expanded_nodes": statistics.fmean(
+                item["expanded_nodes"] for item in raw["weighted_hungarian"]
+            ),
+            "time_elapsed": statistics.fmean(
+                item["time_elapsed"] for item in raw["weighted_hungarian"]
+            ),
+            "time_std": statistics.pstdev(
+                item["time_elapsed"] for item in raw["weighted_hungarian"]
+            )
+            if len(raw["weighted_hungarian"]) > 1
+            else 0.0,
         },
     }
+
+
+def write_csv(
+    board_path: Path,
+    runs: int,
+    outpath: Path,
+) -> Path:
+    board, state = parse_board(board_path)
+    rows: list[dict[str, float | int | str]] = []
+    for run in range(1, runs + 1):
+        with redirect_stderr(io.StringIO()):
+            manhattan = astar(board, state, manhattan_heuristic)
+        with redirect_stderr(io.StringIO()):
+            weighted = astar(board, state, weighted_hungarian_heuristic)
+        rows.append(
+            {
+                "run": run,
+                "heuristic": "manhattan",
+                "cost": manhattan.cost,
+                "expanded_nodes": manhattan.expanded_nodes,
+                "time_elapsed": manhattan.time_elapsed,
+            }
+        )
+        rows.append(
+            {
+                "run": run,
+                "heuristic": "weighted_hungarian",
+                "cost": weighted.cost,
+                "expanded_nodes": weighted.expanded_nodes,
+                "time_elapsed": weighted.time_elapsed,
+            }
+        )
+
+    outpath.parent.mkdir(parents=True, exist_ok=True)
+    with open(outpath, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["run", "heuristic", "cost", "expanded_nodes", "time_elapsed"],
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+    return outpath
 
 
 def _format_value(metric: str, value: float) -> str:
@@ -60,8 +147,8 @@ def _format_value(metric: str, value: float) -> str:
     return f"{int(value):,}"
 
 
-def build_plot(board_path: Path, outpath: Path) -> Path:
-    data = _run_case(board_path)
+def build_plot(board_path: Path, outpath: Path, runs: int = 5) -> Path:
+    data = _run_case_n(board_path, runs=runs)
 
     labels = ["Manhattan", "Weighted\nHungarian"]
     colors = ["#2A9D8F", "#E76F51"]
@@ -76,7 +163,24 @@ def build_plot(board_path: Path, outpath: Path) -> Path:
 
     for ax, (metric, title, log_scale) in zip(axes, metrics, strict=False):
         values = [data["manhattan"][metric], data["weighted_hungarian"][metric]]
-        bars = ax.bar(labels, values, color=colors, width=0.58)
+        error = None
+        error_kw = None
+        if metric == "time_elapsed":
+            error = [
+                data["manhattan"]["time_std"],
+                data["weighted_hungarian"]["time_std"],
+            ]
+            error_kw = {"elinewidth": 1.8, "capthick": 1.8}
+        bars = ax.bar(
+            labels,
+            values,
+            color=colors,
+            width=0.58,
+            yerr=error,
+            ecolor="#202020",
+            capsize=8 if error is not None else 0,
+            error_kw=error_kw,
+        )
 
         if log_scale:
             ax.set_yscale("log")
@@ -89,8 +193,9 @@ def build_plot(board_path: Path, outpath: Path) -> Path:
         ax.grid(axis="y", alpha=0.22, linestyle="--")
         ax.set_axisbelow(True)
 
-        for bar, value in zip(bars, values, strict=False):
-            y = value * (1.08 if value > 0 else 1.0)
+        for idx, (bar, value) in enumerate(zip(bars, values, strict=False)):
+            extra = error[idx] if error is not None else 0.0
+            y = (value + extra) * (1.08 if value > 0 else 1.0)
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 y,
@@ -137,9 +242,25 @@ def main() -> None:
         / "weighted_hungarian_counterexample_tradeoff.png",
         help="Ruta del PNG de salida",
     )
+    parser.add_argument(
+        "--csv",
+        type=Path,
+        default=ROOT
+        / "results"
+        / "benchmark"
+        / "weighted_hungarian_counterexample_tradeoff.csv",
+        help="CSV de salida con las metricas por corrida",
+    )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=5,
+        help="Cantidad de corridas para estimar media y desvio del tiempo (default: 5)",
+    )
     args = parser.parse_args()
 
-    output = build_plot(args.board, args.out)
+    write_csv(args.board, args.runs, args.csv)
+    output = build_plot(args.board, args.out, runs=args.runs)
     print(output)
 
 
