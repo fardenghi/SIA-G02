@@ -27,6 +27,7 @@ packages = ["src/tp1_search"]
 
 [dependency-groups]
 dev = [
+    "kaleido>=0.2",
     "matplotlib>=3.10.8",
     "pandas>=3.0.1",
     "plotly>=6.6.0",
