@@ -8,6 +8,8 @@ from tp1_search.sokoban.heuristics import (
     manhattan_heuristic,
     euclidean_heuristic,
     dead_square_heuristic,
+    hungarian_heuristic,
+    weighted_hungarian_heuristic,
     combine_heuristics_max,
 )
 
@@ -162,6 +164,29 @@ class TestDeadSquare:
         assert dead_square_heuristic(board, state) == 0.0
 
 
+class TestWeightedHungarian:
+    def test_zero_when_solved(self):
+        board, _ = _simple_board()
+        state = SokobanState(
+            player=Position(4, 2),
+            boxes=frozenset({Position(3, 2)}),
+        )
+        assert weighted_hungarian_heuristic(board, state) == 0.0
+
+    def test_adds_player_term_and_inflates_matching(self):
+        board, state = _simple_board()
+        h_hungarian = hungarian_heuristic(board, state)
+        h_weighted = weighted_hungarian_heuristic(board, state)
+
+        assert h_hungarian == 1.0
+        assert math.isclose(h_weighted, 2.5)
+        assert h_weighted > h_hungarian
+
+    def test_stays_finite_when_dead_square_is_separate(self):
+        board, state = _dead_corner_board()
+        assert weighted_hungarian_heuristic(board, state) == 8.0
+
+
 class TestCombinedHeuristics:
     def test_max_of_manhattan_and_euclidean(self):
         board, state = _simple_board()
@@ -171,4 +196,11 @@ class TestCombinedHeuristics:
     def test_inf_if_any_component_is_inf(self):
         board, state = _dead_corner_board()
         combined = combine_heuristics_max([manhattan_heuristic, dead_square_heuristic])
+        assert combined(board, state) == math.inf
+
+    def test_weighted_plus_dead_square_keeps_pruning_separate(self):
+        board, state = _dead_corner_board()
+        combined = combine_heuristics_max(
+            [weighted_hungarian_heuristic, dead_square_heuristic]
+        )
         assert combined(board, state) == math.inf

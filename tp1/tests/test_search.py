@@ -10,6 +10,7 @@ from tp1_search.sokoban.heuristics import (
     manhattan_heuristic,
     euclidean_heuristic,
     dead_square_heuristic,
+    weighted_hungarian_heuristic,
 )
 
 
@@ -58,6 +59,13 @@ def _astar_counterexample_board():
     """
     return parse_board_string(
         "########\n#@     #\n#  $   #\n#     .#\n#  $####\n# .  # #\n########"
+    )
+
+
+def _weighted_hungarian_counterexample_board():
+    """Caso donde A* con weighted_hungarian devuelve solución subóptima."""
+    return parse_board_string(
+        "#######\n#    .#\n#.    #\n##    #\n#  $$ #\n## # @#\n#######"
     )
 
 
@@ -245,6 +253,12 @@ class TestGreedy:
         assert result.success is True
         _validate_path(board, state, result)
 
+    def test_weighted_hungarian_finds_solution(self):
+        board, state = _simple_board()
+        result = greedy(board, state, weighted_hungarian_heuristic)
+        assert result.success is True
+        _validate_path(board, state, result)
+
     def test_metrics_populated(self):
         board, state = _simple_board()
         result = greedy(board, state, manhattan_heuristic)
@@ -319,3 +333,14 @@ class TestAStar:
         assert astar_result.success is True
         assert bfs_result.cost == 20
         assert astar_result.cost == bfs_result.cost
+
+    def test_weighted_hungarian_can_be_suboptimal(self):
+        board, state = _weighted_hungarian_counterexample_board()
+        bfs_result = bfs(board, state)
+        astar_result = astar(board, state, weighted_hungarian_heuristic)
+
+        assert bfs_result.success is True
+        assert astar_result.success is True
+        assert bfs_result.cost == 16
+        assert astar_result.cost == 17
+        assert astar_result.cost > bfs_result.cost

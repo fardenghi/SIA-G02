@@ -4,7 +4,13 @@ from pathlib import Path
 
 
 VALID_ALGORITHMS = {"bfs", "dfs", "greedy", "astar", "iddfs"}
-VALID_HEURISTICS = {"manhattan", "euclidean", "dead_square", "hungarian"}
+VALID_HEURISTICS = {
+    "manhattan",
+    "euclidean",
+    "dead_square",
+    "hungarian",
+    "weighted_hungarian",
+}
 INFORMED_ALGORITHMS = {"greedy", "astar"}
 
 

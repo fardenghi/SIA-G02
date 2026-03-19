@@ -1,4 +1,4 @@
 [search]
 algorithm = "astar"
-board = "boards/sokoban/level_04.txt"
-heuristic = "manhattan"
+board = "boards/sokoban/weighted_hungarian_counterexample2.txt"
+heuristic = ["weighted_hungarian"]

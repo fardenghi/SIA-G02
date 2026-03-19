@@ -54,6 +54,21 @@ heuristics = ["euclidean", "dead_square"]
     assert config.heuristics == ("euclidean", "dead_square")
 
 
+def test_load_config_accepts_weighted_hungarian(tmp_path):
+    config_path = _write_config(
+        tmp_path,
+        """
+[search]
+algorithm = "greedy"
+board = "boards/sokoban/level_01.txt"
+heuristic = "weighted_hungarian"
+""",
+    )
+
+    config = load_config(config_path)
+    assert config.heuristics == ("weighted_hungarian",)
+
+
 def test_load_config_rejects_both_heuristic_keys(tmp_path):
     config_path = _write_config(
         tmp_path,

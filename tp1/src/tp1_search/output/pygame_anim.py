@@ -5,7 +5,7 @@ Sprites:
   - Objetivo:        vaso.png   (vaso con hielo)
   - Caja en goal:    llenito.png
   - Pared:           rectángulo gris oscuro
-  - Jugador:         joven (cabeza + cuerpo + piernas, dibujado)
+  - Jugador:         sprites direccionales up/down/left/right
   - HUD:             paso actual, algoritmo, resultado
 """
 
@@ -31,6 +31,11 @@ C_HUD_TEXT = (255, 255, 255)
 C_SUCCESS = (60, 200, 80)
 C_FAILURE = (220, 60, 60)
 C_ON_GOAL = (80, 220, 100)  # borde verde cuando ferno está en el objetivo
+C_WOOD_TOP = (116, 78, 50)
+C_WOOD_BOTTOM = (70, 45, 28)
+C_WOOD_SEAM = (58, 36, 22)
+C_WOOD_GRAIN = (145, 104, 72)
+HUD_HEIGHT = 118
 
 ASSETS_DIR = Path(__file__).parent / "assets"
 
@@ -83,14 +88,56 @@ class Sprites:
     box: pygame.Surface  # ferno normal
     box_on_goal: pygame.Surface  # llenito
     goal: pygame.Surface  # vaso solo
+    player: dict[str, pygame.Surface] | None = None
 
 
 def _scale(img: pygame.Surface, size: int) -> pygame.Surface:
     return pygame.transform.smoothscale(img, (size, size))
 
 
+def _fit_sprite_to_cell(
+    img: pygame.Surface, cell: int, padding: float = 0.08
+) -> pygame.Surface:
+    bounds = img.get_bounding_rect(min_alpha=1)
+    if bounds.width > 0 and bounds.height > 0:
+        img = img.subsurface(bounds).copy()
+
+    inner = max(1, int(round(cell * (1.0 - padding * 2))))
+    scale = min(inner / img.get_width(), inner / img.get_height())
+    target_w = max(1, int(round(img.get_width() * scale)))
+    target_h = max(1, int(round(img.get_height() * scale)))
+    scaled = pygame.transform.smoothscale(img, (target_w, target_h))
+
+    canvas = pygame.Surface((cell, cell), pygame.SRCALPHA)
+    offset_x = (cell - target_w) // 2
+    offset_y = (cell - target_h) // 2
+    canvas.blit(scaled, (offset_x, offset_y))
+    return canvas
+
+
+def _load_optional_player_sprites(cell: int) -> dict[str, pygame.Surface] | None:
+    names = {
+        "UP": "up.png",
+        "DOWN": "down.png",
+        "LEFT": "left.png",
+        "RIGHT": "right.png",
+    }
+    try:
+        raw = {
+            direction: pygame.image.load(ASSETS_DIR / filename).convert_alpha()
+            for direction, filename in names.items()
+        }
+    except (FileNotFoundError, pygame.error):
+        return None
+
+    return {
+        direction: _fit_sprite_to_cell(surface, cell)
+        for direction, surface in raw.items()
+    }
+
+
 def load_sprites(cell: int) -> Sprites | None:
-    """Carga ferno.png, vaso.png y llenito.png desde assets/. Retorna None si faltan."""
+    """Carga sprites de cajas/goals y, si existen, sprites direccionales del jugador."""
     try:
         raw_ferno = pygame.image.load(ASSETS_DIR / "ferno.png").convert_alpha()
         raw_vaso = pygame.image.load(ASSETS_DIR / "vaso.png").convert_alpha()
@@ -98,20 +145,84 @@ def load_sprites(cell: int) -> Sprites | None:
     except (FileNotFoundError, pygame.error):
         return None
 
-    box = _scale(raw_ferno, cell)
-    goal = _scale(raw_vaso, cell)
-    box_on_goal = _scale(raw_llenito, cell)
+    box = _fit_sprite_to_cell(raw_ferno, cell)
+    goal = _fit_sprite_to_cell(raw_vaso, cell)
+    box_on_goal = _fit_sprite_to_cell(raw_llenito, cell)
+    player = _load_optional_player_sprites(cell)
 
-    return Sprites(box=box, box_on_goal=box_on_goal, goal=goal)
+    return Sprites(box=box, box_on_goal=box_on_goal, goal=goal, player=player)
 
 
-def load_background(width: int, height: int) -> pygame.Surface | None:
-    """Carga y escala el fondo bolo.png al tamaño del tablero."""
+def _lerp_color(
+    start: tuple[int, int, int], end: tuple[int, int, int], t: float
+) -> tuple[int, int, int]:
+    return (
+        int(start[0] + (end[0] - start[0]) * t),
+        int(start[1] + (end[1] - start[1]) * t),
+        int(start[2] + (end[2] - start[2]) * t),
+    )
+
+
+def _generate_wood_background(width: int, height: int) -> pygame.Surface:
+    bg = pygame.Surface((width, height)).convert()
+
+    for y in range(height):
+        t = y / max(1, height - 1)
+        pygame.draw.line(
+            bg, _lerp_color(C_WOOD_TOP, C_WOOD_BOTTOM, t), (0, y), (width, y)
+        )
+
+    plank_h = max(24, height // 7)
+    for plank_idx, top in enumerate(range(0, height, plank_h)):
+        plank_rect = pygame.Rect(0, top, width, min(plank_h, height - top))
+        tint = 8 if plank_idx % 2 == 0 else -8
+        plank_color = tuple(
+            max(0, min(255, c + tint))
+            for c in _lerp_color(C_WOOD_TOP, C_WOOD_BOTTOM, 0.35)
+        )
+        pygame.draw.rect(bg, plank_color, plank_rect, 0)
+        pygame.draw.line(bg, C_WOOD_SEAM, (0, top), (width, top), 2)
+
+        grain_step = max(18, width // 12)
+        for x in range((plank_idx % 3) * 7, width + grain_step, grain_step):
+            pygame.draw.line(
+                bg,
+                C_WOOD_GRAIN,
+                (x, top + 4),
+                (
+                    min(width - 1, x + plank_h // 3),
+                    min(height - 1, top + plank_rect.height - 4),
+                ),
+                1,
+            )
+
+    vignette = pygame.Surface((width, height), pygame.SRCALPHA)
+    border = max(18, min(width, height) // 16)
+    pygame.draw.rect(vignette, (0, 0, 0, 0), (0, 0, width, height))
+    pygame.draw.rect(vignette, (0, 0, 0, 48), (0, 0, width, border))
+    pygame.draw.rect(vignette, (0, 0, 0, 48), (0, height - border, width, border))
+    pygame.draw.rect(vignette, (0, 0, 0, 42), (0, 0, border, height))
+    pygame.draw.rect(vignette, (0, 0, 0, 42), (width - border, 0, border, height))
+    bg.blit(vignette, (0, 0))
+
+    return bg
+
+
+def load_background(width: int, height: int, cell: int) -> pygame.Surface:
+    """Carga floor.png y lo repite por celda; si falta, usa madera generada."""
     try:
-        raw_bg = pygame.image.load(ASSETS_DIR / "bolo.png").convert()
+        raw_floor = pygame.image.load(ASSETS_DIR / "floor.png").convert()
     except (FileNotFoundError, pygame.error):
-        return None
-    return pygame.transform.smoothscale(raw_bg, (width, height))
+        return _generate_wood_background(width, height)
+
+    floor_tile = _scale(raw_floor, cell)
+    bg = pygame.Surface((width, height)).convert()
+
+    for y in range(0, height, cell):
+        for x in range(0, width, cell):
+            bg.blit(floor_tile, (x, y))
+
+    return bg
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +290,21 @@ def draw_box(
         )
 
 
-def draw_player(surf: pygame.Surface, row: int, col: int, cell: int) -> None:
+def draw_player(
+    surf: pygame.Surface,
+    row: int,
+    col: int,
+    cell: int,
+    sprites: Sprites | None,
+    direction: str,
+) -> None:
+    x, y = col * cell, row * cell
+    if sprites and sprites.player:
+        img = sprites.player.get(direction)
+        if img is not None:
+            surf.blit(img, (x, y))
+            return
+
     cx = col * cell + cell // 2
     cy = row * cell + cell // 2
     s = cell / 64
@@ -220,38 +345,53 @@ def draw_hud(
     small_font: pygame.font.Font,
     current_fps: float | None = None,
 ) -> None:
-    total_steps = len(replay.frames) - 1
-    pygame.draw.rect(surf, C_HUD_BG, (0, board_h, surf.get_width(), hud_h))
+    def _fit_text(text: str, text_font: pygame.font.Font, max_width: int) -> str:
+        if text_font.size(text)[0] <= max_width:
+            return text
+        ellipsis = "..."
+        trimmed = text
+        while trimmed and text_font.size(trimmed + ellipsis)[0] > max_width:
+            trimmed = trimmed[:-1]
+        return (trimmed + ellipsis) if trimmed else ellipsis
 
-    txt1 = (
-        f"Algoritmo: {replay.algorithm.upper()}"
-        f"   |   Tablero: {Path(replay.board_path).name}"
-    )
-    surf.blit(font.render(txt1, True, C_HUD_TEXT), (10, board_h + 6))
+    total_steps = len(replay.frames) - 1
+    width = surf.get_width()
+    left_pad = 10
+    right_pad = 10
+    pygame.draw.rect(surf, C_HUD_BG, (0, board_h, width, hud_h))
+
+    algo_txt = f"Algoritmo: {replay.algorithm.upper()}"
+    surf.blit(font.render(algo_txt, True, C_HUD_TEXT), (left_pad, board_h + 6))
+
+    board_txt = f"Tablero: {Path(replay.board_path).name}"
+    board_txt = _fit_text(board_txt, small_font, width - left_pad - right_pad)
+    surf.blit(small_font.render(board_txt, True, C_HUD_TEXT), (left_pad, board_h + 24))
 
     move_txt = replay.moves[frame_idx - 1] if frame_idx > 0 else "INICIO"
-    txt2 = f"Paso {frame_idx}/{total_steps}   Movimiento: {move_txt}"
-    surf.blit(small_font.render(txt2, True, C_HUD_TEXT), (10, board_h + 28))
-
-    txt3 = (
-        f"Costo: {replay.cost}   "
-        f"Nodos expandidos: {replay.expanded_nodes}   "
-        f"Tiempo: {replay.time_elapsed:.4f}s"
-    )
-    surf.blit(small_font.render(txt3, True, C_HUD_TEXT), (10, board_h + 46))
+    move_line = f"Paso {frame_idx}/{total_steps} | Mov: {move_txt}"
+    surf.blit(small_font.render(move_line, True, C_HUD_TEXT), (left_pad, board_h + 42))
 
     result_color = C_SUCCESS if replay.success else C_FAILURE
     result_txt = "EXITO" if replay.success else "FRACASO"
+    result_surface = small_font.render(result_txt, True, result_color)
     surf.blit(
-        small_font.render(result_txt, True, result_color),
-        (surf.get_width() - 90, board_h + 28),
+        result_surface, (width - right_pad - result_surface.get_width(), board_h + 42)
     )
 
+    cost_line = f"Costo: {replay.cost}"
+    surf.blit(small_font.render(cost_line, True, C_HUD_TEXT), (left_pad, board_h + 60))
+
+    stats_line = (
+        f"Expandidos: {replay.expanded_nodes} | Tiempo: {replay.time_elapsed:.4f}s"
+    )
+    stats_line = _fit_text(stats_line, small_font, width - left_pad - right_pad)
+    surf.blit(small_font.render(stats_line, True, C_HUD_TEXT), (left_pad, board_h + 78))
+
     if current_fps is not None:
-        speed_txt = f"Velocidad: {current_fps:.1f} FPS  [UP/DOWN]"
+        speed_txt = f"Velocidad: {current_fps:.1f} FPS | UP/DOWN"
+        speed_txt = _fit_text(speed_txt, small_font, width - left_pad - right_pad)
         surf.blit(
-            small_font.render(speed_txt, True, C_HUD_TEXT),
-            (surf.get_width() - 250, board_h + 46),
+            small_font.render(speed_txt, True, C_HUD_TEXT), (left_pad, board_h + 96)
         )
 
 
@@ -271,6 +411,14 @@ def draw_frame(
     frame = replay.frames[frame_idx]
     player_pos = tuple(frame["player"])
     box_set = {tuple(b) for b in frame["boxes"]}
+    if frame_idx > 0:
+        player_dir = replay.moves[frame_idx - 1]
+    elif replay.moves:
+        player_dir = replay.moves[0]
+    else:
+        player_dir = "DOWN"
+    if player_dir not in {"UP", "DOWN", "LEFT", "RIGHT"}:
+        player_dir = "DOWN"
 
     if board_bg is not None:
         surf.blit(board_bg, (0, 0))
@@ -290,8 +438,89 @@ def draw_frame(
             elif pos in box_set:
                 draw_box(surf, r, c, cell, on_goal=False, sprites=sprites)
 
-    draw_player(surf, int(player_pos[0]), int(player_pos[1]), cell)
+    draw_player(
+        surf,
+        int(player_pos[0]),
+        int(player_pos[1]),
+        cell,
+        sprites,
+        player_dir,
+    )
     draw_hud(surf, replay, frame_idx, hud_h, board_h, font, small_font, current_fps)
+
+
+def _build_render_assets(
+    replay: ReplayData,
+    cell_size: int,
+) -> tuple[
+    int, int, int, pygame.Surface, Sprites | None, pygame.font.Font, pygame.font.Font
+]:
+    hud_h = HUD_HEIGHT
+    width = replay.cols * cell_size
+    board_h = replay.rows * cell_size
+    height = board_h + hud_h
+    board_bg = load_background(width, board_h, cell_size)
+    sprites = load_sprites(cell_size)
+    font = pygame.font.SysFont("monospace", 14, bold=True)
+    small_font = pygame.font.SysFont("monospace", 12)
+    return width, height, hud_h, board_bg, sprites, font, small_font
+
+
+def export_gif(
+    replay_path: str | Path,
+    output_path: str | Path,
+    cell_size: int = 64,
+    fps: float = 2.0,
+) -> Path:
+    """Renderiza un replay completo y lo exporta como GIF animado."""
+    from PIL import Image
+
+    replay = load_replay(replay_path)
+    output_path = Path(output_path)
+    current_fps = max(_FPS_MIN, min(_FPS_MAX, fps))
+    frame_duration_ms = max(1, int(round(1000 / current_fps)))
+
+    pygame.init()
+    try:
+        pygame.display.set_mode((1, 1), pygame.HIDDEN)
+        width, height, hud_h, board_bg, sprites, font, small_font = (
+            _build_render_assets(replay, cell_size)
+        )
+        frame_surface = pygame.Surface((width, height)).convert()
+
+        pil_frames = []
+        for frame_idx in range(len(replay.frames)):
+            draw_frame(
+                frame_surface,
+                replay,
+                frame_idx,
+                cell_size,
+                font,
+                small_font,
+                hud_h,
+                sprites,
+                current_fps,
+                board_bg,
+            )
+            raw = pygame.image.tobytes(frame_surface, "RGB")
+            frame_image = Image.frombytes("RGB", (width, height), raw)
+            frame_image.info = {}
+            pil_frames.append(frame_image)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        first, *rest = pil_frames
+        first.save(
+            output_path,
+            save_all=True,
+            append_images=rest,
+            duration=frame_duration_ms,
+            loop=0,
+            optimize=False,
+        )
+    finally:
+        pygame.quit()
+
+    return output_path
 
 
 # ---------------------------------------------------------------------------
@@ -316,19 +545,14 @@ def run_animation(
         f"Sokoban — {replay.algorithm.upper()} — {Path(replay_path).name}"
     )
 
-    hud_h = 72
+    hud_h = HUD_HEIGHT
     width = replay.cols * cell_size
     height = replay.rows * cell_size + hud_h
-
     screen = pygame.display.set_mode((width, height))
-    board_bg = load_background(width, replay.rows * cell_size)
-
-    # load_sprites DEBE ir despues de set_mode: convert_alpha() necesita el display
-    sprites = load_sprites(cell_size)
+    width, height, hud_h, board_bg, sprites, font, small_font = _build_render_assets(
+        replay, cell_size
+    )
     clock = pygame.time.Clock()
-
-    font = pygame.font.SysFont("monospace", 14, bold=True)
-    small_font = pygame.font.SysFont("monospace", 12)
 
     frame_idx = 0
     total_frames = len(replay.frames)

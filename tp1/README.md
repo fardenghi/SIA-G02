@@ -37,7 +37,7 @@ Todos los algoritmos usan **graph-search** con un conjunto de visitados para evi
 
 ## Heuristicas disponibles
 
-Para los algoritmos informados (Greedy y A*) se implementaron 4 heuristicas:
+Para los algoritmos informados (Greedy y A*) se implementaron 5 heuristicas:
 
 | Heuristica | Valor en config | Admisible | Descripcion |
 |------------|-----------------|-----------|-------------|
@@ -45,6 +45,7 @@ Para los algoritmos informados (Greedy y A*) se implementaron 4 heuristicas:
 | **Euclidean** | `euclidean` | Si | Suma de distancias Euclidianas desde cada caja a su objetivo mas cercano. Siempre da valores <= Manhattan, por lo que guia menos la busqueda. |
 | **Dead Square** | `dead_square` | Si | Retorna infinito si alguna caja que no esta en objetivo queda atrapada en una esquina; sino retorna 0. Funciona como mecanismo de poda mas que como estimador de distancia. |
 | **Hungarian** | `hungarian` | Si | Suma de distancias Manhattan asignando de manera optima cajas a metas minimizando la distancia neta (Algoritmo Hungaro), incluyendo chequeo de esquinas muertas. Requiere Scipy. |
+| **Weighted Hungarian** | `weighted_hungarian` | No | Variante agresiva: multiplica Hungarian por 1.5 y suma 0.5 veces la distancia del jugador a la caja no resuelta mas cercana. Puede acelerar la busqueda, pero no garantiza optimalidad. La poda por esquinas puede agregarse aparte combinandola con `dead_square`. |
 
 ### Deteccion de dead squares
 
@@ -65,6 +66,12 @@ Los tableros estan en `boards/sokoban/` y van de menor a mayor dificultad:
 | `level_05.txt` | 9x5 | 2 | Irresoluble | Todos los algoritmos deben retornar FAILURE |
 | `level_06.txt` | 5x6 | 1 | Trivial | Solucion optima: 4 pasos |
 | `level_07.txt` | 6x8 | 2 | Media | Solucion optima: 13 pasos |
+
+Board adicional para pruebas puntuales:
+
+| Tablero | Tamanio | Cajas | Uso | Notas |
+|---------|---------|-------|-----|-------|
+| `weighted_hungarian_counterexample.txt` | 7x7 | 2 | Contraejemplo | Muestra que A* con `weighted_hungarian` puede devolver costo 17 mientras BFS encuentra el optimo 16. No entra en el benchmark automatico, que usa solo `level_*.txt`. |
 
 ---
 
@@ -106,7 +113,7 @@ heuristic = ["<h1>", "<h2>"]              # Array (se combina con max(h1, h2, ..
 |-------|----------|
 | `algorithm` | `bfs`, `dfs`, `iddfs`, `greedy`, `astar` |
 | `board` | Ruta a cualquier archivo `.txt` en `boards/sokoban/` |
-| `heuristic` | String o array con `manhattan`, `euclidean`, `dead_square`, `hungarian` |
+| `heuristic` | String o array con `manhattan`, `euclidean`, `dead_square`, `hungarian`, `weighted_hungarian` |
 
 ### Validaciones
 
@@ -114,7 +121,7 @@ heuristic = ["<h1>", "<h2>"]              # Array (se combina con max(h1, h2, ..
 - El archivo de tablero debe existir
 - Los algoritmos informados (`greedy`, `astar`) **deben** tener una heuristica
 - Si `heuristic` es array, se usa una heuristica compuesta: `max(h1, ..., hn)`
-- Cada heuristica del array debe ser una de las 3 listadas
+- Cada heuristica del array debe ser una de las listadas arriba
 
 ---
 
@@ -227,9 +234,9 @@ Repetir para cada nivel.
 
 ---
 
-### 4. Greedy (requiere heuristica) — 28 ejecuciones
+### 4. Greedy (requiere heuristica) — 35 ejecuciones
 
-4 heuristicas x 7 niveles. Ejemplo para manhattan + level_01:
+5 heuristicas x 7 niveles. Ejemplo para manhattan + level_01:
 
 ```toml
 # configs/sokoban/greedy.toml
@@ -261,13 +268,13 @@ board = "boards/sokoban/level_01.txt"
 heuristic = "dead_square"
 ```
 
-Repetir las 4 heuristicas para cada nivel (`level_01` a `level_07`).
+Repetir las 5 heuristicas para cada nivel (`level_01` a `level_07`).
 
 ---
 
-### 5. A* (requiere heuristica) — 28 ejecuciones
+### 5. A* (requiere heuristica) — 35 ejecuciones
 
-4 heuristicas x 7 niveles. Ejemplo para manhattan + level_01:
+5 heuristicas x 7 niveles. Ejemplo para manhattan + level_01:
 
 ```toml
 # configs/sokoban/astar.toml
@@ -299,7 +306,7 @@ board = "boards/sokoban/level_01.txt"
 heuristic = "dead_square"
 ```
 
-Repetir las 4 heuristicas para cada nivel (`level_01` a `level_07`).
+Repetir las 5 heuristicas para cada nivel (`level_01` a `level_07`).
 
 ---
 
@@ -365,18 +372,27 @@ Esto genera un archivo JSON en `results/raw/`.
 uv run tp1-animate results/raw/<archivo_generado>.json
 ```
 
+Para exportar la misma animacion como GIF:
+
+```bash
+uv run tp1-animate results/raw/<archivo_generado>.json --save-gif results/raw/animacion.gif
+```
+
 **Parametros opcionales:**
 
 | Parametro | Default | Descripcion                            |
 |-----------|---------|----------------------------------------|
 | `--speed` | 2.0 | Frames por segundo (velocidad inicial) |
 | `--cell-size` | 64 | Tamaño en pixeles de cada celda        |
+| `--save-gif` | - | Ruta de salida para exportar la animacion como GIF |
 
 Ejemplo:
 
 ```bash
 uv run tp1-animate results/raw/replay.json --speed 3 --cell-size 64
 ```
+
+El GIF usa la velocidad indicada por `--speed` como duracion entre frames.
 
 ### Controles de teclado durante la animacion
 
@@ -456,6 +472,7 @@ uv run pytest -v       # con detalle por test
 - **Manhattan vs Euclidean**: Manhattan siempre da valores >= Euclidean para el mismo estado, por lo que guia mejor la busqueda y expande menos nodos.
 - **Dead square**: no estima distancia (solo retorna 0 o infinito), pero poda estados irrecuperables de forma muy efectiva.
 - **A\* con manhattan** deberia ser la combinacion mas eficiente en general para encontrar soluciones optimas.
+- **weighted_hungarian**: es util para guiar la busqueda mas agresivamente, pero en `boards/sokoban/weighted_hungarian_counterexample.txt` A* devuelve costo 17 frente al optimo 16, mostrando que no garantiza optimalidad.
 - Los algoritmos no informados (BFS, DFS, IDDFS) no usan heuristica y su rendimiento depende unicamente de la estructura del espacio de estados.
 
 ---
@@ -472,7 +489,8 @@ tp1/
 │   ├── level_04.txt            # 13x13, 2 cajas
 │   ├── level_05.txt            # 9x5, 2 cajas (irresoluble)
 │   ├── level_06.txt            # 5x6, 1 caja (trivial)
-│   └── level_07.txt            # 6x8, 2 cajas
+│   ├── level_07.txt            # 6x8, 2 cajas
+│   └── weighted_hungarian_counterexample.txt  # 7x7, contraejemplo no admisible
 ├── scripts/
 │   ├── run_batch.py            # Benchmark: todas las combinaciones -> CSV
 │   └── make_plots.py           # Generacion de graficos (matplotlib + plotly)
@@ -485,7 +503,7 @@ tp1/
 │   ├── test_state.py           # Tests de Position y SokobanState
 │   ├── test_successors.py      # Tests de apply_action, get_successors, is_goal
 │   ├── test_search.py          # Tests de los 5 algoritmos
-│   └── test_heuristics.py      # Tests de las 4 heuristicas
+│   └── test_heuristics.py      # Tests de las 5 heuristicas
 └── src/tp1_search/
     ├── cli.py                  # Entry point (tp1-search)
     ├── config.py               # Carga y validacion de configuracion TOML
@@ -500,13 +518,13 @@ tp1/
     │   ├── greedy.py           # Greedy Best-First Search
     │   └── astar.py            # A*
     ├── sokoban/
-    │   ├── board.py            # Board (paredes, objetivos, dead squares)
+│   ├── board.py            # Board (paredes, objetivos, dead squares locales)
     │   ├── state.py            # SokobanState (jugador, cajas)
     │   ├── parser.py           # Parser de archivos .txt
     │   ├── actions.py          # apply_action (reglas de movimiento)
     │   ├── successors.py       # get_successors (generar movimientos validos)
     │   ├── goal.py             # is_goal (todas las cajas en objetivos)
-    │   └── heuristics.py       # 4 heuristicas + registro HEURISTICS
+│   └── heuristics.py       # 5 heuristicas + registro HEURISTICS
     ├── output/
     │   ├── writer.py           # Serializador de replays JSON
     │   ├── animator_cli.py     # Entry point (tp1-animate)

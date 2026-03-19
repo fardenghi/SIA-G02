@@ -15,6 +15,38 @@ from scipy.optimize import linear_sum_assignment  # hungarian heuristic
 # ---------------------------------------------------------------------------
 HeuristicFn = Callable[[Board, SokobanState], float]
 
+WEIGHTED_HUNGARIAN_FACTOR = 1.5
+PLAYER_DISTANCE_FACTOR = 0.5
+
+
+def _manhattan_distance(a, b) -> int:
+    return abs(a.row - b.row) + abs(a.col - b.col)
+
+
+def _hungarian_assignment_cost(
+    boxes: Sequence,
+    goals: Sequence,
+) -> float:
+    if not boxes or not goals:
+        return 0.0
+
+    cost_matrix = []
+    for box in boxes:
+        row_costs = []
+        for goal in goals:
+            row_costs.append(_manhattan_distance(box, goal))
+        cost_matrix.append(row_costs)
+
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    return float(sum(cost_matrix[i][j] for i, j in zip(row_ind, col_ind, strict=False)))
+
+
+def _player_to_nearest_unsolved_box(board: Board, state: SokobanState) -> float:
+    unsolved_boxes = [box for box in state.boxes if not board.is_goal(box)]
+    if not unsolved_boxes:
+        return 0.0
+    return float(min(_manhattan_distance(state.player, box) for box in unsolved_boxes))
+
 
 def dead_square_heuristic(board: Board, state: SokobanState) -> float:
     """Devuelve inf si alguna caja no-goal está atrapada en una esquina.
@@ -71,40 +103,26 @@ def hungarian_heuristic(board: Board, state: SokobanState) -> float:
     de las distancias sea la mínima posible. Retorna infinito si detecta
     una caja atrapada en una esquina para podar la rama tempranamente.
     """
-    boxes = state.boxes
-    goals = board.goals
-
     # 1. Poda temprana: Si hay cajas en celdas muertas, el costo es infinito.
-    for box in boxes:
+    for box in state.boxes:
         if board.is_dead_square(box):
             return math.inf
 
-    # Casos borde (aunque en Sokoban estándar siempre hay cajas y goals)
-    if not boxes or not goals:
-        return 0.0
+    return _hungarian_assignment_cost(tuple(state.boxes), tuple(board.goals))
 
-    # 2. Construir la matriz de costos
-    # cost_matrix[i][j] será la distancia de la caja i al goal j
-    cost_matrix = []
-    for box in boxes:
-        row_costs = []
-        for goal in goals:
-            # Calculamos la distancia Manhattan
-            dist = abs(box.row - goal.row) + abs(box.col - goal.col)
-            row_costs.append(dist)
-        cost_matrix.append(row_costs)
 
-    # 3. Aplicar el algoritmo Húngaro (Jonker-Volgenant)
-    # row_ind contiene los índices de las cajas, col_ind los índices de los goals asignados
-    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+def weighted_hungarian_heuristic(board: Board, state: SokobanState) -> float:
+    """Heurística no admisible basada en Hungarian inflada + término del jugador.
 
-    # 4. Sumar los costos de la asignación óptima
-    total_cost = 0.0
-    for i in range(len(row_ind)):
-        # Accedemos a la matriz original con los índices óptimos que nos devolvió scipy
-        total_cost += cost_matrix[row_ind[i]][col_ind[i]]
-
-    return total_cost
+    Multiplica el matching óptimo caja-goal por un factor > 1 y agrega la
+    distancia Manhattan del jugador a la caja no resuelta más cercana.
+    Esto la vuelve más agresiva para guiar Greedy/A*, pero deja de garantizar
+    optimalidad. La poda por dead squares se deja separada para combinarla con
+    max(weighted_hungarian, dead_square) cuando haga falta.
+    """
+    base_cost = _hungarian_assignment_cost(tuple(state.boxes), tuple(board.goals))
+    player_term = _player_to_nearest_unsolved_box(board, state)
+    return WEIGHTED_HUNGARIAN_FACTOR * base_cost + PLAYER_DISTANCE_FACTOR * player_term
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +133,7 @@ HEURISTICS: dict[str, HeuristicFn] = {
     "euclidean": euclidean_heuristic,
     "dead_square": dead_square_heuristic,
     "hungarian": hungarian_heuristic,
+    "weighted_hungarian": weighted_hungarian_heuristic,
 }
 
 
