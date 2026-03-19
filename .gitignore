@@ -207,3 +207,9 @@ marimo/_lsp/
 __marimo__/
 /tp1/uv.lock
 /.idea
+
+# MacOS
+.DS_Store
+
+# Results
+tp1/results/*
