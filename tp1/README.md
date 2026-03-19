@@ -343,14 +343,7 @@ uv run python scripts/run_batch.py --timeout 30 --output results/benchmark/bench
 
 ## Generacion de graficos
 
-```bash
-uv run python scripts/make_plots.py --input results/benchmark/benchmark.csv --outdir results/benchmark/plots
-```
-
-**Graficos generados:**
-
-- Bar charts agrupados (nodos expandidos, tiempo, costo de solucion)
-- Heatmap de algoritmo x nivel (nodos expandidos)
+Los graficos se generan con scripts especificos segun el experimento (`box_count_traps_plots.py`, `dead_square_showcase.py`, `plot_weighted_tradeoff.py`).
 - Comparacion de heuristicas por algoritmo (A* y Greedy)
 - Dashboard interactivo HTML (Plotly)
 
@@ -492,8 +485,7 @@ tp1/
 │   ├── level_07.txt            # 6x8, 2 cajas
 │   └── weighted_hungarian_counterexample.txt  # 7x7, contraejemplo no admisible
 ├── scripts/
-│   ├── run_batch.py            # Benchmark: todas las combinaciones -> CSV
-│   └── make_plots.py           # Generacion de graficos (matplotlib + plotly)
+│   └── run_batch.py            # Benchmark: todas las combinaciones -> CSV
 ├── results/
 │   ├── raw/                    # Replays JSON (generados con --save-replay)
 │   └── benchmark/
