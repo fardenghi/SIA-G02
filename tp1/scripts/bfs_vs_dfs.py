@@ -105,6 +105,8 @@ def main() -> None:
         )
 
     print(f"\nResultados guardados en: {out_file}")
+    print(f"\nPara visualizar los resultados ejecutá:")
+    print(f"  uv run python scripts/bfs_vs_dfs_plots.py --result {out_file}")
 
 
 if __name__ == "__main__":

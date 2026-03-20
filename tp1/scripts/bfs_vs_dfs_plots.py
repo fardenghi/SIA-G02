@@ -108,7 +108,7 @@ def _plot_expanded(ax, boards, results):
         ax, boards, bfs_vals, dfs_vals,
         ylabel="Nodos expandidos",
         title="Nodos expandidos",
-        log_scale=True,
+        log_scale=False,
     )
     _annotate_status(ax, x, [v or 1 for v in bfs_vals], bfs_ok, [-w / 2] * len(x))
     _annotate_status(ax, x, [v or 1 for v in dfs_vals], dfs_ok, [+w / 2] * len(x))
@@ -124,7 +124,7 @@ def _plot_time(ax, boards, results):
         ax, boards, bfs_vals, dfs_vals,
         ylabel="Tiempo (s)",
         title="Tiempo de ejecución",
-        log_scale=True,
+        log_scale=False,
     )
     _annotate_status(ax, x, [v or 1e-9 for v in bfs_vals], bfs_ok, [-w / 2] * len(x))
     _annotate_status(ax, x, [v or 1e-9 for v in dfs_vals], dfs_ok, [+w / 2] * len(x))
