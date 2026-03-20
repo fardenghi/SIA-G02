@@ -1,5 +1,4 @@
 [search]
 algorithm = "astar"
-#board = "boards/sokoban/weighted_hungarian_counterexample2.txt"
-board = "boards/sokoban/box_count_traps/boxes_10.txt"
+board = "boards/sokoban/level_10.txt"
 heuristic = ["manhattan"]

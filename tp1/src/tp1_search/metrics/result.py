@@ -7,7 +7,7 @@ from tp1_search.types import Direction
 class SearchResult:
     """Resultado de un algoritmo de búsqueda.
 
-    Contiene todo lo que pide el enunciado:
+    Contiene:
       - Resultado (éxito/fracaso)
       - Costo de la solución
       - Cantidad de nodos expandidos

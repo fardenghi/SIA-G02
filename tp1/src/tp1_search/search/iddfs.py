@@ -13,12 +13,17 @@ _LOG_INTERVAL = 10_000
 
 
 def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
-    """Iterative Deepening Depth-First Search.
+    """Iterative Deepening Depth-First Search con graph-search por iteración.
 
-    Combina la completitud de BFS con el uso de memoria de DFS.
-    Incrementa el límite de profundidad en cada iteración y ejecuta
-    un DFS limitado por profundidad (con visited set por iteración).
-    Garantiza encontrar la solución con menor profundidad.
+    Incrementa el límite de profundidad en cada iteración y ejecuta un DFS
+    limitado por profundidad. En cada iteración reinicia un diccionario de
+    visitados para evitar ciclos y permitir reabrir estados si reaparecen a
+    menor profundidad.
+
+    Con costos uniformes, garantiza encontrar la solución de menor
+    profundidad. Como mantiene visitados por iteración, esta variante no usa
+    la memoria mínima del IDDFS clásico puro: el consumo crece con los estados
+    alcanzados dentro de la iteración actual.
     """
     start_time = time.time()
     total_expanded = 0
@@ -46,7 +51,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
 
     while True:
         # DFS limitado con visited set fresco para esta iteración
-        result, expanded, cutoff_occurred = _depth_limited_search(
+        result, expanded, cutoff_occurred, frontier_nodes = _depth_limited_search(
             board, root, depth_limit, cols
         )
         total_expanded += expanded
@@ -76,7 +81,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
                 path=result.reconstruct_path(),
                 cost=result.path_cost,
                 expanded_nodes=total_expanded,
-                frontier_nodes=0,
+                frontier_nodes=frontier_nodes,
                 time_elapsed=elapsed,
             )
 
@@ -94,7 +99,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
                 path=[],
                 cost=0,
                 expanded_nodes=total_expanded,
-                frontier_nodes=0,
+                frontier_nodes=frontier_nodes,
                 time_elapsed=elapsed,
             )
 
@@ -106,14 +111,15 @@ def _depth_limited_search(
     root: SearchNode,
     limit: int,
     cols: int,
-) -> tuple[SearchNode | None, int, bool]:
+) -> tuple[SearchNode | None, int, bool, int]:
     """DFS limitado por profundidad.
 
     Returns:
-        (solution_node, expanded_count, cutoff_occurred)
+        (solution_node, expanded_count, cutoff_occurred, frontier_nodes)
         - solution_node: nodo goal si se encontró, None si no
         - expanded_count: nodos expandidos en esta iteración
         - cutoff_occurred: True si algún nodo fue cortado por el límite
+        - frontier_nodes: nodos pendientes en la pila al terminar la iteración
     """
     expanded = 0
     cutoff_occurred = False
@@ -145,8 +151,8 @@ def _depth_limited_search(
             child_node = node.expand_child(child_state, action, step_cost)
 
             if is_goal(board, child_state):
-                return child_node, expanded, False
+                return child_node, expanded, False, len(stack)
 
             stack.append(child_node)
 
-    return None, expanded, cutoff_occurred
+    return None, expanded, cutoff_occurred, len(stack)

@@ -22,7 +22,7 @@ Se implementaron 5 algoritmos de busqueda, divididos en **no informados** e **in
 |-----------|-------------|--------|----------|
 | **BFS** | Breadth-First Search. Usa frontera FIFO (cola). Verifica objetivo al generar el nodo. | Si (minimo pasos) | Si |
 | **DFS** | Depth-First Search. Usa frontera LIFO (pila). Verifica objetivo al generar el nodo. | No | Si (con graph-search) |
-| **IDDFS** | Iterative Deepening DFS. Ejecuta DFS con limite de profundidad incremental (0, 1, 2, ...). Usa un conjunto de visitados fresco por cada iteracion. | Si (minima profundidad) | Si |
+| **IDDFS** | Iterative Deepening DFS. Ejecuta DFS con limite de profundidad incremental (0, 1, 2, ...) en una variante graph-search: usa un conjunto de visitados fresco por cada iteracion. | Si (minima profundidad) | Si |
 
 ### Informados (requieren heuristica)
 
@@ -244,6 +244,7 @@ Los graficos actuales se generan con scripts especificos segun el experimento:
 - `scripts/box_count_traps_plots.py`: compara heuristicas con **Greedy** en funcion de la cantidad de cajas sobre `boards/sokoban/box_count_traps/`
 - `scripts/dead_square_showcase.py`: compara `manhattan` vs `max(manhattan, dead_square)` en un tablero con muchas esquinas
 - `scripts/plot_weighted_tradeoff.py`: compara `manhattan` vs `weighted_hungarian` en el contraejemplo no admisible
+- `scripts/single_board_all_algorithms.py`: corre un mismo tablero 10 veces para todos los algoritmos y grafica barras con error, usando combinaciones utiles de heuristicas para Greedy y A*
 
 Ejemplos:
 
@@ -253,6 +254,7 @@ uv run python scripts/box_count_traps_plots.py --plot-only
 
 uv run python scripts/dead_square_showcase.py --runs 5
 uv run python scripts/plot_weighted_tradeoff.py --runs 5
+uv run python scripts/single_board_all_algorithms.py --board boards/sokoban/level_02.txt --runs 10
 ```
 
 Archivos generados actualmente:
@@ -262,6 +264,7 @@ Archivos generados actualmente:
 - `results/plots/heuristics_by_boxcount_time.html`
 - `results/plots/dead_square_showcase.png`
 - `results/plots/weighted_hungarian_counterexample_tradeoff.png`
+- `results/plots/level_02_all_algorithms.png`
 
 ---
 
