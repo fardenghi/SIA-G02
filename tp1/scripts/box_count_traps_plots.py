@@ -294,11 +294,84 @@ def _mask_band(
     return masked_means, masked_stds
 
 
+def _nice_step(value: float) -> float:
+    exponent = math.floor(math.log10(value))
+    fraction = value / (10**exponent)
+
+    if fraction < 1.5:
+        nice_fraction = 1
+    elif fraction < 3.5:
+        nice_fraction = 2
+    elif fraction < 7.5:
+        nice_fraction = 5
+    else:
+        nice_fraction = 10
+
+    return nice_fraction * (10**exponent)
+
+
+def _next_nice_step(step: float) -> float:
+    exponent = math.floor(math.log10(step))
+    fraction = step / (10**exponent)
+
+    if fraction < 1.5:
+        return 2 * (10**exponent)
+    if fraction < 3.5:
+        return 5 * (10**exponent)
+    return 10 ** (exponent + 1)
+
+
 def _power_tick_labels(lower: float, upper: float) -> tuple[list[float], list[str]]:
-    min_exp = math.floor(math.log10(lower))
-    max_exp = math.ceil(math.log10(upper))
-    vals = [10**exp for exp in range(min_exp, max_exp + 1)]
-    texts = [f"10<sup>{exp}</sup>" for exp in range(min_exp, max_exp + 1)]
+    ratio = upper / lower
+
+    if ratio <= 10:
+        step = _nice_step((upper - lower) / 3)
+
+        while True:
+            start = math.floor(lower / step) * step
+            if start < lower:
+                start += step
+
+            vals: list[float] = []
+            value = start
+            while value <= upper * (1 + 1e-9):
+                vals.append(value)
+                value += step
+
+            if 2 <= len(vals) <= 4:
+                break
+
+            if len(vals) < 2:
+                vals = [lower, upper]
+                break
+
+            step = _next_nice_step(step)
+    else:
+        vals = []
+        for mantissas in ([1], [1, 5], [1, 2, 5]):
+            candidates: list[float] = []
+            min_exp = math.floor(math.log10(lower)) - 1
+            max_exp = math.ceil(math.log10(upper)) + 1
+
+            for exp in range(min_exp, max_exp + 1):
+                scale = 10**exp
+                for mantissa in mantissas:
+                    value = mantissa * scale
+                    if lower <= value <= upper:
+                        candidates.append(value)
+
+            if 2 <= len(candidates) <= 4:
+                vals = candidates
+                break
+
+            if not vals and candidates:
+                vals = candidates
+
+        if len(vals) > 4:
+            stride = math.ceil(len(vals) / 4)
+            vals = vals[::stride]
+
+    texts = [f"{value:.2g}" for value in vals]
     return vals, texts
 
 

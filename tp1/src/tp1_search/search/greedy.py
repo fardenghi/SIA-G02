@@ -77,7 +77,7 @@ def greedy(
                 f"\r[Greedy] ¡solución encontrada! "
                 f"expandidos: {expanded:,}  |  "
                 f"costo: {node.path_cost}  |  "
-                f"tiempo: {elapsed:.3f}s\n"
+                f"tiempo: {elapsed:.3f}s                   \n"
             )
             sys.stderr.flush()
             return SearchResult(

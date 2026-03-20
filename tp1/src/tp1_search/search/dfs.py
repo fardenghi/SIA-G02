@@ -79,7 +79,7 @@ def dfs(board: Board, initial_state: SokobanState) -> SearchResult:
                     f"\r[DFS] ¡solución encontrada! "
                     f"expandidos: {expanded:,}  |  "
                     f"costo: {child_node.path_cost}  |  "
-                    f"tiempo: {elapsed:.3f}s\n"
+                    f"tiempo: {elapsed:.3f}s                   \n"
                 )
                 sys.stderr.flush()
                 return SearchResult(

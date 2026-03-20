@@ -30,6 +30,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.patches import Patch
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -404,7 +405,7 @@ def _bar_style(spec: ExperimentSpec) -> dict[str, str]:
     }
 
 
-def _add_group_bands(ax: plt.Axes) -> None:
+def _add_group_bands(ax: Axes) -> None:
     groups = [
         (-0.5, 2.5, "No informados", "#F2EFEA"),
         (2.5, 9.5, "Greedy", "#EAF7F4"),
@@ -435,7 +436,6 @@ def build_plot(rows: list[RowData], board_path: Path, outpath: Path, runs: int) 
     x_positions = list(range(len(EXPERIMENTS)))
     labels = [spec.plot_label for spec in EXPERIMENTS]
     node_means = [summary[spec.key]["nodes_mean"] for spec in EXPERIMENTS]
-    node_stds = [summary[spec.key]["nodes_std"] for spec in EXPERIMENTS]
     time_means = [summary[spec.key]["time_mean"] for spec in EXPERIMENTS]
     time_stds = [summary[spec.key]["time_std"] for spec in EXPERIMENTS]
 
@@ -460,14 +460,10 @@ def build_plot(rows: list[RowData], board_path: Path, outpath: Path, runs: int) 
             x_positions[index],
             node_means[index],
             width=0.72,
-            yerr=node_stds[index],
             color=style["facecolor"],
             edgecolor=style["edgecolor"],
             linewidth=1.8,
             hatch=style["hatch"],
-            ecolor="#1F1F1F",
-            capsize=5,
-            error_kw={"elinewidth": 1.5, "capthick": 1.5},
             zorder=3,
         )
         ax_time.bar(
@@ -496,9 +492,7 @@ def build_plot(rows: list[RowData], board_path: Path, outpath: Path, runs: int) 
         ax_time.set_ylim(min(time_positive) * 0.7, max(time_positive) * 1.6)
 
     ax_nodes.set_title("Nodos expandidos", fontsize=16, weight="bold")
-    ax_nodes.set_ylabel("Media +/- sigma", fontsize=11)
     ax_time.set_title("Tiempo de ejecucion", fontsize=16, weight="bold")
-    ax_time.set_ylabel("Media +/- sigma (s)", fontsize=11)
 
     ax_time.set_xticks(x_positions)
     ax_time.set_xticklabels(labels, rotation=32, ha="right", fontsize=10)
@@ -532,8 +526,7 @@ def build_plot(rows: list[RowData], board_path: Path, outpath: Path, runs: int) 
         0.5,
         0.02,
         (
-            f"Tablero: {board_path.name} | barras de error = sigma | "
-            "combos con DS usan max(h, dead_square)"
+            f"Tablero: {board_path.name} "
         ),
         ha="center",
         fontsize=10,

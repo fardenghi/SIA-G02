@@ -73,7 +73,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
                 f"profundidad: {depth_limit}  |  "
                 f"expandidos: {total_expanded:,}  |  "
                 f"costo: {result.path_cost}  |  "
-                f"tiempo: {elapsed:.3f}s\n"
+                f"tiempo: {elapsed:.3f}s                   \n"
             )
             sys.stderr.flush()
             return SearchResult(

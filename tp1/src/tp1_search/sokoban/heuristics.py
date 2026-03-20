@@ -51,8 +51,6 @@ def _player_to_nearest_unsolved_box(board: Board, state: SokobanState) -> float:
 def dead_square_heuristic(board: Board, state: SokobanState) -> float:
     """Devuelve inf si alguna caja no-goal está atrapada en una esquina.
 
-    Esta versión detecta deadlocks locales de esquina al momento de evaluar
-    el estado, sin preprocesar el tablero completo.
 
     Es admisible: si el estado es irresolvible el costo real también es inf;
     si no, devolver 0 nunca sobreestima.
@@ -100,13 +98,8 @@ def hungarian_heuristic(board: Board, state: SokobanState) -> float:
     """Suma de distancias Manhattan usando asignación óptima (Algoritmo Húngaro).
 
     Empareja cada caja con un goal único de forma tal que la suma total
-    de las distancias sea la mínima posible. Retorna infinito si detecta
-    una caja atrapada en una esquina para podar la rama tempranamente.
+    de las distancias sea la mínima posible.
     """
-    # 1. Poda temprana: Si hay cajas en celdas muertas, el costo es infinito.
-    for box in state.boxes:
-        if board.is_dead_square(box):
-            return math.inf
 
     return _hungarian_assignment_cost(tuple(state.boxes), tuple(board.goals))
 
@@ -117,8 +110,7 @@ def weighted_hungarian_heuristic(board: Board, state: SokobanState) -> float:
     Multiplica el matching óptimo caja-goal por un factor > 1 y agrega la
     distancia Manhattan del jugador a la caja no resuelta más cercana.
     Esto la vuelve más agresiva para guiar Greedy/A*, pero deja de garantizar
-    optimalidad. La poda por dead squares se deja separada para combinarla con
-    max(weighted_hungarian, dead_square) cuando haga falta.
+    optimalidad.
     """
     base_cost = _hungarian_assignment_cost(tuple(state.boxes), tuple(board.goals))
     player_term = _player_to_nearest_unsolved_box(board, state)
