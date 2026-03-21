@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Visualización comparativa BFS vs DFS.
 
-Uso:
-    uv run python scripts/bfs_vs_dfs_plots.py [--input DIR] [--output PATH]
+Lee los JSONs de una carpeta de corridas (generada por bfs_vs_dfs.py),
+promedia las métricas entre corridas y genera un PNG con barras de error.
 
-Lee los JSON de results/bfs_vs_dfs/ (generados por bfs_vs_dfs.py) y produce
-un PNG con cuatro subgráficos: nodos expandidos, tiempo, costo y status.
+Uso:
+    uv run python scripts/bfs_vs_dfs_plots.py --result results/bfs_vs_dfs/level_01_20260320_093344/
 """
 
 from __future__ import annotations
@@ -27,139 +27,106 @@ ROOT = Path(__file__).resolve().parent.parent
 
 BFS_COLOR = "#4C72B0"
 DFS_COLOR = "#DD8452"
-OK_MARKER = "✓"
-FAIL_MARKER = "✗"
 
 
-# ── data loading ─────────────────────────────────────────────────────────
+# ── data loading ──────────────────────────────────────────────────────────
+
+
+def load_runs(folder: Path) -> list[dict]:
+    files = sorted(folder.glob("run_*.json"))
+    if not files:
+        print(f"Error: no se encontraron archivos run_*.json en {folder}", file=sys.stderr)
+        sys.exit(1)
+    runs = []
+    for f in files:
+        with open(f) as fp:
+            runs.append(json.load(fp))
+    return runs
+
+
+def compute_stats(runs: list[dict], algo: str, metric: str) -> tuple[float, float]:
+    """Returns (mean, std) for the given algo+metric across all runs."""
+    vals = [r[algo][metric] for r in runs if r.get(algo, {}).get(metric) is not None]
+    if not vals:
+        return 0.0, 0.0
+    return float(np.mean(vals)), float(np.std(vals))
+
+
+def success_rate(runs: list[dict], algo: str) -> float:
+    vals = [r[algo].get("success", False) for r in runs if r.get(algo)]
+    return sum(vals) / len(vals) if vals else 0.0
 
 
 # ── plotting helpers ──────────────────────────────────────────────────────
 
 
-def _extract(results: dict, algo: str, metric: str) -> list:
-    return [results[b].get(algo, {}).get(metric, None) for b in results]
+def _plain_fmt(x, _pos):
+    if x == 0:
+        return "0"
+    if x >= 1:
+        return f"{x:.0f}" if x == int(x) else f"{x:g}"
+    return f"{x:.10f}".rstrip("0").rstrip(".")
 
 
-def _annotate_status(ax, x_positions, values, statuses, offsets):
-    """Draw ✓/✗ above each bar according to success status."""
-    for x, v, ok, off in zip(x_positions, values, statuses, offsets):
-        if v is None:
-            continue
-        label = OK_MARKER if ok else FAIL_MARKER
-        color = "#2ca02c" if ok else "#d62728"
-        ax.text(
-            x + off,
-            v * 1.05,
-            label,
-            ha="center",
-            va="bottom",
-            fontsize=11,
-            color=color,
-        )
+def _bar_group(ax, bfs_mean, dfs_mean, bfs_err, dfs_err, ylabel, title, error_bars=False):
+    w = 0.5
 
+    # Normalize to BFS: BFS = 1, DFS = dfs/bfs
+    scale = bfs_mean if bfs_mean > 0 else 1.0
+    bfs_norm = bfs_mean / scale          # always 1.0
+    dfs_norm = dfs_mean / scale
+    bfs_err_norm = bfs_err / scale if error_bars else None
+    dfs_err_norm = dfs_err / scale if error_bars else None
 
-def _bar_group(ax, boards, bfs_vals, dfs_vals, ylabel, title, log_scale=False):
-    """Grouped bar chart (BFS | DFS) for a single metric."""
-    n = len(boards)
-    x = np.arange(n)
-    w = 0.35
+    err_kw = dict(capsize=6, error_kw={"elinewidth": 1.5, "ecolor": "black"})
 
-    bfs_plot = [v if v is not None else 0 for v in bfs_vals]
-    dfs_plot = [v if v is not None else 0 for v in dfs_vals]
+    ax.bar(0, bfs_norm, w, yerr=bfs_err_norm, label="BFS", color=BFS_COLOR,
+           **(err_kw if error_bars else {}))
+    ax.bar(1, dfs_norm, w, yerr=dfs_err_norm, label="DFS", color=DFS_COLOR,
+           **(err_kw if error_bars else {}))
 
-    ax.bar(x - w / 2, bfs_plot, w, label="BFS", color=BFS_COLOR)
-    ax.bar(x + w / 2, dfs_plot, w, label="DFS", color=DFS_COLOR)
+    # Annotate actual values above each bar
+    ax.text(0, bfs_norm + 0.05, _plain_fmt(bfs_mean, None), ha="center", va="bottom", fontsize=9)
+    ax.text(1, dfs_norm + 0.05, _plain_fmt(dfs_mean, None), ha="center", va="bottom", fontsize=9)
 
     ax.set_title(title, fontsize=11, fontweight="bold")
-    ax.set_ylabel(ylabel)
-    ax.set_xticks(x)
-    ax.set_xticklabels([""] * len(boards))
+    ax.set_ylabel(f"{ylabel}  (× BFS)")
+    ax.set_xticks([0, 1])
+    ax.set_xticklabels(["BFS", "DFS"], fontsize=11)
     ax.legend(fontsize=9)
-
-    if log_scale:
-        ax.set_yscale("log")
-
-    # Force plain decimal notation on both major and minor ticks
-    def _plain_fmt(x, _pos):
-        if x == 0:
-            return "0"
-        if x >= 1:
-            return f"{x:.0f}" if x == int(x) else f"{x:g}"
-        # Small decimals: strip trailing zeros
-        return f"{x:.10f}".rstrip("0").rstrip(".")
-
-    ax.yaxis.set_major_formatter(ticker.FuncFormatter(_plain_fmt))
-    ax.yaxis.set_minor_formatter(ticker.FuncFormatter(_plain_fmt))
-
-    return x, w
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f"{x:.2f}x"))
 
 
 # ── individual plot functions ─────────────────────────────────────────────
 
 
-def _plot_expanded(ax, boards, results):
-    bfs_vals = _extract(results, "bfs", "expanded_nodes")
-    dfs_vals = _extract(results, "dfs", "expanded_nodes")
-    bfs_ok = _extract(results, "bfs", "success")
-    dfs_ok = _extract(results, "dfs", "success")
-
-    x, w = _bar_group(
-        ax, boards, bfs_vals, dfs_vals,
-        ylabel="Nodos expandidos",
-        title="Nodos expandidos",
-        log_scale=False,
-    )
-    _annotate_status(ax, x, [v or 1 for v in bfs_vals], bfs_ok, [-w / 2] * len(x))
-    _annotate_status(ax, x, [v or 1 for v in dfs_vals], dfs_ok, [+w / 2] * len(x))
+def _plot_expanded(ax, runs):
+    bfs_m, bfs_e = compute_stats(runs, "bfs", "expanded_nodes")
+    dfs_m, dfs_e = compute_stats(runs, "dfs", "expanded_nodes")
+    _bar_group(ax, bfs_m, dfs_m, bfs_e, dfs_e,
+               ylabel="Nodos expandidos", title="Nodos expandidos")
 
 
-def _plot_time(ax, boards, results):
-    bfs_vals = _extract(results, "bfs", "time_elapsed")
-    dfs_vals = _extract(results, "dfs", "time_elapsed")
-    bfs_ok = _extract(results, "bfs", "success")
-    dfs_ok = _extract(results, "dfs", "success")
-
-    x, w = _bar_group(
-        ax, boards, bfs_vals, dfs_vals,
-        ylabel="Tiempo (s)",
-        title="Tiempo de ejecución",
-        log_scale=False,
-    )
-    _annotate_status(ax, x, [v or 1e-9 for v in bfs_vals], bfs_ok, [-w / 2] * len(x))
-    _annotate_status(ax, x, [v or 1e-9 for v in dfs_vals], dfs_ok, [+w / 2] * len(x))
+def _plot_frontier(ax, runs):
+    bfs_m, bfs_e = compute_stats(runs, "bfs", "frontier_nodes")
+    dfs_m, dfs_e = compute_stats(runs, "dfs", "frontier_nodes")
+    _bar_group(ax, bfs_m, dfs_m, bfs_e, dfs_e,
+               ylabel="Nodos frontera", title="Nodos frontera")
 
 
-def _plot_cost(ax, boards, results):
-    bfs_vals = _extract(results, "bfs", "cost")
-    dfs_vals = _extract(results, "dfs", "cost")
-    bfs_ok = _extract(results, "bfs", "success")
-    dfs_ok = _extract(results, "dfs", "success")
-
-    x, w = _bar_group(
-        ax, boards, bfs_vals, dfs_vals,
-        ylabel="Costo (pasos)",
-        title="Costo de la solución",
-        log_scale=False,
-    )
-    _annotate_status(ax, x, [max(v or 0, 0.1) for v in bfs_vals], bfs_ok, [-w / 2] * len(x))
-    _annotate_status(ax, x, [max(v or 0, 0.1) for v in dfs_vals], dfs_ok, [+w / 2] * len(x))
+def _plot_time(ax, runs):
+    bfs_m, bfs_e = compute_stats(runs, "bfs", "time_elapsed")
+    dfs_m, dfs_e = compute_stats(runs, "dfs", "time_elapsed")
+    _bar_group(ax, bfs_m, dfs_m, bfs_e, dfs_e,
+               ylabel="Tiempo (s)", title="Tiempo de ejecución", error_bars=True)
 
 
-def _plot_frontier(ax, boards, results):
-    bfs_vals = _extract(results, "bfs", "frontier_nodes")
-    dfs_vals = _extract(results, "dfs", "frontier_nodes")
-    bfs_ok = _extract(results, "bfs", "success")
-    dfs_ok = _extract(results, "dfs", "success")
+def _plot_cost(ax, runs):
+    bfs_m, bfs_e = compute_stats(runs, "bfs", "cost")
+    dfs_m, dfs_e = compute_stats(runs, "dfs", "cost")
+    _bar_group(ax, bfs_m, dfs_m, bfs_e, dfs_e,
+               ylabel="Costo (pasos)", title="Costo de la solución")
 
-    x, w = _bar_group(
-        ax, boards, bfs_vals, dfs_vals,
-        ylabel="Nodos frontera",
-        title="Nodos frontera",
-        log_scale=False,
-    )
-    _annotate_status(ax, x, [v or 1 for v in bfs_vals], bfs_ok, [-w / 2] * len(x))
-    _annotate_status(ax, x, [v or 1 for v in dfs_vals], dfs_ok, [+w / 2] * len(x))
 
 
 # ── main ──────────────────────────────────────────────────────────────────
@@ -167,41 +134,38 @@ def _plot_frontier(ax, boards, results):
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Genera gráfico comparativo BFS vs DFS desde un JSON de resultados"
+        description="Genera gráfico comparativo BFS vs DFS desde una carpeta de corridas"
     )
     parser.add_argument(
         "--result",
         type=str,
         required=True,
-        help="Ruta al JSON generado por bfs_vs_dfs.py",
+        help="Carpeta con los run_*.json generados por bfs_vs_dfs.py",
     )
     args = parser.parse_args()
 
-    result_path = Path(args.result)
-    if not result_path.exists():
-        print(f"Error: archivo no encontrado: {result_path}", file=sys.stderr)
+    result_dir = Path(args.result)
+    if not result_dir.is_dir():
+        print(f"Error: carpeta no encontrada: {result_dir}", file=sys.stderr)
         sys.exit(1)
 
-    output_path = result_path.with_suffix(".png")
+    runs = load_runs(result_dir)
+    print(f"Corridas cargadas: {len(runs)}  ({result_dir.name})")
 
-    with open(result_path) as fp:
-        data = json.load(fp)
-    board_name = result_path.stem.rsplit("_", 2)[0]
-    results = {board_name: data}
-    boards = [board_name]
-
-    print(f"Tableros encontrados: {', '.join(boards)}")
+    output_path = result_dir / "comparison.png"
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle("BFS vs DFS — Comparación de métricas", fontsize=14, fontweight="bold")
+    fig.suptitle(
+        f"BFS vs DFS — {result_dir.name}  (n={len(runs)})",
+        fontsize=13, fontweight="bold",
+    )
 
-    _plot_expanded(axes[0, 0], boards, results)
-    _plot_frontier(axes[0, 1], boards, results)
-    _plot_time(axes[1, 0], boards, results)
-    _plot_cost(axes[1, 1], boards, results)
+    _plot_expanded(axes[0, 0], runs)
+    _plot_frontier(axes[0, 1], runs)
+    _plot_time(axes[1, 0], runs)
+    _plot_cost(axes[1, 1], runs)
 
     fig.tight_layout()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 

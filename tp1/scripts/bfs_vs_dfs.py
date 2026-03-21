@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Compara BFS vs DFS en un único tablero de Sokoban, ejecutándolos en paralelo.
 
+Corre 5 veces y guarda cada resultado en una carpeta con timestamp.
+
 Uso:
     uv run python scripts/bfs_vs_dfs.py --map boards/sokoban/level_01.txt
-
-Genera un JSON en results/bfs_vs_dfs/<stem>_<YYYYMMDD_HHMMSS>.json con los
-resultados de ambos algoritmos.
 """
 
 from __future__ import annotations
@@ -19,9 +18,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Asegurar que el paquete se pueda importar al correr como script
-# ---------------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -29,9 +25,10 @@ from tp1_search.sokoban.parser import parse_board  # noqa: E402
 from tp1_search.search.bfs import bfs  # noqa: E402
 from tp1_search.search.dfs import dfs  # noqa: E402
 
+N_RUNS = 5
+
 
 def _worker(algo_name: str, board_path: str, queue: mp.Queue) -> None:
-    """Worker function executed in a child process."""
     with (
         contextlib.redirect_stderr(io.StringIO()),
         contextlib.redirect_stdout(io.StringIO()),
@@ -51,6 +48,24 @@ def _worker(algo_name: str, board_path: str, queue: mp.Queue) -> None:
     )
 
 
+def run_once(board_path: str) -> dict:
+    bfs_queue: mp.Queue = mp.Queue()
+    dfs_queue: mp.Queue = mp.Queue()
+
+    bfs_proc = mp.Process(target=_worker, args=("bfs", board_path, bfs_queue))
+    dfs_proc = mp.Process(target=_worker, args=("dfs", board_path, dfs_queue))
+
+    bfs_proc.start()
+    dfs_proc.start()
+    bfs_proc.join()
+    dfs_proc.join()
+
+    return {
+        "bfs": bfs_queue.get_nowait() if not bfs_queue.empty() else {},
+        "dfs": dfs_queue.get_nowait() if not dfs_queue.empty() else {},
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compara BFS vs DFS en paralelo sobre un tablero de Sokoban"
@@ -64,49 +79,28 @@ def main() -> None:
     if not board_path.exists():
         sys.exit(f"Error: tablero no encontrado: {board_path}")
 
-    bfs_queue: mp.Queue = mp.Queue()
-    dfs_queue: mp.Queue = mp.Queue()
-
-    bfs_proc = mp.Process(target=_worker, args=("bfs", str(board_path), bfs_queue))
-    dfs_proc = mp.Process(target=_worker, args=("dfs", str(board_path), dfs_queue))
-
-    print(f"Ejecutando BFS y DFS sobre {board_path.name} ...")
-    bfs_proc.start()
-    dfs_proc.start()
-    bfs_proc.join()
-    dfs_proc.join()
-
-    bfs_result = bfs_queue.get_nowait() if not bfs_queue.empty() else None
-    dfs_result = dfs_queue.get_nowait() if not dfs_queue.empty() else None
-
-    output: dict = {
-        "bfs": bfs_result or {},
-        "dfs": dfs_result or {},
-    }
-
-    out_dir = ROOT / "results" / "bfs_vs_dfs"
-    out_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_file = out_dir / f"{board_path.stem}_{timestamp}.json"
+    out_dir = ROOT / "results" / "bfs_vs_dfs" / f"{board_path.stem}_{timestamp}"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(out_file, "w") as f:
-        json.dump(output, f, indent=2)
+    print(f"Ejecutando {N_RUNS} corridas de BFS y DFS sobre {board_path.name} ...\n")
 
-    # Console summary
-    print()
-    for algo, res in output.items():
-        if not res:
-            print(f"  {algo.upper()}: sin resultado (proceso fallido)")
-            continue
-        status = "OK" if res["success"] else "FAIL"
-        print(
-            f"  {algo.upper()}: {status}  cost={res['cost']}  "
-            f"expanded={res['expanded_nodes']}  time={res['time_elapsed']:.3f}s"
-        )
+    for i in range(1, N_RUNS + 1):
+        result = run_once(str(board_path))
 
-    print(f"\nResultados guardados en: {out_file}")
+        out_file = out_dir / f"run_{i}.json"
+        with open(out_file, "w") as f:
+            json.dump(result, f, indent=2)
+
+        bfs_r = result["bfs"]
+        dfs_r = result["dfs"]
+        print(f"  [{i}/{N_RUNS}]  "
+              f"BFS: cost={bfs_r.get('cost')}  expanded={bfs_r.get('expanded_nodes')}  time={bfs_r.get('time_elapsed', 0):.4f}s  |  "
+              f"DFS: cost={dfs_r.get('cost')}  expanded={dfs_r.get('expanded_nodes')}  time={dfs_r.get('time_elapsed', 0):.4f}s")
+
+    print(f"\nResultados guardados en: {out_dir}")
     print(f"\nPara visualizar los resultados ejecutá:")
-    print(f"  uv run python scripts/bfs_vs_dfs_plots.py --result {out_file}")
+    print(f"  uv run python scripts/bfs_vs_dfs_plots.py --result {out_dir}")
 
 
 if __name__ == "__main__":
