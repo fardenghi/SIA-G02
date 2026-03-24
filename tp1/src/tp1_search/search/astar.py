@@ -56,6 +56,7 @@ def astar(
     frontier = PriorityFrontier()
     h_root = heuristic(board, initial_state)
     frontier.push(root, priority=root.path_cost + h_root)
+    max_frontier = 1
 
     # g-score mínimo conocido por estado para preservar optimalidad
     # en graph-search (permite reabrir estados si aparece un mejor camino).
@@ -96,7 +97,7 @@ def astar(
                 path=node.reconstruct_path(),
                 cost=node.path_cost,
                 expanded_nodes=expanded,
-                frontier_nodes=len(frontier),
+                frontier_nodes=max_frontier,
                 time_elapsed=elapsed,
             )
 
@@ -113,6 +114,8 @@ def astar(
             h = heuristic(board, child_state)
             f = new_g + h
             frontier.push(child_node, priority=f)
+            if len(frontier) > max_frontier:
+                max_frontier = len(frontier)
 
     elapsed = time.time() - start_time
     sys.stderr.write(
@@ -124,6 +127,6 @@ def astar(
         path=[],
         cost=0,
         expanded_nodes=expanded,
-        frontier_nodes=0,
+        frontier_nodes=max_frontier,
         time_elapsed=elapsed,
     )
