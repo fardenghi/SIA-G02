@@ -55,6 +55,7 @@ def _run_case_n(board_path: Path, runs: int) -> dict[str, dict[str, float]]:
                 "cost": float(manhattan.cost),
                 "expanded_nodes": float(manhattan.expanded_nodes),
                 "time_elapsed": float(manhattan.time_elapsed),
+                "frontier_nodes": float(manhattan.frontier_nodes),
             }
         )
         raw["weighted_hungarian"].append(
@@ -62,6 +63,7 @@ def _run_case_n(board_path: Path, runs: int) -> dict[str, dict[str, float]]:
                 "cost": float(weighted.cost),
                 "expanded_nodes": float(weighted.expanded_nodes),
                 "time_elapsed": float(weighted.time_elapsed),
+                "frontier_nodes": float(weighted.frontier_nodes),
             }
         )
 
@@ -79,6 +81,9 @@ def _run_case_n(board_path: Path, runs: int) -> dict[str, dict[str, float]]:
             )
             if len(raw["manhattan"]) > 1
             else 0.0,
+            "frontier_nodes": statistics.fmean(
+                item["frontier_nodes"] for item in raw["manhattan"]
+            ),
         },
         "weighted_hungarian": {
             "cost": statistics.fmean(
@@ -95,6 +100,9 @@ def _run_case_n(board_path: Path, runs: int) -> dict[str, dict[str, float]]:
             )
             if len(raw["weighted_hungarian"]) > 1
             else 0.0,
+            "frontier_nodes": statistics.fmean(
+                item["frontier_nodes"] for item in raw["weighted_hungarian"]
+            ),
         },
     }
 
@@ -118,6 +126,7 @@ def write_csv(
                 "cost": manhattan.cost,
                 "expanded_nodes": manhattan.expanded_nodes,
                 "time_elapsed": manhattan.time_elapsed,
+                "frontier_nodes": manhattan.frontier_nodes,
             }
         )
         rows.append(
@@ -127,6 +136,7 @@ def write_csv(
                 "cost": weighted.cost,
                 "expanded_nodes": weighted.expanded_nodes,
                 "time_elapsed": weighted.time_elapsed,
+                "frontier_nodes": weighted.frontier_nodes,
             }
         )
 
@@ -134,7 +144,7 @@ def write_csv(
     with open(outpath, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["run", "heuristic", "cost", "expanded_nodes", "time_elapsed"],
+            fieldnames=["run", "heuristic", "cost", "expanded_nodes", "time_elapsed", "frontier_nodes"],
         )
         writer.writeheader()
         writer.writerows(rows)
@@ -156,9 +166,10 @@ def build_plot(board_path: Path, outpath: Path, runs: int = 5) -> Path:
         ("cost", "Costo de solucion", False),
         ("expanded_nodes", "Nodos expandidos", True),
         ("time_elapsed", "Tiempo de ejecucion (s)", True),
+        ("frontier_nodes", "Nodos frontera (max)", True),
     ]
 
-    fig, axes = plt.subplots(1, 3, figsize=(13, 5.6))
+    fig, axes = plt.subplots(1, 4, figsize=(17, 5.6))
     fig.patch.set_facecolor("white")
 
     for ax, (metric, title, log_scale) in zip(axes, metrics, strict=False):
