@@ -65,9 +65,8 @@ INFORMED = {
 }
 
 # Solo se incluyen combinaciones que aportan algo real:
-# - dead_square con manhattan, euclidean y weighted_hungarian
+# - dead_square con manhattan, euclidean, hungarian y weighted_hungarian
 # - no se incluye manhattan+euclidean porque max(manhattan, euclidean) colapsa a manhattan
-# - no se incluye hungarian+dead_square porque hungarian ya poda dead squares internamente
 HEURISTIC_VARIANTS = {
     "manhattan": manhattan_heuristic,
     "manhattan+dead_square": combine_heuristics_max(
@@ -78,6 +77,9 @@ HEURISTIC_VARIANTS = {
         [euclidean_heuristic, dead_square_heuristic]
     ),
     "hungarian": hungarian_heuristic,
+    "hungarian+dead_square": combine_heuristics_max(
+        [hungarian_heuristic, dead_square_heuristic]
+    ),
     "weighted_hungarian": weighted_hungarian_heuristic,
     "weighted_hungarian+dead_square": combine_heuristics_max(
         [weighted_hungarian_heuristic, dead_square_heuristic]
@@ -90,6 +92,7 @@ HEURISTIC_ORDER = [
     "euclidean",
     "euclidean+dead_square",
     "hungarian",
+    "hungarian+dead_square",
     "weighted_hungarian",
     "weighted_hungarian+dead_square",
 ]
@@ -100,6 +103,7 @@ HEURISTIC_LABELS = {
     "euclidean": "Euclidean",
     "euclidean+dead_square": "Euclidean + DS",
     "hungarian": "Hungarian",
+    "hungarian+dead_square": "Hungarian + DS",
     "weighted_hungarian": "Weighted Hung.",
     "weighted_hungarian+dead_square": "Weighted Hung. + DS",
 }
@@ -110,6 +114,7 @@ HEURISTIC_COLORS = {
     "euclidean": "#4C78A8",
     "euclidean+dead_square": "#4C78A8",
     "hungarian": "#E9C46A",
+    "hungarian+dead_square": "#E9C46A",
     "weighted_hungarian": "#E76F51",
     "weighted_hungarian+dead_square": "#E76F51",
 }
@@ -120,6 +125,7 @@ HEURISTIC_HATCHES = {
     "euclidean": "",
     "euclidean+dead_square": "//",
     "hungarian": "",
+    "hungarian+dead_square": "//",
     "weighted_hungarian": "",
     "weighted_hungarian+dead_square": "//",
 }
@@ -406,10 +412,14 @@ def _bar_style(spec: ExperimentSpec) -> dict[str, str]:
 
 
 def _add_group_bands(ax: Axes) -> None:
+    heuristic_count = len(HEURISTIC_ORDER)
+    greedy_end = 2.5 + heuristic_count
+    astar_end = greedy_end + heuristic_count
+
     groups = [
         (-0.5, 2.5, "No informados", "#F2EFEA"),
-        (2.5, 9.5, "Greedy", "#EAF7F4"),
-        (9.5, 16.5, "A*", "#FCEFE8"),
+        (2.5, greedy_end, "Greedy", "#EAF7F4"),
+        (greedy_end, astar_end, "A*", "#FCEFE8"),
     ]
 
     for start, end, label, color in groups:
