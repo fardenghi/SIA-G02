@@ -39,6 +39,19 @@ def main() -> None:
         help="Exporta la animación a un GIF y termina sin abrir la ventana",
     )
     parser.add_argument(
+        "--gif-colors",
+        type=int,
+        default=256,
+        metavar="N",
+        help="Colores de la paleta GIF (16–256, default: 256). Menos colores = archivo más liviano.",
+    )
+    parser.add_argument(
+        "--reduce-frames",
+        action="store_true",
+        default=False,
+        help="Limita el GIF a los últimos 1000 fotogramas del replay.",
+    )
+    parser.add_argument(
         "--save-video",
         action="store_true",
         help="Exporta la animación a MP4 en results/animations/ y termina sin abrir la ventana",
@@ -65,6 +78,8 @@ def main() -> None:
             output_path=args.save_gif,
             cell_size=args.cell_size,
             fps=args.speed,
+            colors=args.gif_colors,
+            reduce_frames=args.reduce_frames,
         )
         print(f"GIF guardado en: {output_path}")
         return

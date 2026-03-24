@@ -466,11 +466,14 @@ def _build_render_assets(
     return width, height, hud_h, board_bg, sprites, font, small_font
 
 
+
 def export_gif(
     replay_path: str | Path,
     output_path: str | Path,
     cell_size: int = 64,
     fps: float = 2.0,
+    colors: int = 256,
+    reduce_frames: bool = False,
 ) -> Path:
     """Renderiza un replay completo y lo exporta como GIF animado."""
     from PIL import Image
@@ -504,10 +507,16 @@ def export_gif(
             )
             raw = pygame.image.tobytes(frame_surface, "RGB")
             frame_image = Image.frombytes("RGB", (width, height), raw)
+            if colors < 256:
+                frame_image = frame_image.quantize(colors=colors, dither=Image.Dither.NONE)
             frame_image.info = {}
             pil_frames.append(frame_image)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if reduce_frames:
+            pil_frames = pil_frames[-1000:]
+
         first, *rest = pil_frames
         first.save(
             output_path,
@@ -515,7 +524,7 @@ def export_gif(
             append_images=rest,
             duration=frame_duration_ms,
             loop=0,
-            optimize=False,
+            optimize=True,
         )
     finally:
         pygame.quit()

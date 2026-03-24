@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compara BFS vs DFS en un único tablero de Sokoban, ejecutándolos en paralelo.
+"""Compara BFS vs DFS vs IDDFS en un único tablero de Sokoban, ejecutándolos en paralelo.
 
 Corre 5 veces y guarda cada resultado en una carpeta con timestamp.
 
@@ -24,8 +24,10 @@ sys.path.insert(0, str(ROOT / "src"))
 from tp1_search.sokoban.parser import parse_board  # noqa: E402
 from tp1_search.search.bfs import bfs  # noqa: E402
 from tp1_search.search.dfs import dfs  # noqa: E402
+from tp1_search.search.iddfs import iddfs  # noqa: E402
 
 N_RUNS = 5
+ALGOS = {"bfs": bfs, "dfs": dfs, "iddfs": iddfs}
 
 
 def _worker(algo_name: str, board_path: str, queue: mp.Queue) -> None:
@@ -34,8 +36,7 @@ def _worker(algo_name: str, board_path: str, queue: mp.Queue) -> None:
         contextlib.redirect_stdout(io.StringIO()),
     ):
         board, state = parse_board(board_path)
-        algo_fn = bfs if algo_name == "bfs" else dfs
-        result = algo_fn(board, state)
+        result = ALGOS[algo_name](board, state)
 
     queue.put(
         {
@@ -49,26 +50,26 @@ def _worker(algo_name: str, board_path: str, queue: mp.Queue) -> None:
 
 
 def run_once(board_path: str) -> dict:
-    bfs_queue: mp.Queue = mp.Queue()
-    dfs_queue: mp.Queue = mp.Queue()
+    queues = {algo: mp.Queue() for algo in ALGOS}
+    procs = {
+        algo: mp.Process(target=_worker, args=(algo, board_path, queues[algo]))
+        for algo in ALGOS
+    }
 
-    bfs_proc = mp.Process(target=_worker, args=("bfs", board_path, bfs_queue))
-    dfs_proc = mp.Process(target=_worker, args=("dfs", board_path, dfs_queue))
-
-    bfs_proc.start()
-    dfs_proc.start()
-    bfs_proc.join()
-    dfs_proc.join()
+    for p in procs.values():
+        p.start()
+    for p in procs.values():
+        p.join()
 
     return {
-        "bfs": bfs_queue.get_nowait() if not bfs_queue.empty() else {},
-        "dfs": dfs_queue.get_nowait() if not dfs_queue.empty() else {},
+        algo: queues[algo].get_nowait() if not queues[algo].empty() else {}
+        for algo in ALGOS
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compara BFS vs DFS en paralelo sobre un tablero de Sokoban"
+        description="Compara BFS vs DFS vs IDDFS en paralelo sobre un tablero de Sokoban"
     )
     parser.add_argument("--map", required=True, help="Ruta al archivo de tablero")
     args = parser.parse_args()
@@ -80,10 +81,10 @@ def main() -> None:
         sys.exit(f"Error: tablero no encontrado: {board_path}")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_dir = ROOT / "results" / "bfs_vs_dfs" / f"{board_path.stem}_{timestamp}"
+    out_dir = ROOT / "results" / "bfs_vs_dfs_vs_iddfs" / f"{board_path.stem}_{timestamp}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Ejecutando {N_RUNS} corridas de BFS y DFS sobre {board_path.name} ...\n")
+    print(f"Ejecutando {N_RUNS} corridas de BFS / DFS / IDDFS sobre {board_path.name} ...\n")
 
     for i in range(1, N_RUNS + 1):
         result = run_once(str(board_path))
@@ -92,15 +93,17 @@ def main() -> None:
         with open(out_file, "w") as f:
             json.dump(result, f, indent=2)
 
-        bfs_r = result["bfs"]
-        dfs_r = result["dfs"]
-        print(f"  [{i}/{N_RUNS}]  "
-              f"BFS: cost={bfs_r.get('cost')}  expanded={bfs_r.get('expanded_nodes')}  time={bfs_r.get('time_elapsed', 0):.4f}s  |  "
-              f"DFS: cost={dfs_r.get('cost')}  expanded={dfs_r.get('expanded_nodes')}  time={dfs_r.get('time_elapsed', 0):.4f}s")
+        parts = "  |  ".join(
+            f"{algo.upper()}: cost={result[algo].get('cost')}  "
+            f"expanded={result[algo].get('expanded_nodes')}  "
+            f"time={result[algo].get('time_elapsed', 0):.4f}s"
+            for algo in ALGOS
+        )
+        print(f"  [{i}/{N_RUNS}]  {parts}")
 
     print(f"\nResultados guardados en: {out_dir}")
     print(f"\nPara visualizar los resultados ejecutá:")
-    print(f"  uv run python scripts/bfs_vs_dfs_plots.py --result {out_dir}")
+    print(f"  uv run python scripts/bfs_vs_dfs_vs_iddfs_plots.py --result {out_dir}")
 
 
 if __name__ == "__main__":
