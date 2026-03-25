@@ -27,6 +27,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
     """
     start_time = time.time()
     total_expanded = 0
+    total_max_frontier = 0
     cols = board.cols
 
     root = SearchNode.root(initial_state)
@@ -38,6 +39,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
             cost=root.path_cost,
             expanded_nodes=total_expanded,
             frontier_nodes=0,
+            max_frontier_nodes=0,
             time_elapsed=time.time() - start_time,
         )
 
@@ -51,10 +53,11 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
 
     while True:
         # DFS limitado con visited set fresco para esta iteración
-        result, expanded, cutoff_occurred, frontier_nodes = _depth_limited_search(
+        result, expanded, cutoff_occurred, frontier_nodes, max_frontier_nodes = _depth_limited_search(
             board, root, depth_limit, cols
         )
         total_expanded += expanded
+        total_max_frontier = max(total_max_frontier, max_frontier_nodes)
 
         if total_expanded % _LOG_INTERVAL < expanded:
             elapsed = time.time() - start_time
@@ -82,6 +85,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
                 cost=result.path_cost,
                 expanded_nodes=total_expanded,
                 frontier_nodes=frontier_nodes,
+                max_frontier_nodes=total_max_frontier,
                 time_elapsed=elapsed,
             )
 
@@ -100,6 +104,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
                 cost=0,
                 expanded_nodes=total_expanded,
                 frontier_nodes=frontier_nodes,
+                max_frontier_nodes=total_max_frontier,
                 time_elapsed=elapsed,
             )
 
@@ -111,20 +116,22 @@ def _depth_limited_search(
     root: SearchNode,
     limit: int,
     cols: int,
-) -> tuple[SearchNode | None, int, bool, int]:
+) -> tuple[SearchNode | None, int, bool, int, int]:
     """DFS limitado por profundidad.
 
     Returns:
-        (solution_node, expanded_count, cutoff_occurred, frontier_nodes)
+        (solution_node, expanded_count, cutoff_occurred, frontier_nodes, max_frontier_nodes)
         - solution_node: nodo goal si se encontró, None si no
         - expanded_count: nodos expandidos en esta iteración
         - cutoff_occurred: True si algún nodo fue cortado por el límite
         - frontier_nodes: nodos pendientes en la pila al terminar la iteración
+        - max_frontier_nodes: máximo de nodos pendientes alcanzado en la iteración
     """
     expanded = 0
     cutoff_occurred = False
 
     stack: list[SearchNode] = [root]
+    max_stack_size = len(stack)
     # Visited dict: state_key -> menor profundidad a la que fue alcanzado.
     # Permite re-explorar un estado si se llega por un camino mas corto,
     # lo cual es necesario para garantizar optimalidad en IDDFS.
@@ -151,8 +158,9 @@ def _depth_limited_search(
             child_node = node.expand_child(child_state, action, step_cost)
 
             if is_goal(board, child_state):
-                return child_node, expanded, False, len(stack)
+                return child_node, expanded, False, len(stack), max_stack_size
 
             stack.append(child_node)
+            max_stack_size = max(max_stack_size, len(stack))
 
-    return None, expanded, cutoff_occurred, len(stack)
+    return None, expanded, cutoff_occurred, len(stack), max_stack_size

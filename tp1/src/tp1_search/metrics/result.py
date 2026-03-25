@@ -21,4 +21,5 @@ class SearchResult:
     cost: int
     expanded_nodes: int
     frontier_nodes: int
+    max_frontier_nodes: int
     time_elapsed: float  # en segundos

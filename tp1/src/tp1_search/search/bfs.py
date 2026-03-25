@@ -34,6 +34,7 @@ def bfs(board: Board, initial_state: SokobanState) -> SearchResult:
     """
     start_time = time.time()
     expanded = 0
+    max_frontier_size = 0
     cols = board.cols
 
     root = SearchNode.root(initial_state)
@@ -46,11 +47,13 @@ def bfs(board: Board, initial_state: SokobanState) -> SearchResult:
             cost=root.path_cost,
             expanded_nodes=expanded,
             frontier_nodes=0,
+            max_frontier_nodes=max_frontier_size,
             time_elapsed=time.time() - start_time,
         )
 
     frontier = QueueFrontier()
     frontier.push(root)
+    max_frontier_size = max(max_frontier_size, len(frontier))
     visited: set[bytes] = {state_key(initial_state, cols)}
 
     print(
@@ -90,10 +93,12 @@ def bfs(board: Board, initial_state: SokobanState) -> SearchResult:
                     cost=child_node.path_cost,
                     expanded_nodes=expanded,
                     frontier_nodes=len(frontier),
+                    max_frontier_nodes=max_frontier_size,
                     time_elapsed=elapsed,
                 )
 
             frontier.push(child_node)
+            max_frontier_size = max(max_frontier_size, len(frontier))
 
     elapsed = time.time() - start_time
     sys.stderr.write(
@@ -106,5 +111,6 @@ def bfs(board: Board, initial_state: SokobanState) -> SearchResult:
         cost=0,
         expanded_nodes=expanded,
         frontier_nodes=0,
+        max_frontier_nodes=max_frontier_size,
         time_elapsed=elapsed,
     )

@@ -44,6 +44,7 @@ def _worker(algo_name: str, board_path: str, queue: mp.Queue) -> None:
             "cost": result.cost,
             "expanded_nodes": result.expanded_nodes,
             "frontier_nodes": result.frontier_nodes,
+            "max_frontier_nodes": result.max_frontier_nodes,
             "time_elapsed": result.time_elapsed,
         }
     )
