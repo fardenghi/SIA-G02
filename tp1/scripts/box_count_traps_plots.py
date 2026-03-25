@@ -541,44 +541,51 @@ def _plot_metric(
     fig.patch.set_facecolor("white")
 
     for heuristic in HEURISTIC_ORDER:
-        means, _, _ = series_stats[heuristic]
-        ax.plot(
-            box_counts,
-            means,
-            marker="o",
-            linewidth=2.4,
-            markersize=6.8,
-            color=HEURISTIC_COLORS[heuristic],
-            label=HEURISTIC_LABELS[heuristic],
-        )
+        means, stds, _ = series_stats[heuristic]
+        if metric == "time_elapsed":
+            ax.errorbar(
+                box_counts,
+                means,
+                yerr=stds,
+                marker="o",
+                linewidth=2.4,
+                markersize=6.8,
+                capsize=5,
+                elinewidth=1.5,
+                color=HEURISTIC_COLORS[heuristic],
+                label=HEURISTIC_LABELS[heuristic],
+            )
+        else:
+            ax.plot(
+                box_counts,
+                means,
+                marker="o",
+                linewidth=2.4,
+                markersize=6.8,
+                color=HEURISTIC_COLORS[heuristic],
+                label=HEURISTIC_LABELS[heuristic],
+            )
 
     if metric == "expanded_nodes":
-        solved = [v for v in positive_values if v > 0]
-        if solved:
-            upper = max(solved) * 1.35
-            lower = max(min(solved) * 0.7, 1)
-            ax.set_ylim(lower, upper)
-            timeout_y = upper * 0.95
-            for heuristic in HEURISTIC_ORDER:
-                timeout_x = [
-                    row["box_count"]
-                    for row in _series(rows, heuristic)
-                    if row["timed_out"]
-                ]
-                if timeout_x:
-                    ax.scatter(
-                        [x + timeout_offsets[heuristic] for x in timeout_x],
-                        [timeout_y] * len(timeout_x),
-                        marker="X",
-                        s=86,
-                        color=HEURISTIC_COLORS[heuristic],
-                        zorder=4,
-                    )
+        for heuristic in HEURISTIC_ORDER:
+            timeout_x = [
+                row["box_count"]
+                for row in _series(rows, heuristic)
+                if row["timed_out"]
+            ]
+            if timeout_x:
+                ymin, ymax = ax.get_ylim()
+                timeout_y = ymax * 0.85
+                ax.scatter(
+                    [x + timeout_offsets[heuristic] for x in timeout_x],
+                    [timeout_y] * len(timeout_x),
+                    marker="X",
+                    s=86,
+                    color=HEURISTIC_COLORS[heuristic],
+                    zorder=4,
+                )
     else:
-        solved = [v for v in positive_values if v > 0]
-        if solved:
-            ax.set_ylim(max(min(solved) * 0.7, 1e-4), timeout * 1.18)
-            ax.axhline(timeout, color="#999999", linestyle=":", linewidth=1.3)
+        ax.axhline(timeout, color="#999999", linestyle=":", linewidth=1.3)
 
     if metric == "time_elapsed":
         title = f"{title} (media ± sigma, {runs} corridas)"
@@ -636,6 +643,18 @@ def main() -> None:
         help="PNG de salida para tiempo",
     )
     parser.add_argument(
+        "--cost-plot",
+        type=Path,
+        default=ROOT / "results" / "plots" / "heuristics_by_boxcount_cost.png",
+        help="PNG de salida para costo de solucion",
+    )
+    parser.add_argument(
+        "--frontier-plot",
+        type=Path,
+        default=ROOT / "results" / "plots" / "heuristics_by_boxcount_frontier.png",
+        help="PNG de salida para nodos frontera",
+    )
+    parser.add_argument(
         "--csv-only",
         action="store_true",
         help="Solo genera el CSV de benchmark; no regenera los graficos",
@@ -679,10 +698,30 @@ def main() -> None:
         timeout=args.timeout,
         runs=args.runs,
     )
+    cost_path = _plot_metric(
+        rows,
+        metric="cost",
+        ylabel="Costo (pasos)",
+        title="Greedy: costo de solución vs cantidad de cajas",
+        outpath=args.cost_plot,
+        timeout=args.timeout,
+        runs=args.runs,
+    )
+    frontier_path = _plot_metric(
+        rows,
+        metric="frontier_nodes",
+        ylabel="Nodos frontera (max)",
+        title="Greedy: nodos frontera vs cantidad de cajas",
+        outpath=args.frontier_plot,
+        timeout=args.timeout,
+        runs=args.runs,
+    )
 
-    print(f"CSV:   {csv_path}")
-    print(f"Nodos: {nodes_path}")
-    print(f"Tiempo:{time_path}")
+    print(f"CSV:      {csv_path}")
+    print(f"Nodos:    {nodes_path}")
+    print(f"Tiempo:   {time_path}")
+    print(f"Costo:    {cost_path}")
+    print(f"Frontera: {frontier_path}")
 
 
 if __name__ == "__main__":

@@ -48,16 +48,13 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
     )
 
     depth_limit = 0
-    global_max_frontier = 0
 
     while True:
         # DFS limitado con visited set fresco para esta iteración
-        result, expanded, cutoff_occurred, max_frontier_iter = _depth_limited_search(
+        result, expanded, cutoff_occurred, frontier_nodes = _depth_limited_search(
             board, root, depth_limit, cols
         )
         total_expanded += expanded
-        if max_frontier_iter > global_max_frontier:
-            global_max_frontier = max_frontier_iter
 
         if total_expanded % _LOG_INTERVAL < expanded:
             elapsed = time.time() - start_time
@@ -84,7 +81,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
                 path=result.reconstruct_path(),
                 cost=result.path_cost,
                 expanded_nodes=total_expanded,
-                frontier_nodes=global_max_frontier,
+                frontier_nodes=frontier_nodes,
                 time_elapsed=elapsed,
             )
 
@@ -102,7 +99,7 @@ def iddfs(board: Board, initial_state: SokobanState) -> SearchResult:
                 path=[],
                 cost=0,
                 expanded_nodes=total_expanded,
-                frontier_nodes=global_max_frontier,
+                frontier_nodes=frontier_nodes,
                 time_elapsed=elapsed,
             )
 
@@ -126,7 +123,6 @@ def _depth_limited_search(
     """
     expanded = 0
     cutoff_occurred = False
-    max_frontier = 1
 
     stack: list[SearchNode] = [root]
     # Visited dict: state_key -> menor profundidad a la que fue alcanzado.
@@ -155,10 +151,8 @@ def _depth_limited_search(
             child_node = node.expand_child(child_state, action, step_cost)
 
             if is_goal(board, child_state):
-                return child_node, expanded, False, max_frontier
+                return child_node, expanded, False, len(stack)
 
             stack.append(child_node)
-            if len(stack) > max_frontier:
-                max_frontier = len(stack)
 
-    return None, expanded, cutoff_occurred, max_frontier
+    return None, expanded, cutoff_occurred, len(stack)
