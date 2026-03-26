@@ -37,6 +37,7 @@ def greedy(
     """
     start_time = time.time()
     expanded = 0
+    max_frontier_size = 0
     cols = board.cols
 
     root = SearchNode.root(initial_state)
@@ -48,12 +49,14 @@ def greedy(
             cost=root.path_cost,
             expanded_nodes=expanded,
             frontier_nodes=0,
+            max_frontier_nodes=max_frontier_size,
             time_elapsed=time.time() - start_time,
         )
 
     frontier = PriorityFrontier()
     h_root = heuristic(board, initial_state)
     frontier.push(root, priority=h_root)
+    max_frontier_size = max(max_frontier_size, len(frontier))
     visited: set[bytes] = {state_key(initial_state, cols)}
 
     print(
@@ -86,6 +89,7 @@ def greedy(
                 cost=node.path_cost,
                 expanded_nodes=expanded,
                 frontier_nodes=len(frontier),
+                max_frontier_nodes=max_frontier_size,
                 time_elapsed=elapsed,
             )
 
@@ -98,6 +102,7 @@ def greedy(
             child_node = node.expand_child(child_state, action, step_cost)
             h = heuristic(board, child_state)
             frontier.push(child_node, priority=h)
+            max_frontier_size = max(max_frontier_size, len(frontier))
 
     elapsed = time.time() - start_time
     sys.stderr.write(
@@ -111,5 +116,6 @@ def greedy(
         cost=0,
         expanded_nodes=expanded,
         frontier_nodes=0,
+        max_frontier_nodes=max_frontier_size,
         time_elapsed=elapsed,
     )
