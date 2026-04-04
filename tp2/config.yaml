@@ -1,0 +1,66 @@
+# Configuración por defecto del algoritmo genético
+# Estos valores pueden ser sobreescritos por argumentos CLI
+
+# Imagen
+image:
+  # Ruta a la imagen objetivo (requerido en CLI)
+  target_path: null
+
+# Parámetros del genotipo
+genotype:
+  # Cantidad de triángulos por individuo
+  num_triangles: 50
+  # Rango de valores para el canal alfa (0.0 - 1.0)
+  alpha_min: 0.1
+  alpha_max: 0.8
+
+# Parámetros del algoritmo genético
+genetic:
+  # Tamaño de la población
+  population_size: 100
+  # Número máximo de generaciones
+  max_generations: 5000
+  # Umbral de error para parada temprana (MSE)
+  error_threshold: null
+  
+# Selección
+selection:
+  # Método: "tournament", "roulette", "rank"
+  method: "tournament"
+  # Tamaño del torneo (solo para tournament)
+  tournament_size: 3
+  # Proporción de élite que pasa directamente
+  elite_ratio: 0.1
+
+# Cruza (Crossover)
+crossover:
+  # Método: "single_point", "two_point", "uniform"
+  method: "single_point"
+  # Probabilidad de cruza
+  probability: 0.8
+
+# Mutación
+mutation:
+  # Probabilidad de mutar un individuo
+  probability: 0.3
+  # Probabilidad de mutar cada gen (triángulo) dado que el individuo muta
+  gene_probability: 0.1
+  # Magnitud máxima de perturbación en coordenadas (fracción del tamaño)
+  position_delta: 0.1
+  # Magnitud máxima de perturbación en color (0-255)
+  color_delta: 30
+  # Magnitud máxima de perturbación en alfa
+  alpha_delta: 0.1
+
+# Salida y visualización
+output:
+  # Directorio de salida
+  directory: "output"
+  # Guardar imagen cada N generaciones (0 = solo al final)
+  save_interval: 100
+  # Mostrar progreso en consola cada N generaciones
+  log_interval: 10
+  # Exportar datos de triángulos (JSON)
+  export_triangles: true
+  # Generar gráfico de evolución del fitness
+  plot_fitness: true

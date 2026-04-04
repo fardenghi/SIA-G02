@@ -1,2 +1,22 @@
 # Compresor de Imágenes Evolutivo - Dependencias
-# TODO: Agregar dependencias según se implementen los módulos
+
+# Renderizado y procesamiento de imágenes
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Configuración
+PyYAML>=6.0
+
+# CLI
+argparse  # stdlib, incluido para documentación
+
+# Visualización y métricas
+matplotlib>=3.7.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Desarrollo (opcional)
+black>=23.0.0
+ruff>=0.1.0
