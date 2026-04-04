@@ -1,0 +1,2 @@
+# Compresor de Imágenes Evolutivo - Dependencias
+# TODO: Agregar dependencias según se implementen los módulos
