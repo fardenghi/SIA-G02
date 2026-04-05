@@ -124,7 +124,7 @@ class Individual:
 
     Attributes:
         triangles: Lista ordenada de triángulos.
-        fitness: Valor de aptitud (menor es mejor, None si no evaluado).
+        fitness: Valor de aptitud (mayor es mejor, None si no evaluado).
     """
 
     triangles: List[Triangle]

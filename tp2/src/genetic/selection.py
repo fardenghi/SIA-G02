@@ -38,7 +38,7 @@ class TournamentSelection(SelectionMethod):
     """
     Selección por torneo.
 
-    Se eligen k individuos al azar y el mejor (menor fitness) gana.
+    Se eligen k individuos al azar y el mejor (mayor fitness) gana.
     Se repite hasta obtener la cantidad deseada de padres.
     """
 
@@ -65,8 +65,8 @@ class TournamentSelection(SelectionMethod):
         for _ in range(num_parents):
             # Elegir participantes al azar
             participants = random.sample(population, self.tournament_size)
-            # El ganador es el de menor fitness
-            winner = min(participants, key=lambda ind: ind.fitness)
+            # El ganador es el de mayor fitness
+            winner = max(participants, key=lambda ind: ind.fitness)
             selected.append(winner)
 
         return selected
@@ -76,31 +76,33 @@ class RouletteSelection(SelectionMethod):
     """
     Selección por ruleta (proporcional al fitness).
 
-    La probabilidad de selección es inversamente proporcional al fitness
-    (menor fitness = mayor probabilidad).
+    La probabilidad de selección es proporcional al fitness
+    (mayor fitness = mayor probabilidad).
     """
 
     def select(
         self, population: List[Individual], num_parents: int
     ) -> List[Individual]:
-        """Selecciona mediante ruleta invertida."""
+        """Selecciona mediante ruleta proporcional al fitness."""
         if not population:
             raise ValueError("La población está vacía")
 
-        # Calcular fitness invertido (mayor = mejor para ruleta)
         fitness_values = [ind.fitness for ind in population]
-        max_fitness = max(fitness_values)
 
-        # Invertir: fitness_invertido = max_fitness - fitness + epsilon
-        # Agregar epsilon para evitar probabilidad 0
+        # Si hay fitness <= 0, desplazar para que todos los pesos sean positivos
+        min_fitness = min(fitness_values)
         epsilon = 1e-10
-        inverted_fitness = [max_fitness - f + epsilon for f in fitness_values]
+        if min_fitness <= 0:
+            weights = [f - min_fitness + epsilon for f in fitness_values]
+        else:
+            weights = fitness_values
 
-        total = sum(inverted_fitness)
-        probabilities = [f / total for f in inverted_fitness]
+        total = sum(weights)
+        if total <= 0:
+            raise ValueError("No se pudieron construir pesos válidos para ruleta")
 
         # Seleccionar con reemplazo según probabilidades
-        selected = random.choices(population, weights=probabilities, k=num_parents)
+        selected = random.choices(population, weights=weights, k=num_parents)
 
         return selected
 
@@ -120,8 +122,8 @@ class RankSelection(SelectionMethod):
         if not population:
             raise ValueError("La población está vacía")
 
-        # Ordenar por fitness (menor primero = mejor)
-        sorted_pop = sorted(population, key=lambda ind: ind.fitness)
+        # Ordenar por fitness (mayor primero = mejor)
+        sorted_pop = sorted(population, key=lambda ind: ind.fitness, reverse=True)
 
         # Asignar pesos según posición: mejor = mayor peso
         n = len(sorted_pop)
@@ -158,8 +160,8 @@ class ElitistSelection(SelectionMethod):
         if not population:
             raise ValueError("La población está vacía")
 
-        # Ordenar por fitness
-        sorted_pop = sorted(population, key=lambda ind: ind.fitness)
+        # Ordenar por fitness (mayor primero)
+        sorted_pop = sorted(population, key=lambda ind: ind.fitness, reverse=True)
 
         # Élite: los mejores pasan directamente
         actual_elite = min(self.elite_count, len(sorted_pop), num_parents)

@@ -79,9 +79,9 @@ class TestSaveFitnessPlot:
     def test_save_plot(self):
         """Debe guardar gráfico de fitness."""
         history = [
-            {"generation": 0, "best_fitness": 10000, "avg_fitness": 15000},
-            {"generation": 1, "best_fitness": 9000, "avg_fitness": 12000},
-            {"generation": 2, "best_fitness": 8000, "avg_fitness": 10000},
+            {"generation": 0, "best_fitness": 0.0001, "avg_fitness": 0.00008},
+            {"generation": 1, "best_fitness": 0.0002, "avg_fitness": 0.00015},
+            {"generation": 2, "best_fitness": 0.0003, "avg_fitness": 0.00021},
         ]
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
@@ -104,8 +104,8 @@ class TestSaveMetricsCsv:
     def test_save_csv(self):
         """Debe guardar CSV correctamente."""
         history = [
-            {"generation": 0, "best_fitness": 10000, "avg_fitness": 15000},
-            {"generation": 1, "best_fitness": 9000, "avg_fitness": 12000},
+            {"generation": 0, "best_fitness": 0.0001, "avg_fitness": 0.00008},
+            {"generation": 1, "best_fitness": 0.0002, "avg_fitness": 0.00015},
         ]
 
         with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w") as f:
@@ -121,7 +121,7 @@ class TestSaveMetricsCsv:
 
             assert "generation" in content
             assert "best_fitness" in content
-            assert "10000" in content
+            assert "0.0001" in content
         finally:
             Path(path).unlink(missing_ok=True)
 

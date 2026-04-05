@@ -84,14 +84,14 @@ def save_fitness_plot(history: List[Dict[str, Any]], path: str | Path):
     ax.plot(generations, avg_fitness, label="Fitness promedio", linewidth=1, alpha=0.7)
 
     ax.set_xlabel("Generación")
-    ax.set_ylabel("Fitness (MSE)")
+    ax.set_ylabel("Fitness (1 / (1 + MSE))")
     ax.set_title("Evolución del Fitness")
     ax.legend()
     ax.grid(True, alpha=0.3)
 
     # Escala logarítmica si hay mucha variación
     if best_fitness[0] > 0 and best_fitness[-1] > 0:
-        ratio = best_fitness[0] / best_fitness[-1]
+        ratio = best_fitness[-1] / best_fitness[0]
         if ratio > 100:
             ax.set_yscale("log")
 
@@ -134,7 +134,7 @@ def print_summary(result, output_dir: Path):
     print("=" * 50)
     print(f"Generaciones ejecutadas: {result.generations}")
     print(f"Tiempo de ejecución: {result.elapsed_time:.2f} segundos")
-    print(f"Fitness final (MSE): {result.best_fitness:.2f}")
+    print(f"Fitness final: {result.best_fitness:.6f}")
     print(f"Triángulos: {len(result.best_individual)}")
 
     if result.stopped_early:

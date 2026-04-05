@@ -29,7 +29,7 @@ def create_population_with_fitness(n: int = 10) -> list[Individual]:
     population = []
     for i in range(n):
         ind = Individual.random(num_triangles=5)
-        ind.fitness = float(i * 100)  # 0, 100, 200, ...
+        ind.fitness = float((i + 1) * 100)  # 100, 200, 300, ...
         population.append(ind)
     return population
 
@@ -48,7 +48,7 @@ class TestTournamentSelection:
         assert all(isinstance(ind, Individual) for ind in selected)
 
     def test_winner_is_best(self):
-        """El ganador del torneo debe ser el de menor fitness."""
+        """El ganador del torneo debe ser el de mayor fitness."""
         random.seed(42)
         pop = create_population_with_fitness(10)
         selector = TournamentSelection(tournament_size=5)
@@ -57,9 +57,9 @@ class TestTournamentSelection:
         selected = selector.select(pop, num_parents=100)
         avg_fitness = sum(ind.fitness for ind in selected) / len(selected)
 
-        # El promedio debería ser menor que el promedio de toda la población
+        # El promedio debería ser mayor que el promedio de toda la población
         pop_avg = sum(ind.fitness for ind in pop) / len(pop)
-        assert avg_fitness < pop_avg
+        assert avg_fitness > pop_avg
 
     def test_invalid_tournament_size(self):
         """Debe fallar con tamaño de torneo inválido."""
@@ -79,8 +79,8 @@ class TestRouletteSelection:
 
         assert len(selected) == 10
 
-    def test_favors_low_fitness(self):
-        """Debe favorecer individuos con menor fitness."""
+    def test_favors_high_fitness(self):
+        """Debe favorecer individuos con mayor fitness."""
         random.seed(42)
         pop = create_population_with_fitness(10)
         selector = RouletteSelection()
@@ -89,7 +89,7 @@ class TestRouletteSelection:
         avg_fitness = sum(ind.fitness for ind in selected) / len(selected)
         pop_avg = sum(ind.fitness for ind in pop) / len(pop)
 
-        assert avg_fitness < pop_avg
+        assert avg_fitness > pop_avg
 
 
 class TestRankSelection:
@@ -114,7 +114,7 @@ class TestRankSelection:
         avg_fitness = sum(ind.fitness for ind in selected) / len(selected)
         pop_avg = sum(ind.fitness for ind in pop) / len(pop)
 
-        assert avg_fitness < pop_avg
+        assert avg_fitness > pop_avg
 
 
 class TestElitistSelection:
@@ -128,8 +128,8 @@ class TestElitistSelection:
 
         selected = selector.select(pop, num_parents=5)
 
-        # Los 3 mejores (fitness 0, 100, 200) deben estar
-        best_fitnesses = sorted([ind.fitness for ind in pop])[:3]
+        # Los 3 mejores (fitness más altos) deben estar
+        best_fitnesses = sorted((ind.fitness for ind in pop), reverse=True)[:3]
         selected_fitnesses = [ind.fitness for ind in selected[:3]]
 
         for f in best_fitnesses:

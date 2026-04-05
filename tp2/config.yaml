@@ -20,8 +20,8 @@ genetic:
   population_size: 100
   # Número máximo de generaciones
   max_generations: 5000
-  # Umbral de error para parada temprana (MSE)
-  error_threshold: 3500
+  # Umbral de fitness para parada temprana (1 / (1 + MSE))
+  fitness_threshold: null
   
 # Selección
 selection:

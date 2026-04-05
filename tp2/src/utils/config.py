@@ -8,12 +8,21 @@ Soporta archivos YAML con override por argumentos CLI.
 from __future__ import annotations
 
 import yaml
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Any, Dict
 
 from src.genetic.engine import EvolutionConfig
 from src.genetic.mutation import MutationParams
+
+
+def _legacy_error_threshold_to_fitness(error_threshold: Any) -> Optional[float]:
+    """Convierte umbral legacy de error (MSE) a umbral de fitness."""
+    if error_threshold is None:
+        return None
+
+    value = float(error_threshold)
+    return 1.0 / (1.0 + value)
 
 
 @dataclass
@@ -85,7 +94,7 @@ class Config:
     # Algoritmo genético
     population_size: int = 100
     max_generations: int = 5000
-    error_threshold: Optional[float] = None
+    fitness_threshold: Optional[float] = None
 
     # Operadores
     selection: SelectionConfig = field(default_factory=SelectionConfig)
@@ -101,7 +110,7 @@ class Config:
             population_size=self.population_size,
             num_triangles=self.num_triangles,
             max_generations=self.max_generations,
-            error_threshold=self.error_threshold,
+            fitness_threshold=self.fitness_threshold,
             alpha_min=self.alpha_min,
             alpha_max=self.alpha_max,
         )
@@ -124,6 +133,12 @@ class Config:
         output_data = data.pop("output", {})
 
         # Extraer de secciones legacy si existen
+        if "fitness_threshold" not in data and "error_threshold" in data:
+            # Compatibilidad hacia atrás
+            data["fitness_threshold"] = _legacy_error_threshold_to_fitness(
+                data.get("error_threshold")
+            )
+
         if "image" in data:
             image_data = data.pop("image")
             if "target_path" in image_data:
@@ -141,7 +156,13 @@ class Config:
             data.setdefault(
                 "max_generations", genetic_data.get("max_generations", 5000)
             )
-            data.setdefault("error_threshold", genetic_data.get("error_threshold"))
+            if "fitness_threshold" in genetic_data:
+                fitness_threshold = genetic_data.get("fitness_threshold")
+            else:
+                fitness_threshold = _legacy_error_threshold_to_fitness(
+                    genetic_data.get("error_threshold")
+                )
+            data.setdefault("fitness_threshold", fitness_threshold)
 
         return cls(
             target_path=data.get("target_path"),
@@ -150,7 +171,7 @@ class Config:
             alpha_max=data.get("alpha_max", 0.8),
             population_size=data.get("population_size", 100),
             max_generations=data.get("max_generations", 5000),
-            error_threshold=data.get("error_threshold"),
+            fitness_threshold=data.get("fitness_threshold"),
             selection=SelectionConfig(**selection_data)
             if selection_data
             else SelectionConfig(),
@@ -261,6 +282,10 @@ class Config:
 
         if self.alpha_min > self.alpha_max:
             errors.append("alpha_min no puede ser mayor que alpha_max")
+
+        if self.fitness_threshold is not None:
+            if not 0 < self.fitness_threshold <= 1:
+                errors.append("fitness_threshold debe estar en (0, 1]")
 
         return errors
 

@@ -28,7 +28,8 @@ class EvolutionConfig:
         population_size: Tamaño de la población.
         num_triangles: Número de triángulos por individuo.
         max_generations: Número máximo de generaciones.
-        error_threshold: Umbral de error para parada temprana (None = sin umbral).
+        fitness_threshold: Umbral de fitness para parada temprana
+            (None = sin umbral).
         alpha_min: Alfa mínimo para triángulos.
         alpha_max: Alfa máximo para triángulos.
     """
@@ -36,7 +37,7 @@ class EvolutionConfig:
     population_size: int = 100
     num_triangles: int = 50
     max_generations: int = 5000
-    error_threshold: Optional[float] = None
+    fitness_threshold: Optional[float] = None
     alpha_min: float = 0.1
     alpha_max: float = 0.8
 
@@ -52,7 +53,7 @@ class EvolutionResult:
         generations: Número de generaciones ejecutadas.
         elapsed_time: Tiempo total de ejecución en segundos.
         history: Historial de estadísticas por generación.
-        stopped_early: Si se detuvo por alcanzar el umbral de error.
+        stopped_early: Si se detuvo por alcanzar el umbral de fitness.
     """
 
     best_individual: Individual
@@ -227,7 +228,7 @@ class GeneticEngine:
 
             # Actualizar mejor global
             current_best = self.population.best
-            if current_best.fitness < best_fitness_ever:
+            if current_best.fitness > best_fitness_ever:
                 best_ever = current_best.copy()
                 best_fitness_ever = best_ever.fitness
                 self._notify_improvement(gen, best_ever, best_fitness_ever)
@@ -238,8 +239,8 @@ class GeneticEngine:
             self._notify_generation(gen, self.population, stats)
 
             # Verificar criterio de parada
-            if self.config.error_threshold is not None:
-                if best_fitness_ever <= self.config.error_threshold:
+            if self.config.fitness_threshold is not None:
+                if best_fitness_ever >= self.config.fitness_threshold:
                     stopped_early = True
                     break
 

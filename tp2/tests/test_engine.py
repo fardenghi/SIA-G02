@@ -36,24 +36,24 @@ class TestPopulation:
         assert all(len(ind) == 10 for ind in pop)
 
     def test_best_individual(self):
-        """Debe retornar el individuo con menor fitness."""
+        """Debe retornar el individuo con mayor fitness."""
         individuals = [Individual.random(num_triangles=5) for _ in range(5)]
         for i, ind in enumerate(individuals):
             ind.fitness = float(i * 100)  # 0, 100, 200, 300, 400
 
         pop = Population(individuals=individuals)
 
-        assert pop.best.fitness == 0.0
+        assert pop.best.fitness == 400.0
 
     def test_worst_individual(self):
-        """Debe retornar el individuo con mayor fitness."""
+        """Debe retornar el individuo con menor fitness."""
         individuals = [Individual.random(num_triangles=5) for _ in range(5)]
         for i, ind in enumerate(individuals):
             ind.fitness = float(i * 100)
 
         pop = Population(individuals=individuals)
 
-        assert pop.worst.fitness == 400.0
+        assert pop.worst.fitness == 0.0
 
     def test_average_fitness(self):
         """Debe calcular el fitness promedio correctamente."""
@@ -76,8 +76,8 @@ class TestPopulation:
         stats = pop.get_statistics()
 
         assert stats["generation"] == 5
-        assert stats["best_fitness"] == 100.0
-        assert stats["worst_fitness"] == 300.0
+        assert stats["best_fitness"] == 300.0
+        assert stats["worst_fitness"] == 100.0
         assert stats["avg_fitness"] == 200.0
         assert stats["size"] == 3
 
@@ -92,10 +92,10 @@ class TestPopulation:
         pop = Population(individuals=individuals)
         sorted_inds = pop.sorted_by_fitness()
 
-        assert sorted_inds[0].fitness == 50.0
-        assert sorted_inds[1].fitness == 100.0
-        assert sorted_inds[2].fitness == 200.0
-        assert sorted_inds[3].fitness == 300.0
+        assert sorted_inds[0].fitness == 300.0
+        assert sorted_inds[1].fitness == 200.0
+        assert sorted_inds[2].fitness == 100.0
+        assert sorted_inds[3].fitness == 50.0
 
     def test_iteration(self):
         """Debe permitir iteración sobre individuos."""
@@ -127,13 +127,13 @@ class TestEvolutionConfig:
             population_size=50,
             num_triangles=20,
             max_generations=100,
-            error_threshold=500.0,
+            fitness_threshold=0.5,
         )
 
         assert config.population_size == 50
         assert config.num_triangles == 20
         assert config.max_generations == 100
-        assert config.error_threshold == 500.0
+        assert config.fitness_threshold == 0.5
 
 
 class TestGeneticEngine:
@@ -165,7 +165,7 @@ class TestGeneticEngine:
 
         # Después de evaluar, todos tienen fitness
         assert all(ind.fitness is not None for ind in pop)
-        assert all(ind.fitness >= 0 for ind in pop)
+        assert all(0 < ind.fitness <= 1 for ind in pop)
 
     def test_evolve_generation(self, simple_engine):
         """Debe crear una nueva generación."""
@@ -183,27 +183,27 @@ class TestGeneticEngine:
 
         assert isinstance(result, EvolutionResult)
         assert result.best_individual is not None
-        assert result.best_fitness >= 0
+        assert 0 < result.best_fitness <= 1
         assert result.generations == 5
         assert result.elapsed_time > 0
         assert len(result.history) > 0
 
     def test_early_stopping(self):
-        """Debe detenerse si alcanza el umbral de error."""
+        """Debe detenerse si alcanza el umbral de fitness."""
         # Imagen blanca como objetivo
         target = Image.new("RGB", (10, 10), color=(255, 255, 255))
         config = EvolutionConfig(
             population_size=20,
             num_triangles=3,
             max_generations=1000,
-            error_threshold=100000,  # Umbral muy alto, debería parar rápido
+            fitness_threshold=1e-10,  # Umbral muy bajo, debería parar rápido
         )
         engine = create_engine(target, config)
 
         result = engine.run()
 
         # Debería parar antes de las 1000 generaciones
-        # (un individuo vacío sobre blanco tiene fitness 0)
+        # (con umbral muy bajo, cualquier fitness válido debería alcanzarlo)
         assert result.generations < 1000 or result.stopped_early
 
     def test_callbacks(self, simple_engine):
@@ -231,11 +231,11 @@ class TestGeneticEngine:
         result = simple_engine.run()
 
         # El resultado final debe tener un fitness razonable
-        assert result.best_fitness >= 0
+        assert 0 < result.best_fitness <= 1
 
-        # El fitness final debe ser menor o igual al inicial
+        # El fitness final debe ser mayor o igual al inicial
         initial_best = result.history[0]["best_fitness"]
-        assert result.best_fitness <= initial_best
+        assert result.best_fitness >= initial_best
 
 
 class TestCreateEngine:

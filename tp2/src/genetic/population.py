@@ -72,19 +72,19 @@ class Population:
 
     @property
     def best(self) -> Individual | None:
-        """Retorna el mejor individuo (menor fitness)."""
-        evaluated = [ind for ind in self.individuals if ind.fitness is not None]
-        if not evaluated:
-            return None
-        return min(evaluated, key=lambda ind: ind.fitness)
-
-    @property
-    def worst(self) -> Individual | None:
-        """Retorna el peor individuo (mayor fitness)."""
+        """Retorna el mejor individuo (mayor fitness)."""
         evaluated = [ind for ind in self.individuals if ind.fitness is not None]
         if not evaluated:
             return None
         return max(evaluated, key=lambda ind: ind.fitness)
+
+    @property
+    def worst(self) -> Individual | None:
+        """Retorna el peor individuo (menor fitness)."""
+        evaluated = [ind for ind in self.individuals if ind.fitness is not None]
+        if not evaluated:
+            return None
+        return min(evaluated, key=lambda ind: ind.fitness)
 
     @property
     def average_fitness(self) -> float | None:
@@ -121,5 +121,5 @@ class Population:
         evaluated = [ind for ind in self.individuals if ind.fitness is not None]
         not_evaluated = [ind for ind in self.individuals if ind.fitness is None]
 
-        evaluated.sort(key=lambda ind: ind.fitness)
+        evaluated.sort(key=lambda ind: ind.fitness, reverse=True)
         return evaluated + not_evaluated

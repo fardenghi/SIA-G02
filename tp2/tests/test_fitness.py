@@ -1,11 +1,17 @@
-"""Tests para la función de fitness (MSE)."""
+"""Tests para cálculo de error (MSE) y fitness."""
 
 import pytest
 import numpy as np
 from PIL import Image
 
 from src.genetic.individual import Triangle, Individual
-from src.fitness.mse import calculate_mse, calculate_normalized_mse, FitnessEvaluator
+from src.fitness.mse import (
+    calculate_mse,
+    calculate_normalized_mse,
+    error_to_fitness,
+    calculate_fitness,
+    FitnessEvaluator,
+)
 
 
 class TestMSE:
@@ -74,6 +80,29 @@ class TestMSE:
         assert nmse == 1.0
 
 
+class TestFitnessTransform:
+    """Tests para la transformación de error a fitness."""
+
+    def test_error_zero_is_max_fitness(self):
+        """Error 0 debe mapear a fitness máximo (1.0)."""
+        assert error_to_fitness(0.0) == 1.0
+
+    def test_fitness_decreases_with_error(self):
+        """A mayor error, menor fitness."""
+        low_error = error_to_fitness(100.0)
+        high_error = error_to_fitness(1000.0)
+        assert low_error > high_error
+
+    def test_calculate_fitness_range(self):
+        """El fitness calculado debe estar en (0, 1]."""
+        black = np.zeros((10, 10, 3), dtype=np.uint8)
+        white = np.full((10, 10, 3), 255, dtype=np.uint8)
+
+        fitness = calculate_fitness(black, white)
+
+        assert 0 < fitness <= 1
+
+
 class TestFitnessEvaluator:
     """Tests para la clase FitnessEvaluator."""
 
@@ -106,7 +135,7 @@ class TestFitnessEvaluator:
 
         fitness = evaluator.evaluate(individual)
 
-        assert fitness >= 0
+        assert 0 < fitness <= 1
         assert individual.fitness == fitness
         assert evaluator.evaluations == 1
 
@@ -146,10 +175,10 @@ class TestFitnessEvaluator:
         individual = Individual.random(num_triangles=5)
         fitness = evaluator.evaluate(individual)
 
-        assert 0 <= fitness <= 1
+        assert 0 < fitness <= 1
 
     def test_white_canvas_on_white_target(self):
-        """Individuo vacío sobre imagen blanca debe tener fitness 0."""
+        """Individuo vacío sobre imagen blanca debe tener fitness 1."""
         white_img = Image.new("RGB", (50, 50), color=(255, 255, 255))
         evaluator = FitnessEvaluator(white_img)
 
@@ -157,7 +186,7 @@ class TestFitnessEvaluator:
         empty_individual = Individual(triangles=[])
         fitness = evaluator.evaluate(empty_individual)
 
-        assert fitness == 0.0
+        assert fitness == 1.0
 
     def test_reset_counter(self):
         """Debe reiniciar el contador de evaluaciones."""

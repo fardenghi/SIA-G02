@@ -162,11 +162,11 @@ class EvolutionVisualizer:
 
         if metrics:
             if "best_fitness" in metrics:
-                lines.append(f"Mejor Fitness: {metrics['best_fitness']:.2f}")
+                lines.append(f"Mejor Fitness: {metrics['best_fitness']:.6f}")
             if "avg_fitness" in metrics:
-                lines.append(f"Fitness Promedio: {metrics['avg_fitness']:.2f}")
+                lines.append(f"Fitness Promedio: {metrics['avg_fitness']:.6f}")
             if "worst_fitness" in metrics:
-                lines.append(f"Peor Fitness: {metrics['worst_fitness']:.2f}")
+                lines.append(f"Peor Fitness: {metrics['worst_fitness']:.6f}")
 
         if self.triangles_data:
             lines.append("-" * 25)
@@ -209,7 +209,7 @@ class EvolutionVisualizer:
         # Área para gráfico de fitness
         self.ax_plot = self.fig.add_subplot(gs[2, :])
         self.ax_plot.set_xlabel("Generación")
-        self.ax_plot.set_ylabel("Fitness (MSE)")
+        self.ax_plot.set_ylabel("Fitness (1 / (1 + MSE))")
         self.ax_plot.set_title("Evolución del Fitness")
         self.ax_plot.grid(True, alpha=0.3)
 
@@ -303,7 +303,7 @@ class EvolutionVisualizer:
             )
 
         self.ax_plot.set_xlabel("Generación")
-        self.ax_plot.set_ylabel("Fitness (MSE)")
+        self.ax_plot.set_ylabel("Fitness (1 / (1 + MSE))")
         self.ax_plot.set_title("Evolución del Fitness")
         self.ax_plot.grid(True, alpha=0.3)
 
@@ -430,7 +430,7 @@ class EvolutionVisualizer:
             import cv2
         except ImportError:
             print("Error: opencv-python no está instalado.")
-            print("Instálalo con: pip install opencv-python")
+            print("Instálalo con: uv add opencv-python")
             return
 
         print(f"Generando video con {len(self.frames)} frames...")

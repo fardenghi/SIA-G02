@@ -1,8 +1,9 @@
 """
-Cálculo del Error Cuadrático Medio (MSE).
+Cálculo de error (MSE) y transformación a fitness.
 
-Función de fitness que compara la imagen renderizada con la objetivo.
-El objetivo del algoritmo genético es MINIMIZAR este valor.
+El MSE se usa como señal de error base (menor es mejor), y luego se transforma
+a fitness con `fitness = 1 / (1 + error)` para trabajar con la convención
+clásica de algoritmos genéticos (mayor es mejor).
 """
 
 from __future__ import annotations
@@ -68,6 +69,54 @@ def calculate_normalized_mse(rendered: np.ndarray, target: np.ndarray) -> float:
     return mse / max_mse
 
 
+def error_to_fitness(error: float) -> float:
+    """
+    Convierte una métrica de error a fitness.
+
+    Aplica la transformación:
+
+        fitness = 1 / (1 + error)
+
+    Args:
+        error: Error no negativo (0 = ajuste perfecto).
+
+    Returns:
+        Fitness en el rango (0, 1], donde valores más altos son mejores.
+
+    Raises:
+        ValueError: Si el error es negativo.
+    """
+    if error < 0:
+        raise ValueError(f"El error debe ser no negativo, recibido: {error}")
+
+    return 1.0 / (1.0 + error)
+
+
+def calculate_fitness(
+    rendered: np.ndarray, target: np.ndarray, normalize_error: bool = False
+) -> float:
+    """
+    Calcula fitness entre una imagen renderizada y la imagen objetivo.
+
+    Si `normalize_error=True`, primero normaliza el MSE a [0, 1] y luego aplica
+    la transformación a fitness.
+
+    Args:
+        rendered: Array de la imagen renderizada.
+        target: Array de la imagen objetivo.
+        normalize_error: Si True, usa MSE normalizado antes de convertir.
+
+    Returns:
+        Valor de fitness (mayor es mejor).
+    """
+    if normalize_error:
+        error = calculate_normalized_mse(rendered, target)
+    else:
+        error = calculate_mse(rendered, target)
+
+    return error_to_fitness(error)
+
+
 class FitnessEvaluator:
     """
     Evaluador de fitness para individuos.
@@ -87,7 +136,8 @@ class FitnessEvaluator:
 
         Args:
             target_image: Imagen objetivo (PIL Image o NumPy array).
-            normalize: Si True, normaliza el MSE al rango [0, 1].
+            normalize: Si True, normaliza el error MSE a [0, 1] antes de
+                convertir a fitness.
         """
         if isinstance(target_image, Image.Image):
             target_image = target_image.convert("RGB")
@@ -115,26 +165,25 @@ class FitnessEvaluator:
         """
         Evalúa el fitness de un individuo.
 
-        Renderiza el individuo y calcula el MSE contra la imagen objetivo.
+        Renderiza el individuo y calcula fitness contra la imagen objetivo.
         El resultado se almacena en individual.fitness.
 
         Args:
             individual: Individuo a evaluar.
 
         Returns:
-            Valor de fitness (MSE, menor es mejor).
+            Valor de fitness (mayor es mejor).
         """
         # Si ya tiene fitness calculado, devolverlo
         if individual.fitness is not None:
             return individual.fitness
 
-        # Renderizar y calcular MSE
+        # Renderizar y calcular fitness
         rendered = self.canvas.render_to_array(individual)
 
-        if self.normalize:
-            fitness = calculate_normalized_mse(rendered, self.target)
-        else:
-            fitness = calculate_mse(rendered, self.target)
+        fitness = calculate_fitness(
+            rendered, self.target, normalize_error=self.normalize
+        )
 
         individual.fitness = fitness
         self.evaluations += 1

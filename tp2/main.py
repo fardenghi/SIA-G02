@@ -131,7 +131,7 @@ def setup_callbacks(engine, config: Config, output_dir: Path, quiet: bool):
         if not quiet and gen % log_interval == 0:
             best = stats["best_fitness"]
             avg = stats["avg_fitness"]
-            print(f"Gen {gen:5d} | Best: {best:10.2f} | Avg: {avg:10.2f}")
+            print(f"Gen {gen:5d} | Best: {best:10.6f} | Avg: {avg:10.6f}")
 
         # Guardar imagen intermedia
         if save_interval > 0 and gen > 0 and gen % save_interval == 0:
@@ -142,7 +142,7 @@ def setup_callbacks(engine, config: Config, output_dir: Path, quiet: bool):
     def on_improvement(gen: int, individual, fitness: float):
         """Callback cuando hay mejora."""
         if not quiet:
-            print(f"  >> Mejora en gen {gen}: {fitness:.2f}")
+            print(f"  >> Mejora en gen {gen}: {fitness:.6f}")
 
     engine.on_generation(on_generation)
     engine.on_improvement(on_improvement)

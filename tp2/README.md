@@ -33,7 +33,7 @@ El sistema evoluciona una población de soluciones candidatas (individuos), dond
 4. **Cruza (Crossover)**: Se combinan pares de individuos para producir descendencia.
 5. **Mutación**: Se aplican alteraciones aleatorias sutiles a los nuevos individuos.
 6. **Reemplazo**: La nueva generación reemplaza a la anterior.
-7. **Criterio de parada**: Se repite el ciclo hasta alcanzar el número máximo de generaciones o un umbral de error aceptable.
+7. **Criterio de parada**: Se repite el ciclo hasta alcanzar el número máximo de generaciones o un umbral de fitness objetivo.
 
 ---
 
@@ -54,13 +54,14 @@ Cada triángulo se define por:
 
 ### Función de Fitness
 
-El fitness se calcula mediante el **Error Cuadrático Medio (MSE)** entre la imagen renderizada y la imagen objetivo:
+El sistema usa el **Error Cuadrático Medio (MSE)** como señal de error base y luego lo transforma a fitness:
 
 ```
 MSE = (1 / n) × Σ (pixel_original - pixel_renderizado)²
+Fitness = 1 / (1 + MSE)
 ```
 
-Donde `n` es el número total de píxeles. **El objetivo es minimizar este valor.**
+Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitness = mejor individuo**.
 
 ### Operadores Genéticos
 
@@ -77,7 +78,7 @@ Donde `n` es el número total de píxeles. **El objetivo es minimizar este valor
 ### Requisitos previos
 
 - Python 3.10+
-- pip
+- uv
 
 ### Pasos de instalación
 
@@ -86,19 +87,15 @@ Donde `n` es el número total de píxeles. **El objetivo es minimizar este valor
 git clone <URL_DEL_REPOSITORIO>
 cd tp2
 
-# Crear entorno virtual (recomendado)
-python3 -m venv venv
-source venv/bin/activate # En Windows: venv\Scripts\activate
-
-# Instalar dependencias
-pip install -r requirements.txt
+# Sincronizar dependencias (runtime + desarrollo)
+uv sync --dev
 ```
 
 ### Verificar instalación
 
 ```bash
 # Ejecutar tests para verificar que todo funciona
-python -m pytest tests/ -v
+uv run --dev pytest tests/ -v
 ```
 
 ---
@@ -108,17 +105,14 @@ python -m pytest tests/ -v
 ### Ejecución básica
 
 ```bash
-# Activar el entorno virtual
-source venv/bin/activate
-
 # Ejecutar con parámetros mínimos
-python main.py --image input/mi_imagen.png --triangles 50
+uv run main.py --image input/mi_imagen.png --triangles 50
 ```
 
 ### Ejemplo completo
 
 ```bash
-python main.py \
+uv run main.py \
     --image input/foto.png \
     --triangles 100 \
     --population 50 \
@@ -138,10 +132,10 @@ Generaciones máximas: 5000
 
 Iniciando evolución...
 --------------------------------------------------
-Gen     0 | Best:   12500.32 | Avg:   15234.56
-  >> Mejora en gen 1: 11234.21
-  >> Mejora en gen 5: 9876.54
-Gen    10 | Best:    8765.43 | Avg:    9234.12
+Gen     0 | Best:   0.000061 | Avg:   0.000048
+  >> Mejora en gen 1:   0.000079
+  >> Mejora en gen 5:   0.000101
+Gen    10 | Best:   0.000114 | Avg:   0.000098
 ...
 ```
 
@@ -157,7 +151,7 @@ Los parámetros se pueden configurar de **dos formas**:
 ### Opción 1: Argumentos de Línea de Comandos
 
 ```bash
-python main.py --image <ruta> [opciones]
+uv run main.py --image <ruta> [opciones]
 ```
 
 #### Parámetros principales
@@ -205,7 +199,7 @@ alpha_max: 0.8
 # Algoritmo genético
 population_size: 100
 max_generations: 5000
-error_threshold: null  # null = sin parada temprana
+fitness_threshold: null  # null = sin parada temprana
 
 # Selección
 selection:
@@ -244,13 +238,13 @@ Los argumentos CLI **sobreescriben** los valores del archivo YAML.
 ### Ejemplo 1: Ejecución rápida para pruebas
 
 ```bash
-python main.py -i input/logo.png -t 30 -g 500 -p 30
+uv run main.py -i input/logo.png -t 30 -g 500 -p 30
 ```
 
 ### Ejemplo 2: Alta calidad (más triángulos y generaciones)
 
 ```bash
-python main.py \
+uv run main.py \
     --image input/retrato.jpg \
     --triangles 200 \
     --generations 10000 \
@@ -263,7 +257,7 @@ python main.py \
 
 ```bash
 # Usar selección por ruleta y cruza uniforme
-python main.py \
+uv run main.py \
     -i input/paisaje.png \
     -t 100 \
     --selection roulette \
@@ -274,14 +268,14 @@ python main.py \
 ### Ejemplo 4: Modo silencioso (para scripts)
 
 ```bash
-python main.py -i input/imagen.png -t 50 -g 1000 --quiet
+uv run main.py -i input/imagen.png -t 50 -g 1000 --quiet
 ```
 
 ### Ejemplo 5: Usar configuración personalizada
 
 ```bash
 # Primero edita mi_config.yaml con tus parámetros
-python main.py -i input/imagen.png --config mi_config.yaml
+uv run main.py -i input/imagen.png --config mi_config.yaml
 ```
 
 ---
@@ -306,7 +300,7 @@ output/
 |---------|-------------|
 | `result.png` | Imagen final con la mejor aproximación encontrada |
 | `triangles.json` | Datos estructurados de cada triángulo (posición, color, orden) |
-| `fitness_evolution.png` | Gráfico mostrando la mejora del fitness por generación |
+| `fitness_evolution.png` | Gráfico mostrando la evolución del fitness por generación |
 | `gen_XXXXX.png` | Capturas intermedias del progreso |
 
 ### Reconstruir imagen desde JSON
@@ -315,10 +309,10 @@ Puedes reconstruir la imagen a cualquier resolución usando los triángulos expo
 
 ```bash
 # Reconstruir a tamaño original
-python reconstruct.py output/triangles.json -o reconstruida.png -W 256 -H 256
+uv run reconstruct.py output/triangles.json -o reconstruida.png -W 256 -H 256
 
 # Reconstruir a mayor resolución (escala 2x)
-python reconstruct.py output/triangles.json -o reconstruida_hd.png -W 256 -H 256 --scale 2
+uv run reconstruct.py output/triangles.json -o reconstruida_hd.png -W 256 -H 256 --scale 2
 ```
 
 ---
@@ -331,7 +325,7 @@ El sistema incluye un visualizador gráfico interactivo para explorar la evoluci
 
 ```bash
 # Visualizar resultados de un experimento
-python visualize.py output/mi_experimento
+uv run visualize.py output/mi_experimento
 ```
 
 ### Interfaz gráfica
@@ -356,13 +350,13 @@ El visualizador muestra:
 
 ```bash
 # Exportar como GIF animado
-python visualize.py output/mi_experimento --export-gif evolucion.gif
+uv run visualize.py output/mi_experimento --export-gif evolucion.gif
 
 # Exportar como video MP4 (requiere ffmpeg)
-python visualize.py output/mi_experimento --export-video evolucion.mp4
+uv run visualize.py output/mi_experimento --export-video evolucion.mp4
 
 # Generar imagen resumen con todos los pasos
-python visualize.py output/mi_experimento --summary resumen.png
+uv run visualize.py output/mi_experimento --summary resumen.png
 ```
 
 ### Parámetros del visualizador
@@ -381,13 +375,13 @@ python visualize.py output/mi_experimento --summary resumen.png
 
 ```bash
 # Ejecutar todos los tests
-python -m pytest tests/ -v
+uv run --dev pytest tests/ -v
 
 # Ejecutar tests de un módulo específico
-python -m pytest tests/test_engine.py -v
+uv run --dev pytest tests/test_engine.py -v
 
 # Ejecutar tests con cobertura
-python -m pytest tests/ --cov=src --cov-report=html
+uv run --dev pytest tests/ --cov=src --cov-report=html
 ```
 
 ---
@@ -400,7 +394,8 @@ tp2/
 ├── reconstruct.py          # Script de reconstrucción desde JSON
 ├── visualize.py            # Visualizador gráfico interactivo
 ├── config.yaml             # Configuración por defecto
-├── requirements.txt        # Dependencias del proyecto
+├── pyproject.toml          # Dependencias y metadata del proyecto
+├── uv.lock                 # Lockfile generado por uv
 ├── pytest.ini              # Configuración de pytest
 ├── README.md
 ├── src/
@@ -412,7 +407,7 @@ tp2/
 │   │   ├── crossover.py    # Operadores de cruza
 │   │   └── mutation.py     # Operadores de mutación
 │   ├── fitness/            # Evaluación de fitness
-│   │   └── mse.py          # Cálculo del MSE
+│   │   └── mse.py          # Cálculo de fitness a partir de MSE
 │   ├── rendering/          # Renderizado de triángulos
 │   │   └── canvas.py       # Generación de imágenes con Pillow
 │   └── utils/              # Utilidades generales

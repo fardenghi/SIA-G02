@@ -90,7 +90,11 @@ class TestConfig:
         data = {
             "image": {"target_path": "/path/to/image.png"},
             "genotype": {"num_triangles": 40, "alpha_min": 0.2},
-            "genetic": {"population_size": 80, "max_generations": 1000},
+            "genetic": {
+                "population_size": 80,
+                "max_generations": 1000,
+                "error_threshold": 3500,
+            },
         }
 
         config = Config.from_dict(data)
@@ -100,6 +104,7 @@ class TestConfig:
         assert config.alpha_min == 0.2
         assert config.population_size == 80
         assert config.max_generations == 1000
+        assert config.fitness_threshold == pytest.approx(1.0 / 3501.0)
 
     def test_from_yaml(self):
         """Debe cargar desde archivo YAML."""
@@ -175,6 +180,14 @@ class TestConfig:
         errors = config.validate()
 
         assert any("alpha_min" in e for e in errors)
+
+    def test_validate_fitness_threshold_range(self):
+        """Debe detectar fitness_threshold fuera de rango."""
+        config = Config(target_path="/dummy/path.png", fitness_threshold=2.0)
+
+        errors = config.validate()
+
+        assert any("fitness_threshold" in e for e in errors)
 
 
 class TestLoadConfig:
