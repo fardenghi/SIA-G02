@@ -25,12 +25,16 @@ genetic:
   
 # Selección
 selection:
-  # Método: "tournament", "roulette", "rank"
+  # Método: "elite", "tournament", "probabilistic_tournament", "roulette", "universal", "boltzmann", "rank"
   method: "tournament"
-  # Tamaño del torneo (solo para tournament)
+  # Tamaño del torneo determinístico
   tournament_size: 3
-  # Proporción de élite que pasa directamente
-  elite_ratio: 0.1
+  # Umbral para torneo probabilístico (0.5 - 1.0)
+  threshold: 0.75
+  # Parámetros de Boltzmann
+  boltzmann_t0: 100.0
+  boltzmann_tc: 1.0
+  boltzmann_k: 0.005
 
 # Cruza (Crossover)
 crossover:

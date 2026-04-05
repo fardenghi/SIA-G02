@@ -73,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--selection",
         type=str,
-        choices=["tournament", "roulette", "rank"],
+        choices=["elite", "tournament", "probabilistic_tournament", "roulette", "universal", "boltzmann", "rank"],
         default=None,
         help="Método de selección",
     )
@@ -203,10 +203,13 @@ def main():
         config=config.to_evolution_config(),
         selection_method=config.selection.method,
         tournament_size=config.selection.tournament_size,
-        elite_ratio=config.selection.elite_ratio,
         crossover_method=config.crossover.method,
         crossover_probability=config.crossover.probability,
         mutation_params=config.mutation.to_params(),
+        threshold=config.selection.threshold,
+        boltzmann_t0=config.selection.boltzmann_t0,
+        boltzmann_tc=config.selection.boltzmann_tc,
+        boltzmann_k=config.selection.boltzmann_k,
     )
 
     # Configurar callbacks

@@ -4,10 +4,13 @@ import pytest
 import random
 from src.genetic.individual import Individual, Triangle
 from src.genetic.selection import (
+    EliteSelection,
     TournamentSelection,
+    ProbabilisticTournamentSelection,
     RouletteSelection,
+    UniversalSelection,
+    BoltzmannSelection,
     RankSelection,
-    ElitistSelection,
     create_selection_method,
 )
 from src.genetic.crossover import (
@@ -117,39 +120,188 @@ class TestRankSelection:
         assert avg_fitness > pop_avg
 
 
-class TestElitistSelection:
-    """Tests para selección elitista."""
+class TestEliteSelection:
+    """Tests para selección élite."""
 
-    def test_elite_passes(self):
-        """Los mejores deben pasar directamente."""
+    def test_basic_selection(self):
+        """Debe seleccionar la cantidad correcta de padres."""
         pop = create_population_with_fitness(10)
-        base = TournamentSelection(tournament_size=2)
-        selector = ElitistSelection(elite_count=3, base_method=base)
+        selector = EliteSelection()
 
-        selected = selector.select(pop, num_parents=5)
+        selected = selector.select(pop, num_parents=10)
 
-        # Los 3 mejores (fitness más altos) deben estar
-        best_fitnesses = sorted((ind.fitness for ind in pop), reverse=True)[:3]
-        selected_fitnesses = [ind.fitness for ind in selected[:3]]
+        assert len(selected) == 10
 
-        for f in best_fitnesses:
-            assert f in selected_fitnesses
+    def test_best_individual_always_included(self):
+        """El mejor individuo siempre debe aparecer en la selección."""
+        pop = create_population_with_fitness(10)
+        best_fitness = max(ind.fitness for ind in pop)
+        selector = EliteSelection()
+
+        selected = selector.select(pop, num_parents=10)
+
+        assert any(ind.fitness == best_fitness for ind in selected)
+
+    def test_deterministic(self):
+        """Dos llamadas con la misma población deben dar el mismo resultado."""
+        pop = create_population_with_fitness(10)
+        selector = EliteSelection()
+
+        selected1 = selector.select(pop, num_parents=10)
+        selected2 = selector.select(pop, num_parents=10)
+
+        assert [ind.fitness for ind in selected1] == [ind.fitness for ind in selected2]
+
+    def test_favors_high_fitness(self):
+        """El promedio de fitness seleccionado debe ser mayor al de la población."""
+        pop = create_population_with_fitness(10)
+        selector = EliteSelection()
+
+        selected = selector.select(pop, num_parents=10)
+        avg_selected = sum(ind.fitness for ind in selected) / len(selected)
+        avg_pop = sum(ind.fitness for ind in pop) / len(pop)
+
+        assert avg_selected > avg_pop
+
+
+class TestProbabilisticTournamentSelection:
+    """Tests para selección por torneo probabilístico."""
+
+    def test_basic_selection(self):
+        """Debe seleccionar la cantidad correcta de padres."""
+        pop = create_population_with_fitness(20)
+        selector = ProbabilisticTournamentSelection(threshold=0.75)
+
+        selected = selector.select(pop, num_parents=10)
+
+        assert len(selected) == 10
+        assert all(isinstance(ind, Individual) for ind in selected)
+
+    def test_favors_high_fitness(self):
+        """Con threshold alto debe favorecer a los más aptos."""
+        random.seed(42)
+        pop = create_population_with_fitness(10)
+        selector = ProbabilisticTournamentSelection(threshold=0.9)
+
+        selected = selector.select(pop, num_parents=200)
+        avg_fitness = sum(ind.fitness for ind in selected) / len(selected)
+        pop_avg = sum(ind.fitness for ind in pop) / len(pop)
+
+        assert avg_fitness > pop_avg
+
+    def test_invalid_threshold(self):
+        """Debe fallar con threshold fuera de [0.5, 1]."""
+        with pytest.raises(ValueError):
+            ProbabilisticTournamentSelection(threshold=0.3)
+
+        with pytest.raises(ValueError):
+            ProbabilisticTournamentSelection(threshold=1.1)
+
+
+class TestUniversalSelection:
+    """Tests para selección universal estocástica (SUS)."""
+
+    def test_basic_selection(self):
+        """Debe seleccionar la cantidad correcta de padres."""
+        pop = create_population_with_fitness(20)
+        selector = UniversalSelection()
+
+        selected = selector.select(pop, num_parents=10)
+
+        assert len(selected) == 10
+        assert all(isinstance(ind, Individual) for ind in selected)
+
+    def test_favors_high_fitness(self):
+        """Debe favorecer individuos con mayor fitness."""
+        random.seed(42)
+        pop = create_population_with_fitness(10)
+        selector = UniversalSelection()
+
+        selected = selector.select(pop, num_parents=200)
+        avg_fitness = sum(ind.fitness for ind in selected) / len(selected)
+        pop_avg = sum(ind.fitness for ind in pop) / len(pop)
+
+        assert avg_fitness > pop_avg
+
+    def test_empty_population(self):
+        """Debe fallar con población vacía."""
+        selector = UniversalSelection()
+        with pytest.raises(ValueError):
+            selector.select([], num_parents=5)
+
+
+class TestBoltzmannSelection:
+    """Tests para selección entrópica de Boltzmann."""
+
+    def test_basic_selection(self):
+        """Debe seleccionar la cantidad correcta de padres."""
+        pop = create_population_with_fitness(20)
+        selector = BoltzmannSelection(t0=100.0, tc=1.0, k=0.005)
+
+        selected = selector.select(pop, num_parents=10, generation=0)
+
+        assert len(selected) == 10
+        assert all(isinstance(ind, Individual) for ind in selected)
+
+    def test_favors_high_fitness_at_low_temperature(self):
+        """A temperatura baja debe favorecer fuertemente a los más aptos."""
+        random.seed(42)
+        pop = create_population_with_fitness(10)
+        # Temperatura baja: generación muy avanzada
+        selector = BoltzmannSelection(t0=100.0, tc=1.0, k=1.0)
+
+        selected = selector.select(pop, num_parents=200, generation=100)
+        avg_fitness = sum(ind.fitness for ind in selected) / len(selected)
+        pop_avg = sum(ind.fitness for ind in pop) / len(pop)
+
+        assert avg_fitness > pop_avg
+
+    def test_temperature_decreases_with_generation(self):
+        """T(t) debe decrecer con generaciones crecientes."""
+        selector = BoltzmannSelection(t0=100.0, tc=1.0, k=0.1)
+
+        t0 = selector._temperature(0)
+        t10 = selector._temperature(10)
+        t100 = selector._temperature(100)
+
+        assert t0 > t10 > t100
+        assert abs(t0 - 100.0) < 1e-9  # T(0) = T0
+
+    def test_invalid_params(self):
+        """Debe fallar con parámetros inválidos."""
+        with pytest.raises(ValueError):
+            BoltzmannSelection(t0=-1.0)
+        with pytest.raises(ValueError):
+            BoltzmannSelection(k=0.0)
 
 
 class TestSelectionFactory:
     """Tests para el factory de selección."""
+
+    def test_create_elite(self):
+        """Debe crear selección élite."""
+        selector = create_selection_method("elite")
+        assert isinstance(selector, EliteSelection)
 
     def test_create_tournament(self):
         """Debe crear selección por torneo."""
         selector = create_selection_method("tournament", tournament_size=5)
         assert isinstance(selector, TournamentSelection)
 
-    def test_create_with_elite(self):
-        """Debe crear selección con elitismo."""
-        selector = create_selection_method(
-            "tournament", elite_ratio=0.1, population_size=100
-        )
-        assert isinstance(selector, ElitistSelection)
+    def test_create_probabilistic_tournament(self):
+        """Debe crear selección por torneo probabilístico."""
+        selector = create_selection_method("probabilistic_tournament", threshold=0.8)
+        assert isinstance(selector, ProbabilisticTournamentSelection)
+
+    def test_create_universal(self):
+        """Debe crear selección universal."""
+        selector = create_selection_method("universal")
+        assert isinstance(selector, UniversalSelection)
+
+    def test_create_boltzmann(self):
+        """Debe crear selección de Boltzmann."""
+        selector = create_selection_method("boltzmann")
+        assert isinstance(selector, BoltzmannSelection)
 
     def test_invalid_method(self):
         """Debe fallar con método desconocido."""

@@ -31,7 +31,10 @@ class SelectionConfig:
 
     method: str = "tournament"
     tournament_size: int = 3
-    elite_ratio: float = 0.1
+    threshold: float = 0.75
+    boltzmann_t0: float = 100.0
+    boltzmann_tc: float = 1.0
+    boltzmann_k: float = 0.005
 
 
 @dataclass

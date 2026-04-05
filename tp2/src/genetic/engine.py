@@ -167,7 +167,11 @@ class GeneticEngine:
         new_individuals = []
 
         # Seleccionar padres (necesitamos pop_size padres para generar pop_size hijos)
-        parents = self.selection.select(population.individuals, num_parents=pop_size)
+        parents = self.selection.select(
+            population.individuals,
+            num_parents=pop_size,
+            generation=population.generation,
+        )
 
         # Cruza y mutación
         i = 0
@@ -271,10 +275,13 @@ def create_engine(
     config: EvolutionConfig,
     selection_method: str = "tournament",
     tournament_size: int = 3,
-    elite_ratio: float = 0.1,
     crossover_method: str = "single_point",
     crossover_probability: float = 0.8,
     mutation_params: Optional[MutationParams] = None,
+    threshold: float = 0.75,
+    boltzmann_t0: float = 100.0,
+    boltzmann_tc: float = 1.0,
+    boltzmann_k: float = 0.005,
 ) -> GeneticEngine:
     """
     Factory para crear un motor genético configurado.
@@ -284,10 +291,13 @@ def create_engine(
         config: Configuración de evolución.
         selection_method: Método de selección.
         tournament_size: Tamaño de torneo.
-        elite_ratio: Proporción de élite.
         crossover_method: Método de cruza.
         crossover_probability: Probabilidad de cruza.
         mutation_params: Parámetros de mutación.
+        threshold: Umbral para torneo probabilístico.
+        boltzmann_t0: Temperatura inicial de Boltzmann.
+        boltzmann_tc: Temperatura mínima de Boltzmann.
+        boltzmann_k: Constante de decaimiento de Boltzmann.
 
     Returns:
         Motor genético configurado.
@@ -295,8 +305,10 @@ def create_engine(
     selection = create_selection_method(
         method=selection_method,
         tournament_size=tournament_size,
-        elite_ratio=elite_ratio,
-        population_size=config.population_size,
+        threshold=threshold,
+        boltzmann_t0=boltzmann_t0,
+        boltzmann_tc=boltzmann_tc,
+        boltzmann_k=boltzmann_k,
     )
 
     crossover = create_crossover_method(

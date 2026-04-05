@@ -106,3 +106,5 @@ input/*
 *.tmp
 *.temp
 *.bak
+
+uv.lock

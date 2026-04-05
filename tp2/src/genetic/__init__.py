@@ -4,10 +4,13 @@ from src.genetic.individual import Triangle, Individual
 from src.genetic.population import Population
 from src.genetic.selection import (
     SelectionMethod,
+    EliteSelection,
     TournamentSelection,
+    ProbabilisticTournamentSelection,
     RouletteSelection,
+    UniversalSelection,
+    BoltzmannSelection,
     RankSelection,
-    ElitistSelection,
     create_selection_method,
 )
 from src.genetic.crossover import (
@@ -37,10 +40,13 @@ __all__ = [
     "Population",
     # Selección
     "SelectionMethod",
+    "EliteSelection",
     "TournamentSelection",
+    "ProbabilisticTournamentSelection",
     "RouletteSelection",
+    "UniversalSelection",
+    "BoltzmannSelection",
     "RankSelection",
-    "ElitistSelection",
     "create_selection_method",
     # Cruza
     "CrossoverMethod",
