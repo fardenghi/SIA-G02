@@ -1,6 +1,12 @@
 """
 Operadores de mutación.
 
+Implementa los 4 tipos de mutación según la teoría:
+- SINGLE_GENE: Muta exactamente 1 gen (triángulo)
+- LIMITED_MULTIGEN: Muta entre 1 y M genes
+- UNIFORM_MULTIGEN: Cada gen tiene probabilidad independiente de mutar
+- COMPLETE: Muta todos los genes del individuo
+
 Alteración de coordenadas, colores, transparencia y orden Z-index
 de los triángulos.
 """
@@ -9,9 +15,26 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Tuple
+from enum import Enum
+from typing import List, Tuple
 
 from src.genetic.individual import Individual, Triangle
+
+
+class MutationType(Enum):
+    """
+    Tipos de mutación disponibles según la teoría.
+
+    - SINGLE_GENE: Muta exactamente 1 gen (triángulo) con probabilidad Pm.
+    - LIMITED_MULTIGEN: Muta entre [1, M] genes con probabilidad Pm.
+    - UNIFORM_MULTIGEN: Cada gen tiene probabilidad Pm de ser mutado (independiente).
+    - COMPLETE: Muta todos los genes con probabilidad Pm.
+    """
+
+    SINGLE_GENE = "single_gene"
+    LIMITED_MULTIGEN = "limited_multigen"
+    UNIFORM_MULTIGEN = "uniform_multigen"
+    COMPLETE = "complete"
 
 
 @dataclass
@@ -20,15 +43,19 @@ class MutationParams:
     Parámetros de mutación.
 
     Attributes:
-        probability: Probabilidad de mutar un individuo.
-        gene_probability: Probabilidad de mutar cada triángulo.
+        mutation_type: Tipo de mutación a aplicar.
+        probability: Probabilidad de mutar un individuo (Pm).
+        gene_probability: Probabilidad de mutar cada gen (solo para UNIFORM_MULTIGEN).
+        max_genes: Máximo de genes a mutar (M) para LIMITED_MULTIGEN.
         position_delta: Magnitud máxima de perturbación en coordenadas.
         color_delta: Magnitud máxima de perturbación en color (0-255).
         alpha_delta: Magnitud máxima de perturbación en alfa.
     """
 
+    mutation_type: MutationType = MutationType.UNIFORM_MULTIGEN
     probability: float = 0.3
     gene_probability: float = 0.1
+    max_genes: int = 3
     position_delta: float = 0.1
     color_delta: int = 30
     alpha_delta: float = 0.1
@@ -45,6 +72,8 @@ class MutationParams:
             raise ValueError("color_delta debe estar en [0, 255]")
         if not 0 <= self.alpha_delta <= 1:
             raise ValueError("alpha_delta debe estar en [0, 1]")
+        if self.max_genes < 1:
+            raise ValueError("max_genes debe ser >= 1")
 
 
 def mutate_value(value: float, delta: float, min_val: float, max_val: float) -> float:
@@ -116,12 +145,29 @@ def mutate_triangle(triangle: Triangle, params: MutationParams) -> Triangle:
     return Triangle(vertices=new_vertices, color=(new_r, new_g, new_b, new_a))
 
 
-def mutate_individual(individual: Individual, params: MutationParams) -> Individual:
+def _apply_zindex_swap(triangles: List[Triangle], probability: float) -> None:
     """
-    Muta un individuo.
+    Aplica swap de Z-index (intercambio de posiciones) in-place.
 
-    Cada triángulo tiene una probabilidad de ser mutado.
-    También puede ocurrir un swap de posiciones (cambio de Z-index).
+    Args:
+        triangles: Lista de triángulos (se modifica in-place).
+        probability: Probabilidad de realizar el swap.
+    """
+    if len(triangles) >= 2 and random.random() < probability:
+        i, j = random.sample(range(len(triangles)), 2)
+        triangles[i], triangles[j] = triangles[j], triangles[i]
+
+
+def mutate_single_gene(individual: Individual, params: MutationParams) -> Individual:
+    """
+    Mutación de gen único.
+
+    Con probabilidad Pm, muta exactamente UN gen (triángulo) elegido al azar.
+
+    Cuándo sirve:
+    - Cuando se quiere hacer cambios chicos
+    - Cuando conviene no romper demasiado la estructura del individuo
+    - Cuando el problema es sensible a cambios grandes
 
     Args:
         individual: Individuo a mutar.
@@ -130,26 +176,163 @@ def mutate_individual(individual: Individual, params: MutationParams) -> Individ
     Returns:
         Nuevo individuo mutado.
     """
-    # Decidir si mutar este individuo
     if random.random() > params.probability:
         return individual.copy()
 
+    new_triangles = [t.copy() for t in individual.triangles]
+
+    if len(new_triangles) > 0:
+        # Elegir exactamente 1 gen al azar
+        idx = random.randrange(len(new_triangles))
+        new_triangles[idx] = mutate_triangle(new_triangles[idx], params)
+
+    # Swap de Z-index con probabilidad reducida
+    _apply_zindex_swap(new_triangles, params.gene_probability)
+
+    return Individual(triangles=new_triangles)
+
+
+def mutate_limited_multigen(
+    individual: Individual, params: MutationParams
+) -> Individual:
+    """
+    Mutación multigen limitada.
+
+    Con probabilidad Pm, muta entre [1, M] genes elegidos al azar.
+    M está definido por params.max_genes.
+
+    Cuándo sirve:
+    - Cuando una mutación de un solo gen resulta demasiado conservadora
+    - Cuando se quiere explorar más sin llegar a modificar todo el individuo
+    - Cuando tiene sentido controlar cuánto "ruido" se introduce
+
+    Args:
+        individual: Individuo a mutar.
+        params: Parámetros de mutación.
+
+    Returns:
+        Nuevo individuo mutado.
+    """
+    if random.random() > params.probability:
+        return individual.copy()
+
+    new_triangles = [t.copy() for t in individual.triangles]
+
+    if len(new_triangles) > 0:
+        # Elegir entre 1 y M genes (limitado por el tamaño del individuo)
+        max_to_mutate = min(params.max_genes, len(new_triangles))
+        num_to_mutate = random.randint(1, max_to_mutate)
+
+        # Seleccionar índices únicos al azar
+        indices_to_mutate = random.sample(range(len(new_triangles)), num_to_mutate)
+
+        for idx in indices_to_mutate:
+            new_triangles[idx] = mutate_triangle(new_triangles[idx], params)
+
+    # Swap de Z-index
+    _apply_zindex_swap(new_triangles, params.gene_probability)
+
+    return Individual(triangles=new_triangles)
+
+
+def mutate_uniform_multigen(
+    individual: Individual, params: MutationParams
+) -> Individual:
+    """
+    Mutación multigen uniforme.
+
+    Cada gen tiene probabilidad independiente (gene_probability) de ser mutado.
+    No hay decisión global de "si ocurre mutación o no", cada gen decide
+    independientemente.
+
+    Cuándo sirve:
+    - Cuando no se quiere fijar de antemano cuántos genes cambiar
+    - Cuando se busca una mutación distribuida a lo largo de todo el cromosoma
+    - Cuando el cromosoma tiene muchos genes relativamente independientes
+
+    Args:
+        individual: Individuo a mutar.
+        params: Parámetros de mutación.
+
+    Returns:
+        Nuevo individuo mutado.
+    """
+    # En uniform_multigen, cada gen decide independientemente
+    # Usamos gene_probability como la probabilidad de cada gen
     new_triangles = []
 
     for triangle in individual.triangles:
         if random.random() < params.gene_probability:
-            # Mutar este triángulo
             new_triangles.append(mutate_triangle(triangle, params))
         else:
-            # Copiar sin cambios
             new_triangles.append(triangle.copy())
 
-    # Con cierta probabilidad, hacer swap de dos triángulos (cambio de Z-index)
-    if len(new_triangles) >= 2 and random.random() < params.gene_probability:
-        i, j = random.sample(range(len(new_triangles)), 2)
-        new_triangles[i], new_triangles[j] = new_triangles[j], new_triangles[i]
+    # Swap de Z-index
+    _apply_zindex_swap(new_triangles, params.gene_probability)
 
     return Individual(triangles=new_triangles)
+
+
+def mutate_complete(individual: Individual, params: MutationParams) -> Individual:
+    """
+    Mutación completa.
+
+    Con probabilidad Pm, muta TODOS los genes del individuo.
+
+    Cuándo sirve:
+    - Para introducir un cambio muy fuerte
+    - Para escapar de poblaciones demasiado estancadas
+    - Como operador más agresivo de exploración
+
+    Riesgo: puede romper estructuras buenas que ya se habían encontrado.
+
+    Args:
+        individual: Individuo a mutar.
+        params: Parámetros de mutación.
+
+    Returns:
+        Nuevo individuo mutado.
+    """
+    if random.random() > params.probability:
+        return individual.copy()
+
+    # Mutar TODOS los triángulos
+    new_triangles = [mutate_triangle(t, params) for t in individual.triangles]
+
+    # Swap de Z-index
+    _apply_zindex_swap(new_triangles, params.gene_probability)
+
+    return Individual(triangles=new_triangles)
+
+
+# Dispatcher de métodos de mutación
+_MUTATION_FUNCTIONS = {
+    MutationType.SINGLE_GENE: mutate_single_gene,
+    MutationType.LIMITED_MULTIGEN: mutate_limited_multigen,
+    MutationType.UNIFORM_MULTIGEN: mutate_uniform_multigen,
+    MutationType.COMPLETE: mutate_complete,
+}
+
+
+def mutate_individual(individual: Individual, params: MutationParams) -> Individual:
+    """
+    Muta un individuo usando el método especificado en params.
+
+    Dispatcher que selecciona la función de mutación apropiada según
+    params.mutation_type.
+
+    Args:
+        individual: Individuo a mutar.
+        params: Parámetros de mutación (incluye el tipo).
+
+    Returns:
+        Nuevo individuo mutado.
+    """
+    mutation_func = _MUTATION_FUNCTIONS.get(params.mutation_type)
+    if mutation_func is None:
+        raise ValueError(f"Tipo de mutación no soportado: {params.mutation_type}")
+
+    return mutation_func(individual, params)
 
 
 class Mutator:
@@ -166,6 +349,11 @@ class Mutator:
             params: Parámetros de mutación. Si es None, usa defaults.
         """
         self.params = params or MutationParams()
+
+    @property
+    def mutation_type(self) -> MutationType:
+        """Retorna el tipo de mutación configurado."""
+        return self.params.mutation_type
 
     def mutate(self, individual: Individual) -> Individual:
         """
@@ -190,3 +378,56 @@ class Mutator:
             Nueva lista con individuos mutados.
         """
         return [self.mutate(ind) for ind in population]
+
+
+def create_mutation_params(
+    mutation_method: str = "uniform_multigen",
+    probability: float = 0.3,
+    gene_probability: float = 0.1,
+    max_genes: int = 3,
+    position_delta: float = 0.1,
+    color_delta: int = 30,
+    alpha_delta: float = 0.1,
+) -> MutationParams:
+    """
+    Factory para crear parámetros de mutación desde strings.
+
+    Args:
+        mutation_method: Nombre del método de mutación.
+            Opciones: "single_gene", "limited_multigen", "uniform_multigen", "complete"
+        probability: Probabilidad de mutar un individuo (Pm).
+        gene_probability: Probabilidad por gen (para uniform_multigen).
+        max_genes: Máximo de genes a mutar (M) para limited_multigen.
+        position_delta: Delta de posición.
+        color_delta: Delta de color.
+        alpha_delta: Delta de alfa.
+
+    Returns:
+        MutationParams configurado.
+
+    Raises:
+        ValueError: Si el método no es válido.
+    """
+    method_map = {
+        "single_gene": MutationType.SINGLE_GENE,
+        "limited_multigen": MutationType.LIMITED_MULTIGEN,
+        "uniform_multigen": MutationType.UNIFORM_MULTIGEN,
+        "complete": MutationType.COMPLETE,
+    }
+
+    if mutation_method not in method_map:
+        valid_methods = ", ".join(method_map.keys())
+        raise ValueError(
+            f"Método de mutación '{mutation_method}' no válido. "
+            f"Opciones: {valid_methods}"
+        )
+
+    return MutationParams(
+        mutation_type=method_map[mutation_method],
+        probability=probability,
+        gene_probability=gene_probability,
+        max_genes=max_genes,
+        position_delta=position_delta,
+        color_delta=color_delta,
+        alpha_delta=alpha_delta,
+    )

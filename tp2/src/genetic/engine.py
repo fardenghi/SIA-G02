@@ -15,7 +15,7 @@ from src.genetic.individual import Individual
 from src.genetic.population import Population
 from src.genetic.selection import SelectionMethod, create_selection_method
 from src.genetic.crossover import CrossoverMethod, create_crossover_method
-from src.genetic.mutation import Mutator, MutationParams
+from src.genetic.mutation import Mutator, MutationParams, create_mutation_params
 from src.fitness.mse import FitnessEvaluator
 
 
@@ -278,6 +278,10 @@ def create_engine(
     crossover_method: str = "single_point",
     crossover_probability: float = 0.8,
     mutation_params: Optional[MutationParams] = None,
+    mutation_method: str = "uniform_multigen",
+    mutation_probability: float = 0.3,
+    mutation_gene_probability: float = 0.1,
+    mutation_max_genes: int = 3,
     threshold: float = 0.75,
     boltzmann_t0: float = 100.0,
     boltzmann_tc: float = 1.0,
@@ -293,7 +297,12 @@ def create_engine(
         tournament_size: Tamaño de torneo.
         crossover_method: Método de cruza.
         crossover_probability: Probabilidad de cruza.
-        mutation_params: Parámetros de mutación.
+        mutation_params: Parámetros de mutación (si se provee, ignora los otros params de mutación).
+        mutation_method: Método de mutación ("single_gene", "limited_multigen",
+            "uniform_multigen", "complete").
+        mutation_probability: Probabilidad de mutación (Pm).
+        mutation_gene_probability: Probabilidad por gen (para uniform_multigen).
+        mutation_max_genes: Máximo de genes a mutar (M) para limited_multigen.
         threshold: Umbral para torneo probabilístico.
         boltzmann_t0: Temperatura inicial de Boltzmann.
         boltzmann_tc: Temperatura mínima de Boltzmann.
@@ -315,7 +324,18 @@ def create_engine(
         method=crossover_method, probability=crossover_probability
     )
 
-    mutator = Mutator(mutation_params or MutationParams())
+    # Si se proveen mutation_params, usarlos directamente
+    # Si no, crear los params a partir de los argumentos individuales
+    if mutation_params is not None:
+        mutator = Mutator(mutation_params)
+    else:
+        params = create_mutation_params(
+            mutation_method=mutation_method,
+            probability=mutation_probability,
+            gene_probability=mutation_gene_probability,
+            max_genes=mutation_max_genes,
+        )
+        mutator = Mutator(params)
 
     return GeneticEngine(
         target_image=target_image,
