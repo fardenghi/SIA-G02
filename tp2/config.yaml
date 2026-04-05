@@ -21,7 +21,7 @@ genetic:
   # Número máximo de generaciones
   max_generations: 5000
   # Umbral de error para parada temprana (MSE)
-  error_threshold: null
+  error_threshold: 3500
   
 # Selección
 selection:

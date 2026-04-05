@@ -2,4 +2,288 @@
 Configuración e hiperparámetros.
 
 Manejo de parámetros del algoritmo genético y configuración general.
+Soporta archivos YAML con override por argumentos CLI.
 """
+
+from __future__ import annotations
+
+import yaml
+from dataclasses import dataclass, field, asdict
+from pathlib import Path
+from typing import Optional, Any, Dict
+
+from src.genetic.engine import EvolutionConfig
+from src.genetic.mutation import MutationParams
+
+
+@dataclass
+class SelectionConfig:
+    """Configuración de selección."""
+
+    method: str = "tournament"
+    tournament_size: int = 3
+    elite_ratio: float = 0.1
+
+
+@dataclass
+class CrossoverConfig:
+    """Configuración de cruza."""
+
+    method: str = "single_point"
+    probability: float = 0.8
+
+
+@dataclass
+class MutationConfig:
+    """Configuración de mutación."""
+
+    probability: float = 0.3
+    gene_probability: float = 0.1
+    position_delta: float = 0.1
+    color_delta: int = 30
+    alpha_delta: float = 0.1
+
+    def to_params(self) -> MutationParams:
+        """Convierte a MutationParams."""
+        return MutationParams(
+            probability=self.probability,
+            gene_probability=self.gene_probability,
+            position_delta=self.position_delta,
+            color_delta=self.color_delta,
+            alpha_delta=self.alpha_delta,
+        )
+
+
+@dataclass
+class OutputConfig:
+    """Configuración de salida."""
+
+    directory: str = "output"
+    save_interval: int = 100
+    log_interval: int = 10
+    export_triangles: bool = True
+    plot_fitness: bool = True
+
+
+@dataclass
+class Config:
+    """
+    Configuración completa del sistema.
+
+    Agrupa todas las configuraciones parciales y proporciona
+    métodos para cargar desde archivo y combinar con CLI.
+    """
+
+    # Imagen objetivo
+    target_path: Optional[str] = None
+
+    # Parámetros del genotipo
+    num_triangles: int = 50
+    alpha_min: float = 0.1
+    alpha_max: float = 0.8
+
+    # Algoritmo genético
+    population_size: int = 100
+    max_generations: int = 5000
+    error_threshold: Optional[float] = None
+
+    # Operadores
+    selection: SelectionConfig = field(default_factory=SelectionConfig)
+    crossover: CrossoverConfig = field(default_factory=CrossoverConfig)
+    mutation: MutationConfig = field(default_factory=MutationConfig)
+
+    # Salida
+    output: OutputConfig = field(default_factory=OutputConfig)
+
+    def to_evolution_config(self) -> EvolutionConfig:
+        """Convierte a EvolutionConfig para el motor."""
+        return EvolutionConfig(
+            population_size=self.population_size,
+            num_triangles=self.num_triangles,
+            max_generations=self.max_generations,
+            error_threshold=self.error_threshold,
+            alpha_min=self.alpha_min,
+            alpha_max=self.alpha_max,
+        )
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> Config:
+        """
+        Crea configuración desde diccionario.
+
+        Args:
+            data: Diccionario con la configuración.
+
+        Returns:
+            Instancia de Config.
+        """
+        # Extraer secciones anidadas
+        selection_data = data.pop("selection", {})
+        crossover_data = data.pop("crossover", {})
+        mutation_data = data.pop("mutation", {})
+        output_data = data.pop("output", {})
+
+        # Extraer de secciones legacy si existen
+        if "image" in data:
+            image_data = data.pop("image")
+            if "target_path" in image_data:
+                data["target_path"] = image_data["target_path"]
+
+        if "genotype" in data:
+            genotype_data = data.pop("genotype")
+            data.setdefault("num_triangles", genotype_data.get("num_triangles", 50))
+            data.setdefault("alpha_min", genotype_data.get("alpha_min", 0.1))
+            data.setdefault("alpha_max", genotype_data.get("alpha_max", 0.8))
+
+        if "genetic" in data:
+            genetic_data = data.pop("genetic")
+            data.setdefault("population_size", genetic_data.get("population_size", 100))
+            data.setdefault(
+                "max_generations", genetic_data.get("max_generations", 5000)
+            )
+            data.setdefault("error_threshold", genetic_data.get("error_threshold"))
+
+        return cls(
+            target_path=data.get("target_path"),
+            num_triangles=data.get("num_triangles", 50),
+            alpha_min=data.get("alpha_min", 0.1),
+            alpha_max=data.get("alpha_max", 0.8),
+            population_size=data.get("population_size", 100),
+            max_generations=data.get("max_generations", 5000),
+            error_threshold=data.get("error_threshold"),
+            selection=SelectionConfig(**selection_data)
+            if selection_data
+            else SelectionConfig(),
+            crossover=CrossoverConfig(**crossover_data)
+            if crossover_data
+            else CrossoverConfig(),
+            mutation=MutationConfig(**mutation_data)
+            if mutation_data
+            else MutationConfig(),
+            output=OutputConfig(**output_data) if output_data else OutputConfig(),
+        )
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> Config:
+        """
+        Carga configuración desde archivo YAML.
+
+        Args:
+            path: Ruta al archivo YAML.
+
+        Returns:
+            Instancia de Config.
+        """
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"Archivo de configuración no encontrado: {path}")
+
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+
+        return cls.from_dict(data)
+
+    def merge_cli_args(self, **kwargs) -> Config:
+        """
+        Combina con argumentos de línea de comandos.
+
+        Los argumentos CLI tienen prioridad sobre el archivo.
+
+        Args:
+            **kwargs: Argumentos de CLI.
+
+        Returns:
+            Nueva instancia con valores combinados.
+        """
+        # Crear copia de la configuración actual
+        import copy
+
+        new_config = copy.deepcopy(self)
+
+        # Aplicar overrides
+        if kwargs.get("image"):
+            new_config.target_path = kwargs["image"]
+
+        if kwargs.get("triangles"):
+            new_config.num_triangles = kwargs["triangles"]
+
+        if kwargs.get("population"):
+            new_config.population_size = kwargs["population"]
+
+        if kwargs.get("generations"):
+            new_config.max_generations = kwargs["generations"]
+
+        if kwargs.get("mutation_rate"):
+            new_config.mutation.probability = kwargs["mutation_rate"]
+
+        if kwargs.get("output"):
+            new_config.output.directory = kwargs["output"]
+
+        if kwargs.get("save_interval"):
+            new_config.output.save_interval = kwargs["save_interval"]
+
+        if kwargs.get("selection"):
+            new_config.selection.method = kwargs["selection"]
+
+        if kwargs.get("crossover"):
+            new_config.crossover.method = kwargs["crossover"]
+
+        return new_config
+
+    def validate(self) -> list[str]:
+        """
+        Valida la configuración.
+
+        Returns:
+            Lista de errores encontrados (vacía si válida).
+        """
+        errors = []
+
+        if not self.target_path:
+            errors.append("Se requiere una imagen objetivo (--image)")
+        elif not Path(self.target_path).exists():
+            errors.append(f"Imagen no encontrada: {self.target_path}")
+
+        if self.num_triangles < 1:
+            errors.append("num_triangles debe ser al menos 1")
+
+        if self.population_size < 2:
+            errors.append("population_size debe ser al menos 2")
+
+        if self.max_generations < 1:
+            errors.append("max_generations debe ser al menos 1")
+
+        if not 0 <= self.alpha_min <= 1:
+            errors.append("alpha_min debe estar en [0, 1]")
+
+        if not 0 <= self.alpha_max <= 1:
+            errors.append("alpha_max debe estar en [0, 1]")
+
+        if self.alpha_min > self.alpha_max:
+            errors.append("alpha_min no puede ser mayor que alpha_max")
+
+        return errors
+
+
+def load_config(config_path: Optional[str] = None, **cli_args) -> Config:
+    """
+    Carga configuración combinando archivo YAML y argumentos CLI.
+
+    Args:
+        config_path: Ruta al archivo de configuración (opcional).
+        **cli_args: Argumentos de línea de comandos.
+
+    Returns:
+        Configuración combinada.
+    """
+    # Cargar desde archivo si existe
+    if config_path and Path(config_path).exists():
+        config = Config.from_yaml(config_path)
+    else:
+        config = Config()
+
+    # Aplicar overrides de CLI
+    if cli_args:
+        config = config.merge_cli_args(**cli_args)
+
+    return config

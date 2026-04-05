@@ -6,6 +6,21 @@ Sistema que utiliza un motor de **Algoritmos Genéticos (AG)** para reconstruir 
 
 ---
 
+## Tabla de Contenidos
+
+- [Funcionamiento del Algoritmo](#funcionamiento-el-enfoque-genético)
+- [Arquitectura](#arquitectura-del-algoritmo)
+- [Instalación](#instalación)
+- [Inicio Rápido](#inicio-rápido)
+- [Configuración de Parámetros](#configuración-de-parámetros)
+- [Ejemplos de Uso](#ejemplos-de-uso)
+- [Salidas del Sistema](#salidas-del-sistema)
+- [Visualizador Interactivo](#visualizador-interactivo)
+- [Testing](#testing)
+- [Estructura del Proyecto](#estructura-del-proyecto)
+
+---
+
 ## Funcionamiento: El Enfoque Genético
 
 El sistema evoluciona una población de soluciones candidatas (individuos), donde cada individuo representa una posible aproximación a la imagen objetivo. A través de generaciones sucesivas, los individuos mejor adaptados son seleccionados, combinados y mutados hasta converger hacia una solución óptima.
@@ -32,10 +47,10 @@ Cada triángulo se define por:
 
 | Atributo       | Descripción                                      |
 |----------------|--------------------------------------------------|
-| Vértice 1      | Coordenadas (x₁, y₁)                             |
-| Vértice 2      | Coordenadas (x₂, y₂)                             |
-| Vértice 3      | Coordenadas (x₃, y₃)                             |
-| Color          | Valor RGBA o HSLA con canal alfa (transparencia) |
+| Vértice 1      | Coordenadas (x₁, y₁) normalizadas [0, 1]         |
+| Vértice 2      | Coordenadas (x₂, y₂) normalizadas [0, 1]         |
+| Vértice 3      | Coordenadas (x₃, y₃) normalizadas [0, 1]         |
+| Color          | Valor RGBA (R, G, B en [0-255], A en [0-1])      |
 
 ### Función de Fitness
 
@@ -49,35 +64,11 @@ Donde `n` es el número total de píxeles. **El objetivo es minimizar este valor
 
 ### Operadores Genéticos
 
-| Operador       | Descripción                                                                 |
-|----------------|-----------------------------------------------------------------------------|
-| **Selección**  | Torneo, ruleta, ranking u otros métodos configurables.                      |
-| **Cruza**      | Intercambio de secuencias de triángulos entre dos padres.                   |
-| **Mutación**   | Alteración de coordenadas, colores, transparencia u orden (Z-index).        |
-
----
-
-## Inputs (Entradas del Sistema)
-
-| Parámetro                | Descripción                                                        |
-|--------------------------|--------------------------------------------------------------------|
-| Imagen objetivo          | Archivo de imagen a aproximar (PNG, JPG, etc.).                    |
-| N (triángulos)           | Cantidad estricta de triángulos permitidos en la solución.         |
-| Tamaño de población      | Número de individuos en cada generación.                           |
-| Tasa de mutación         | Probabilidad de mutación por gen/triángulo.                        |
-| Método de cruza          | Estrategia de combinación de individuos (configurable).            |
-| Criterio de parada       | Generaciones máximas y/o umbral de error mínimo.                   |
-
----
-
-## Outputs (Salidas del Sistema)
-
-| Salida                   | Descripción                                                        |
-|--------------------------|--------------------------------------------------------------------|
-| Imagen renderizada       | Archivo de imagen con la mejor aproximación encontrada.            |
-| Datos de triángulos      | Exportación estructurada (JSON/CSV) con posiciones, colores y orden de cada triángulo. |
-| Métricas de evolución    | Gráfico o log con la evolución del fitness por generación.         |
-| Estadísticas finales     | Error final (MSE), tiempo de ejecución y número de generaciones.   |
+| Operador | Métodos Disponibles | Descripción |
+|----------|---------------------|-------------|
+| **Selección** | `tournament`, `roulette`, `rank` | Elige individuos para reproducción |
+| **Cruza** | `single_point`, `two_point`, `uniform` | Combina genes de dos padres |
+| **Mutación** | Gaussiana | Altera posiciones, colores y orden Z |
 
 ---
 
@@ -96,35 +87,308 @@ git clone <URL_DEL_REPOSITORIO>
 cd tp2
 
 # Crear entorno virtual (recomendado)
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
+python3 -m venv venv
+source venv/bin/activate # En Windows: venv\Scripts\activate
 
 # Instalar dependencias
 pip install -r requirements.txt
 ```
 
----
-
-## Uso
+### Verificar instalación
 
 ```bash
-# Ejecutar el compresor evolutivo
-python main.py --image <ruta_imagen> --triangles <N> [opciones]
-
-# Ejemplo
-python main.py --image input/foto.png --triangles 100 --generations 5000 --population 50
+# Ejecutar tests para verificar que todo funciona
+python -m pytest tests/ -v
 ```
 
-### Opciones disponibles
+---
 
-| Opción               | Descripción                              | Valor por defecto |
-|----------------------|------------------------------------------|-------------------|
-| `--image`            | Ruta a la imagen objetivo                | (requerido)       |
-| `--triangles`        | Cantidad de triángulos                   | (requerido)       |
-| `--population`       | Tamaño de la población                   | 100               |
-| `--generations`      | Número máximo de generaciones            | 10000             |
-| `--mutation-rate`    | Tasa de mutación                         | 0.01              |
-| `--output`           | Directorio de salida                     | `output/`         |
+## Inicio Rápido
+
+### Ejecución básica
+
+```bash
+# Activar el entorno virtual
+source venv/bin/activate
+
+# Ejecutar con parámetros mínimos
+python main.py --image input/mi_imagen.png --triangles 50
+```
+
+### Ejemplo completo
+
+```bash
+python main.py \
+    --image input/foto.png \
+    --triangles 100 \
+    --population 50 \
+    --generations 5000 \
+    --output output/mi_experimento
+```
+
+El sistema mostrará el progreso en consola:
+
+```
+Cargando imagen: input/foto.png
+Tamaño original: (512, 512)
+Tamaño de trabajo: (256, 256)
+Triángulos: 100
+Población: 50
+Generaciones máximas: 5000
+
+Iniciando evolución...
+--------------------------------------------------
+Gen     0 | Best:   12500.32 | Avg:   15234.56
+  >> Mejora en gen 1: 11234.21
+  >> Mejora en gen 5: 9876.54
+Gen    10 | Best:    8765.43 | Avg:    9234.12
+...
+```
+
+---
+
+## Configuración de Parámetros
+
+Los parámetros se pueden configurar de **dos formas**:
+
+1. **Argumentos de línea de comandos (CLI)** - tienen prioridad
+2. **Archivo de configuración YAML** - valores por defecto
+
+### Opción 1: Argumentos de Línea de Comandos
+
+```bash
+python main.py --image <ruta> [opciones]
+```
+
+#### Parámetros principales
+
+| Opción | Alias | Descripción | Default |
+|--------|-------|-------------|---------|
+| `--image` | `-i` | **Ruta a la imagen objetivo** (requerido) | - |
+| `--triangles` | `-t` | Cantidad de triángulos por individuo | 50 |
+| `--population` | `-p` | Tamaño de la población | 100 |
+| `--generations` | `-g` | Número máximo de generaciones | 5000 |
+
+#### Parámetros de operadores genéticos
+
+| Opción | Descripción | Valores | Default |
+|--------|-------------|---------|---------|
+| `--selection` | Método de selección | `tournament`, `roulette`, `rank` | `tournament` |
+| `--crossover` | Método de cruza | `single_point`, `two_point`, `uniform` | `single_point` |
+| `--mutation-rate` | Probabilidad de mutación | 0.0 - 1.0 | 0.3 |
+
+#### Parámetros de salida
+
+| Opción | Alias | Descripción | Default |
+|--------|-------|-------------|---------|
+| `--output` | `-o` | Directorio de salida | `output/` |
+| `--save-interval` | - | Guardar imagen cada N generaciones | 100 |
+| `--max-size` | - | Redimensionar imagen si excede este tamaño | 256 |
+| `--quiet` | `-q` | Modo silencioso (menos output) | False |
+
+#### Parámetros de configuración
+
+| Opción | Alias | Descripción | Default |
+|--------|-------|-------------|---------|
+| `--config` | `-c` | Archivo de configuración YAML | `config.yaml` |
+
+### Opción 2: Archivo de Configuración YAML
+
+Edita el archivo `config.yaml` para establecer valores por defecto:
+
+```yaml
+# Parámetros del genotipo
+num_triangles: 50
+alpha_min: 0.1
+alpha_max: 0.8
+
+# Algoritmo genético
+population_size: 100
+max_generations: 5000
+error_threshold: null  # null = sin parada temprana
+
+# Selección
+selection:
+  method: "tournament"    # tournament, roulette, rank
+  tournament_size: 3      # solo para tournament
+  elite_ratio: 0.1        # proporción de élite (0-1)
+
+# Cruza (Crossover)
+crossover:
+  method: "single_point"  # single_point, two_point, uniform
+  probability: 0.8        # probabilidad de cruza
+
+# Mutación
+mutation:
+  probability: 0.3        # probabilidad de mutar individuo
+  gene_probability: 0.1   # probabilidad de mutar cada triángulo
+  position_delta: 0.1     # magnitud de perturbación en posición
+  color_delta: 30         # magnitud de perturbación en color (0-255)
+  alpha_delta: 0.1        # magnitud de perturbación en alfa
+
+# Salida y visualización
+output:
+  directory: "output"
+  save_interval: 100      # 0 = solo guardar al final
+  log_interval: 10        # mostrar progreso cada N generaciones
+  export_triangles: true  # exportar JSON con triángulos
+  plot_fitness: true      # generar gráfico de evolución
+```
+
+Los argumentos CLI **sobreescriben** los valores del archivo YAML.
+
+---
+
+## Ejemplos de Uso
+
+### Ejemplo 1: Ejecución rápida para pruebas
+
+```bash
+python main.py -i input/logo.png -t 30 -g 500 -p 30
+```
+
+### Ejemplo 2: Alta calidad (más triángulos y generaciones)
+
+```bash
+python main.py \
+    --image input/retrato.jpg \
+    --triangles 200 \
+    --generations 10000 \
+    --population 100 \
+    --save-interval 500 \
+    --output output/retrato_hq
+```
+
+### Ejemplo 3: Experimentar con operadores
+
+```bash
+# Usar selección por ruleta y cruza uniforme
+python main.py \
+    -i input/paisaje.png \
+    -t 100 \
+    --selection roulette \
+    --crossover uniform \
+    --mutation-rate 0.5
+```
+
+### Ejemplo 4: Modo silencioso (para scripts)
+
+```bash
+python main.py -i input/imagen.png -t 50 -g 1000 --quiet
+```
+
+### Ejemplo 5: Usar configuración personalizada
+
+```bash
+# Primero edita mi_config.yaml con tus parámetros
+python main.py -i input/imagen.png --config mi_config.yaml
+```
+
+---
+
+## Salidas del Sistema
+
+Después de ejecutar el algoritmo, se generan los siguientes archivos en el directorio de salida:
+
+```
+output/
+├── result.png              # Imagen final renderizada
+├── triangles.json          # Datos de triángulos (para reconstrucción)
+├── fitness_evolution.png   # Gráfico de evolución del fitness
+├── gen_00100.png          # Imágenes intermedias (cada save_interval)
+├── gen_00200.png
+└── ...
+```
+
+### Descripción de archivos
+
+| Archivo | Descripción |
+|---------|-------------|
+| `result.png` | Imagen final con la mejor aproximación encontrada |
+| `triangles.json` | Datos estructurados de cada triángulo (posición, color, orden) |
+| `fitness_evolution.png` | Gráfico mostrando la mejora del fitness por generación |
+| `gen_XXXXX.png` | Capturas intermedias del progreso |
+
+### Reconstruir imagen desde JSON
+
+Puedes reconstruir la imagen a cualquier resolución usando los triángulos exportados:
+
+```bash
+# Reconstruir a tamaño original
+python reconstruct.py output/triangles.json -o reconstruida.png -W 256 -H 256
+
+# Reconstruir a mayor resolución (escala 2x)
+python reconstruct.py output/triangles.json -o reconstruida_hd.png -W 256 -H 256 --scale 2
+```
+
+---
+
+## Visualizador Interactivo
+
+El sistema incluye un visualizador gráfico interactivo para explorar la evolución del algoritmo paso a paso.
+
+### Uso básico
+
+```bash
+# Visualizar resultados de un experimento
+python visualize.py output/mi_experimento
+```
+
+### Interfaz gráfica
+
+El visualizador muestra:
+
+- **Panel central**: Imagen del mejor individuo de la generación actual
+- **Panel lateral**: Métricas (generación, fitness, número de triángulos)
+- **Gráfico inferior**: Evolución del fitness a lo largo de las generaciones
+- **Controles**: Slider y botones para navegar entre generaciones
+
+### Controles de teclado
+
+| Tecla | Acción |
+|-------|--------|
+| `←` / `→` | Generación anterior / siguiente |
+| `Espacio` | Play / Pause animación automática |
+| `Home` | Ir a la primera generación |
+| `End` | Ir a la última generación |
+
+### Opciones de exportación
+
+```bash
+# Exportar como GIF animado
+python visualize.py output/mi_experimento --export-gif evolucion.gif
+
+# Exportar como video MP4 (requiere ffmpeg)
+python visualize.py output/mi_experimento --export-video evolucion.mp4
+
+# Generar imagen resumen con todos los pasos
+python visualize.py output/mi_experimento --summary resumen.png
+```
+
+### Parámetros del visualizador
+
+| Opción | Descripción | Default |
+|--------|-------------|---------|
+| `--export-gif` | Exportar animación como GIF | - |
+| `--export-video` | Exportar animación como MP4 | - |
+| `--summary` | Generar imagen resumen | - |
+| `--fps` | Frames por segundo (GIF/video) | 10 |
+| `--interval` | Intervalo de animación (ms) | 500 |
+
+---
+
+## Testing
+
+```bash
+# Ejecutar todos los tests
+python -m pytest tests/ -v
+
+# Ejecutar tests de un módulo específico
+python -m pytest tests/test_engine.py -v
+
+# Ejecutar tests con cobertura
+python -m pytest tests/ --cov=src --cov-report=html
+```
 
 ---
 
@@ -132,23 +396,29 @@ python main.py --image input/foto.png --triangles 100 --generations 5000 --popul
 
 ```
 tp2/
-├── main.py                 # Punto de entrada principal
+├── main.py                 # Punto de entrada principal (CLI)
+├── reconstruct.py          # Script de reconstrucción desde JSON
+├── visualize.py            # Visualizador gráfico interactivo
+├── config.yaml             # Configuración por defecto
 ├── requirements.txt        # Dependencias del proyecto
+├── pytest.ini              # Configuración de pytest
 ├── README.md
 ├── src/
 │   ├── genetic/            # Motor de algoritmos genéticos
-│   │   ├── individual.py   # Representación del genotipo
+│   │   ├── individual.py   # Triangle + Individual (genotipo)
 │   │   ├── population.py   # Gestión de la población
+│   │   ├── engine.py       # Motor evolutivo principal
 │   │   ├── selection.py    # Métodos de selección
 │   │   ├── crossover.py    # Operadores de cruza
 │   │   └── mutation.py     # Operadores de mutación
 │   ├── fitness/            # Evaluación de fitness
 │   │   └── mse.py          # Cálculo del MSE
 │   ├── rendering/          # Renderizado de triángulos
-│   │   └── canvas.py       # Generación de imágenes
+│   │   └── canvas.py       # Generación de imágenes con Pillow
 │   └── utils/              # Utilidades generales
-│       ├── config.py       # Configuración e hiperparámetros
+│       ├── config.py       # Configuración YAML + CLI
 │       └── export.py       # Exportación de resultados
+├── tests/                  # Tests unitarios (pytest)
 ├── input/                  # Imágenes de entrada
 └── output/                 # Resultados generados
 ```
