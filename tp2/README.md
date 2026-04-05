@@ -67,7 +67,7 @@ Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitnes
 
 | Operador | Métodos Disponibles | Descripción |
 |----------|---------------------|-------------|
-| **Selección** | `tournament`, `roulette`, `rank` | Elige individuos para reproducción |
+| **Selección** | `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank` (`ranking` alias) | Elige individuos para reproducción |
 | **Cruza** | `single_point`, `two_point`, `uniform` | Combina genes de dos padres |
 | **Mutación** | Gaussiana | Altera posiciones, colores y orden Z |
 
@@ -167,7 +167,7 @@ uv run main.py --image <ruta> [opciones]
 
 | Opción | Descripción | Valores | Default |
 |--------|-------------|---------|---------|
-| `--selection` | Método de selección | `tournament`, `roulette`, `rank` | `tournament` |
+| `--selection` | Método de selección | `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank`, `ranking` | `tournament` |
 | `--crossover` | Método de cruza | `single_point`, `two_point`, `uniform` | `single_point` |
 | `--mutation-rate` | Probabilidad de mutación | 0.0 - 1.0 | 0.3 |
 
@@ -191,21 +191,30 @@ uv run main.py --image <ruta> [opciones]
 Edita el archivo `config.yaml` para establecer valores por defecto:
 
 ```yaml
+# Imagen
+image:
+  target_path: null
+
 # Parámetros del genotipo
-num_triangles: 50
-alpha_min: 0.1
-alpha_max: 0.8
+genotype:
+  num_triangles: 50
+  alpha_min: 0.1
+  alpha_max: 0.8
 
 # Algoritmo genético
-population_size: 100
-max_generations: 5000
-fitness_threshold: null  # null = sin parada temprana
+genetic:
+  population_size: 100
+  max_generations: 5000
+  fitness_threshold: null  # null = sin parada temprana
 
 # Selección
 selection:
-  method: "tournament"    # tournament, roulette, rank
-  tournament_size: 3      # solo para tournament
-  elite_ratio: 0.1        # proporción de élite (0-1)
+  method: "tournament"    # elite, tournament, probabilistic_tournament, roulette, universal, boltzmann, rank (alias ranking)
+  tournament_size: 3       # solo para tournament
+  threshold: 0.75          # solo para probabilistic_tournament
+  boltzmann_t0: 100.0      # solo para boltzmann
+  boltzmann_tc: 1.0        # solo para boltzmann
+  boltzmann_k: 0.005       # solo para boltzmann
 
 # Cruza (Crossover)
 crossover:

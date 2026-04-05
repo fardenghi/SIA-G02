@@ -122,6 +122,8 @@ class RouletteSelection(SelectionMethod):
         """Selecciona mediante ruleta proporcional al fitness."""
         if not population:
             raise ValueError("La población está vacía")
+        if num_parents <= 0:
+            return []
 
         fitness_values = [ind.fitness for ind in population]
 
@@ -137,8 +139,20 @@ class RouletteSelection(SelectionMethod):
         if total <= 0:
             raise ValueError("No se pudieron construir pesos válidos para ruleta")
 
-        # Seleccionar con reemplazo según probabilidades
-        selected = random.choices(population, weights=weights, k=num_parents)
+        # Construir fitness relativo acumulado q_i
+        cumulative = []
+        acc = 0.0
+        for w in weights:
+            acc += w / total
+            cumulative.append(acc)
+
+        # Generar K r_j ~ U[0,1) y elegir q_(i-1) < r_j <= q_i
+        selected = []
+        for _ in range(num_parents):
+            r = random.random()
+            idx = bisect.bisect_left(cumulative, r)
+            idx = min(idx, len(population) - 1)
+            selected.append(population[idx])
 
         return selected
 
@@ -159,6 +173,8 @@ class UniversalSelection(SelectionMethod):
         """Selecciona mediante muestreo universal estocástico."""
         if not population:
             raise ValueError("La población está vacía")
+        if num_parents <= 0:
+            return []
 
         fitness_values = [ind.fitness for ind in population]
 
@@ -172,7 +188,9 @@ class UniversalSelection(SelectionMethod):
 
         total = sum(weights)
         if total <= 0:
-            raise ValueError("No se pudieron construir pesos válidos para selección universal")
+            raise ValueError(
+                "No se pudieron construir pesos válidos para selección universal"
+            )
 
         # Construir CDF normalizada
         cumulative = []
@@ -263,18 +281,40 @@ class RankSelection(SelectionMethod):
     def select(
         self, population: List[Individual], num_parents: int, generation: int = 0
     ) -> List[Individual]:
-        """Selecciona según ranking."""
+        """Selecciona según ranking usando pseudo-aptitud teórica."""
         if not population:
             raise ValueError("La población está vacía")
+        if num_parents <= 0:
+            return []
 
         # Ordenar por fitness (mayor primero = mejor)
         sorted_pop = sorted(population, key=lambda ind: ind.fitness, reverse=True)
 
-        # Asignar pesos según posición: mejor = mayor peso
         n = len(sorted_pop)
-        weights = [n - i for i in range(n)]  # [n, n-1, ..., 1]
 
-        selected = random.choices(sorted_pop, weights=weights, k=num_parents)
+        # Caso degenerado: con N=1 la fórmula da 0/1, así que seleccionamos
+        # siempre al único individuo disponible.
+        if n == 1:
+            return [sorted_pop[0]] * num_parents
+
+        # Pseudo-aptitud teórica:
+        # f'(i) = (N - rank(i)) / N, con rank(i) en [1, N]
+        pseudo_fitness = [(n - rank) / n for rank in range(1, n + 1)]
+        total = sum(pseudo_fitness)
+
+        cumulative = []
+        acc = 0.0
+        for pf in pseudo_fitness:
+            acc += pf / total
+            cumulative.append(acc)
+
+        # Aplicar ruleta sobre la pseudo-aptitud
+        selected = []
+        for _ in range(num_parents):
+            r = random.random()
+            idx = bisect.bisect_left(cumulative, r)
+            idx = min(idx, n - 1)
+            selected.append(sorted_pop[idx])
 
         return selected
 
@@ -284,10 +324,9 @@ class EliteSelection(SelectionMethod):
     Selección élite.
 
     Ordena la población por fitness y selecciona cada individuo n(i) veces
-    según la fórmula: n(i) = floor((K - i) / N)
+    según la fórmula teórica: n(i) = ceil((K - i) / N)
 
     Donde i es el rank (0 = mejor), K = num_parents, N = tamaño de población.
-    Los slots sobrantes por el floor se completan con los mejores individuos.
     Es determinístico y muy performante, aunque restrictivo en diversidad.
     """
 
@@ -297,6 +336,8 @@ class EliteSelection(SelectionMethod):
         """Selecciona según fórmula élite."""
         if not population:
             raise ValueError("La población está vacía")
+        if num_parents <= 0:
+            return []
 
         N = len(population)
         K = num_parents
@@ -304,14 +345,16 @@ class EliteSelection(SelectionMethod):
 
         selected = []
         for i, ind in enumerate(sorted_pop):
-            times = (K - i) // N  # floor((K - i) / N)
+            times = max(0, math.ceil((K - i) / N))
             if times > 0:
                 selected.extend([ind] * times)
 
-        # Completar slots restantes (por efecto del floor) con los mejores
-        remainder = K - len(selected)
-        for j in range(remainder):
-            selected.append(sorted_pop[j % N])
+        # Con la fórmula teórica, la suma debe dar exactamente K.
+        # Dejamos safeguards por robustez numérica.
+        if len(selected) > K:
+            selected = selected[:K]
+        elif len(selected) < K:
+            selected.extend([sorted_pop[0]] * (K - len(selected)))
 
         return selected
 
@@ -353,7 +396,7 @@ def create_selection_method(
         return UniversalSelection()
     elif method == "boltzmann":
         return BoltzmannSelection(boltzmann_t0, boltzmann_tc, boltzmann_k)
-    elif method == "rank":
+    elif method in ("rank", "ranking"):
         return RankSelection()
     else:
         raise ValueError(f"Método de selección desconocido: {method}")

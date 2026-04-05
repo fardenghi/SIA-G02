@@ -2,6 +2,7 @@
 
 import pytest
 import random
+import math
 from src.genetic.individual import Individual, Triangle
 from src.genetic.selection import (
     EliteSelection,
@@ -119,6 +120,19 @@ class TestRankSelection:
 
         assert avg_fitness > pop_avg
 
+    def test_worst_rank_has_zero_probability(self):
+        """Según teoría, el peor rank tiene pseudo-aptitud 0 y no debe salir."""
+        random.seed(42)
+        pop = create_population_with_fitness(10)
+        selector = RankSelection()
+
+        sorted_pop = sorted(pop, key=lambda ind: ind.fitness, reverse=True)
+        worst = sorted_pop[-1]
+
+        selected = selector.select(pop, num_parents=500)
+
+        assert all(ind is not worst for ind in selected)
+
 
 class TestEliteSelection:
     """Tests para selección élite."""
@@ -157,11 +171,39 @@ class TestEliteSelection:
         pop = create_population_with_fitness(10)
         selector = EliteSelection()
 
-        selected = selector.select(pop, num_parents=10)
+        selected = selector.select(pop, num_parents=15)
         avg_selected = sum(ind.fitness for ind in selected) / len(selected)
         avg_pop = sum(ind.fitness for ind in pop) / len(pop)
 
         assert avg_selected > avg_pop
+
+    def test_matches_theory_formula_counts(self):
+        """Debe respetar n(i) = ceil((K - i) / N) exactamente."""
+        pop = create_population_with_fitness(10)
+        selector = EliteSelection()
+
+        k = 15
+        n = len(pop)
+        sorted_pop = sorted(pop, key=lambda ind: ind.fitness, reverse=True)
+        selected = selector.select(pop, num_parents=k)
+
+        expected_counts = [max(0, math.ceil((k - i) / n)) for i in range(n)]
+        actual_counts = [
+            sum(1 for ind in selected if ind is cand) for cand in sorted_pop
+        ]
+
+        assert actual_counts == expected_counts
+        assert len(selected) == k
+
+    def test_k_equals_n_selects_all_once(self):
+        """Con K=N, la fórmula élite debe seleccionar cada individuo una vez."""
+        pop = create_population_with_fitness(12)
+        selector = EliteSelection()
+
+        selected = selector.select(pop, num_parents=len(pop))
+
+        assert len(selected) == len(pop)
+        assert len({id(ind) for ind in selected}) == len(pop)
 
 
 class TestProbabilisticTournamentSelection:
@@ -307,6 +349,11 @@ class TestSelectionFactory:
         """Debe fallar con método desconocido."""
         with pytest.raises(ValueError):
             create_selection_method("unknown")
+
+    def test_create_ranking_alias(self):
+        """Debe aceptar alias 'ranking'."""
+        selector = create_selection_method("ranking")
+        assert isinstance(selector, RankSelection)
 
 
 class TestSinglePointCrossover:

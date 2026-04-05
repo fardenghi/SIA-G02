@@ -25,7 +25,7 @@ genetic:
   
 # Selección
 selection:
-  # Método: "elite", "tournament", "probabilistic_tournament", "roulette", "universal", "boltzmann", "rank"
+  # Método: "elite", "tournament", "probabilistic_tournament", "roulette", "universal", "boltzmann", "rank" (alias: "ranking")
   method: "tournament"
   # Tamaño del torneo determinístico
   tournament_size: 3

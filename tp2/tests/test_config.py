@@ -24,7 +24,10 @@ class TestSelectionConfig:
 
         assert config.method == "tournament"
         assert config.tournament_size == 3
-        assert config.elite_ratio == 0.1
+        assert config.threshold == 0.75
+        assert config.boltzmann_t0 == 100.0
+        assert config.boltzmann_tc == 1.0
+        assert config.boltzmann_k == 0.005
 
 
 class TestCrossoverConfig:

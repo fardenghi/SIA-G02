@@ -73,7 +73,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--selection",
         type=str,
-        choices=["elite", "tournament", "probabilistic_tournament", "roulette", "universal", "boltzmann", "rank"],
+        choices=[
+            "elite",
+            "tournament",
+            "probabilistic_tournament",
+            "roulette",
+            "universal",
+            "boltzmann",
+            "rank",
+            "ranking",
+        ],
         default=None,
         help="Método de selección",
     )
