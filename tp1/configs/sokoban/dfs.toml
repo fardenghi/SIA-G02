@@ -1,3 +1,0 @@
-[search]
-algorithm = "dfs"
-board = "boards/sokoban/peak_dfs.txt"
