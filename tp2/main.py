@@ -90,7 +90,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--crossover",
         type=str,
-        choices=["single_point", "two_point", "uniform"],
+        choices=["single_point", "two_point", "uniform", "annular"],
         default=None,
         help="Método de cruza",
     )

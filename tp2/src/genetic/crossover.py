@@ -154,12 +154,56 @@ class UniformCrossover(CrossoverMethod):
         return Individual(child1_triangles), Individual(child2_triangles)
 
 
+class AnnularCrossover(CrossoverMethod):
+    """
+    Cruza anular (circular).
+
+    Se elige un punto inicial P y una longitud L. El segmento de longitud L
+    a partir de P se intercambia entre los padres, considerando el cromosoma
+    como circular (puede envolver del final al inicio).
+    """
+
+    def _crossover(
+        self, parent1: Individual, parent2: Individual
+    ) -> Tuple[Individual, Individual]:
+        """Realiza cruza anular."""
+        n = len(parent1)
+        if n != len(parent2):
+            raise ValueError("Los padres deben tener el mismo número de triángulos")
+
+        if n <= 1:
+            return parent1.copy(), parent2.copy()
+
+        # Punto inicial P ∈ [0, n-1]
+        point = random.randint(0, n - 1)
+
+        # Longitud L ∈ [0, ⌈n/2⌉]
+        # Usamos -(-n // 2) para calcular ceil(n/2) sin importar math
+        max_length = -(-n // 2)  # equivalente a math.ceil(n / 2)
+        length = random.randint(0, max_length)
+
+        # Crear copias de los padres para construir los hijos
+        child1_triangles = [t.copy() for t in parent1.triangles]
+        child2_triangles = [t.copy() for t in parent2.triangles]
+
+        # Intercambiar el segmento circular de longitud L a partir de P
+        for i in range(length):
+            # Índice circular: (point + i) % n
+            idx = (point + i) % n
+
+            # Intercambiar triángulos en la posición idx
+            child1_triangles[idx] = parent2.triangles[idx].copy()
+            child2_triangles[idx] = parent1.triangles[idx].copy()
+
+        return Individual(child1_triangles), Individual(child2_triangles)
+
+
 def create_crossover_method(method: str, probability: float = 0.8) -> CrossoverMethod:
     """
     Factory para crear métodos de cruza.
 
     Args:
-        method: Nombre del método ("single_point", "two_point", "uniform").
+        method: Nombre del método ("single_point", "two_point", "uniform", "annular").
         probability: Probabilidad de cruza.
 
     Returns:
@@ -173,5 +217,7 @@ def create_crossover_method(method: str, probability: float = 0.8) -> CrossoverM
         return TwoPointCrossover(probability)
     elif method == "uniform":
         return UniformCrossover(probability)
+    elif method == "annular":
+        return AnnularCrossover(probability)
     else:
         raise ValueError(f"Método de cruza desconocido: {method}")

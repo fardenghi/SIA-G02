@@ -1,7 +1,7 @@
 """
-Comparativa de métodos de selección.
+Comparativa de métodos de cruza (crossover).
 
-Corre todos los métodos de selección disponibles sobre la misma imagen
+Corre todos los métodos de cruza disponibles sobre la misma imagen
 y genera un gráfico comparativo de la evolución del fitness.
 """
 
@@ -9,6 +9,9 @@ import argparse
 import sys
 import time
 from pathlib import Path
+
+# Agregar el directorio raíz al path para poder importar src
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -18,56 +21,72 @@ from src.genetic.mutation import MutationParams
 from src.rendering.canvas import Canvas, resize_image
 from src.utils.export import save_result_image
 
-SELECTION_METHODS = [
-    "elite",
-    "tournament",
-    "probabilistic_tournament",
-    "roulette",
-    "universal",
-    "boltzmann",
-    "rank",
+CROSSOVER_METHODS = [
+    "single_point",
+    "two_point",
+    "uniform",
+    "annular",
 ]
 
 LABELS = {
-    "elite": "Elite",
-    "tournament": "Torneo Determinístico",
-    "probabilistic_tournament": "Torneo Probabilístico",
-    "roulette": "Ruleta",
-    "universal": "Universal (SUS)",
-    "boltzmann": "Boltzmann",
-    "rank": "Ranking",
+    "single_point": "Un Punto",
+    "two_point": "Dos Puntos",
+    "uniform": "Uniforme",
+    "annular": "Anular (Circular)",
 }
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Comparativa de métodos de selección",
+        description="Comparativa de métodos de cruza (crossover)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--image", "-i", required=True, help="Imagen objetivo")
-    parser.add_argument("--generations", "-g", type=int, default=200, help="Generaciones")
-    parser.add_argument("--population", "-p", type=int, default=50, help="Tamaño de población")
-    parser.add_argument("--triangles", "-t", type=int, default=50, help="Triángulos por individuo")
-    parser.add_argument("--max-size", type=int, default=128, help="Tamaño máximo de la imagen")
-    parser.add_argument("--output", "-o", type=str, default="output/comparativa", help="Directorio de salida")
+    parser.add_argument(
+        "--generations", "-g", type=int, default=200, help="Generaciones"
+    )
+    parser.add_argument(
+        "--population", "-p", type=int, default=50, help="Tamaño de población"
+    )
+    parser.add_argument(
+        "--triangles", "-t", type=int, default=50, help="Triángulos por individuo"
+    )
+    parser.add_argument(
+        "--max-size", type=int, default=128, help="Tamaño máximo de la imagen"
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="output/comparativa_crossover",
+        help="Directorio de salida",
+    )
     parser.add_argument(
         "--methods",
         nargs="+",
-        choices=SELECTION_METHODS,
-        default=SELECTION_METHODS,
+        choices=CROSSOVER_METHODS,
+        default=CROSSOVER_METHODS,
         help="Métodos a comparar (por defecto todos)",
+    )
+    parser.add_argument(
+        "--selection",
+        type=str,
+        default="tournament",
+        help="Método de selección a usar (fijo para todos)",
     )
     return parser.parse_args()
 
 
-def run_method(method: str, target_image: Image.Image, config: EvolutionConfig) -> dict:
-    """Corre un método de selección y devuelve los resultados."""
+def run_method(
+    method: str, target_image: Image.Image, config: EvolutionConfig, selection: str
+) -> dict:
+    """Corre un método de cruza y devuelve los resultados."""
     engine = create_engine(
         target_image=target_image,
         config=config,
-        selection_method=method,
+        selection_method=selection,
         tournament_size=3,
-        crossover_method="single_point",
+        crossover_method=method,
         crossover_probability=0.8,
         mutation_params=MutationParams(probability=0.3, gene_probability=0.1),
         threshold=0.75,
@@ -130,13 +149,15 @@ def plot_comparison(results: list, output_dir: Path):
             color="gray",
         )
 
-    plt.suptitle("Comparativa de Métodos de Selección", fontsize=14, fontweight="bold")
+    plt.suptitle(
+        "Comparativa de Métodos de Cruza (Crossover)", fontsize=14, fontweight="bold"
+    )
     plt.tight_layout()
 
     path = output_dir / "comparativa_fitness.png"
     plt.savefig(path, dpi=150)
     plt.close()
-    print(f"  Grafico guardado: {path}")
+    print(f"  Gráfico guardado: {path}")
 
 
 def save_result_images(results: list, output_dir: Path):
@@ -154,14 +175,14 @@ def print_summary_table(results: list):
     col_w = 30
     print()
     print("=" * 65)
-    print("RESUMEN COMPARATIVA")
+    print("RESUMEN COMPARATIVA - MÉTODOS DE CRUZA")
     print("=" * 65)
     print(f"{'Método':<{col_w}} {'Fitness final':>14} {'Tiempo (s)':>12}")
     print("-" * 65)
 
     sorted_results = sorted(results, key=lambda r: r["best_fitness"], reverse=True)
     for i, r in enumerate(sorted_results):
-        medal = ["1°", "2°", "3°"][i] if i < 3 else "  "
+        medal = ["🥇", "🥈", "🥉"][i] if i < 3 else "  "
         print(
             f"{medal} {LABELS[r['method']]:<{col_w - 3}} "
             f"{r['best_fitness']:>14.6f} "
@@ -184,8 +205,11 @@ def main():
     target_image = Image.open(args.image).convert("RGB")
     target_image = resize_image(target_image, max_size=args.max_size)
     print(f"Imagen: {args.image}  ({target_image.size[0]}x{target_image.size[1]}px)")
-    print(f"Generaciones: {args.generations} | Poblacion: {args.population} | Triangulos: {args.triangles}")
-    print(f"Metodos a comparar: {', '.join(args.methods)}")
+    print(
+        f"Generaciones: {args.generations} | Población: {args.population} | Triángulos: {args.triangles}"
+    )
+    print(f"Selección: {args.selection} (fijo para todas las comparaciones)")
+    print(f"Métodos de cruza a comparar: {', '.join(args.methods)}")
     print()
 
     config = EvolutionConfig(
@@ -197,10 +221,12 @@ def main():
     results = []
     total = len(args.methods)
     for idx, method in enumerate(args.methods, 1):
-        print(f"[{idx}/{total}] {LABELS[method]}...")
-        r = run_method(method, target_image, config)
+        print(f"[{idx}/{total}] Crossover: {LABELS[method]}...")
+        r = run_method(method, target_image, config, args.selection)
         results.append(r)
-        print(f"       fitness: {r['best_fitness']:.6f}  |  tiempo: {r['elapsed_time']:.1f}s")
+        print(
+            f"       fitness: {r['best_fitness']:.6f}  |  tiempo: {r['elapsed_time']:.1f}s"
+        )
 
     print()
     print("Generando salidas...")

@@ -68,7 +68,7 @@ Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitnes
 | Operador | Métodos Disponibles | Descripción |
 |----------|---------------------|-------------|
 | **Selección** | `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank` (`ranking` alias) | Elige individuos para reproducción |
-| **Cruza** | `single_point`, `two_point`, `uniform` | Combina genes de dos padres |
+| **Cruza** | `single_point`, `two_point`, `uniform`, `annular` | Combina genes de dos padres |
 | **Mutación** | Gaussiana | Altera posiciones, colores y orden Z |
 
 ---
@@ -168,7 +168,7 @@ uv run main.py --image <ruta> [opciones]
 | Opción | Descripción | Valores | Default |
 |--------|-------------|---------|---------|
 | `--selection` | Método de selección | `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank`, `ranking` | `tournament` |
-| `--crossover` | Método de cruza | `single_point`, `two_point`, `uniform` | `single_point` |
+| `--crossover` | Método de cruza | `single_point`, `two_point`, `uniform`, `annular` | `single_point` |
 | `--mutation-rate` | Probabilidad de mutación | 0.0 - 1.0 | 0.3 |
 
 #### Parámetros de salida

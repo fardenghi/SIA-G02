@@ -38,7 +38,7 @@ selection:
 
 # Cruza (Crossover)
 crossover:
-  # Método: "single_point", "two_point", "uniform"
+  # Método: "single_point", "two_point", "uniform", "annular"
   method: "single_point"
   # Probabilidad de cruza
   probability: 0.8
