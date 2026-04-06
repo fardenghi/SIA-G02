@@ -78,6 +78,15 @@ class OutputConfig:
 
 
 @dataclass
+class SurvivalConfig:
+    """Configuración de supervivencia."""
+
+    method: str = "exclusive"  # "additive" o "exclusive"
+    selection_method: str = "elite"  # método para seleccionar sobrevivientes
+    offspring_ratio: float = 1.0  # K = N * offspring_ratio
+
+
+@dataclass
 class Config:
     """
     Configuración completa del sistema.
@@ -103,6 +112,7 @@ class Config:
     selection: SelectionConfig = field(default_factory=SelectionConfig)
     crossover: CrossoverConfig = field(default_factory=CrossoverConfig)
     mutation: MutationConfig = field(default_factory=MutationConfig)
+    survival: SurvivalConfig = field(default_factory=SurvivalConfig)
 
     # Salida
     output: OutputConfig = field(default_factory=OutputConfig)
@@ -133,6 +143,7 @@ class Config:
         selection_data = data.pop("selection", {})
         crossover_data = data.pop("crossover", {})
         mutation_data = data.pop("mutation", {})
+        survival_data = data.pop("survival", {})
         output_data = data.pop("output", {})
 
         # Extraer de secciones legacy si existen
@@ -184,6 +195,9 @@ class Config:
             mutation=MutationConfig(**mutation_data)
             if mutation_data
             else MutationConfig(),
+            survival=SurvivalConfig(**survival_data)
+            if survival_data
+            else SurvivalConfig(),
             output=OutputConfig(**output_data) if output_data else OutputConfig(),
         )
 

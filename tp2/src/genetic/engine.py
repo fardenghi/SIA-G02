@@ -16,6 +16,7 @@ from src.genetic.population import Population
 from src.genetic.selection import SelectionMethod, create_selection_method
 from src.genetic.crossover import CrossoverMethod, create_crossover_method
 from src.genetic.mutation import Mutator, MutationParams, create_mutation_params
+from src.genetic.survival import SurvivalMethod, create_survival_method
 from src.fitness.mse import FitnessEvaluator
 
 
@@ -79,6 +80,8 @@ class GeneticEngine:
         selection_method: SelectionMethod,
         crossover_method: CrossoverMethod,
         mutator: Mutator,
+        survival_method: Optional[SurvivalMethod] = None,
+        offspring_ratio: float = 1.0,
     ):
         """
         Args:
@@ -87,12 +90,18 @@ class GeneticEngine:
             selection_method: Método de selección.
             crossover_method: Método de cruza.
             mutator: Operador de mutación.
+            survival_method: Estrategia de supervivencia (opcional).
+                Si es None, se usa supervivencia exclusiva por defecto.
+            offspring_ratio: Ratio de hijos a generar respecto al tamaño
+                de la población (K = N * offspring_ratio).
         """
         self.config = config
         self.evaluator = FitnessEvaluator(target_image)
         self.selection = selection_method
         self.crossover = crossover_method
         self.mutator = mutator
+        self.survival = survival_method
+        self.offspring_ratio = offspring_ratio
 
         self.population: Optional[Population] = None
         self.history: List[dict] = []
@@ -164,18 +173,22 @@ class GeneticEngine:
             Nueva población (siguiente generación).
         """
         pop_size = len(population)
-        new_individuals = []
 
-        # Seleccionar padres (necesitamos pop_size padres para generar pop_size hijos)
+        # Calcular cantidad de hijos a generar (K = N * offspring_ratio)
+        num_offspring = max(pop_size, int(pop_size * self.offspring_ratio))
+
+        # Seleccionar padres (necesitamos suficientes para generar num_offspring hijos)
+        num_parents_needed = num_offspring  # Un padre por hijo aproximadamente
         parents = self.selection.select(
             population.individuals,
-            num_parents=pop_size,
+            num_parents=num_parents_needed,
             generation=population.generation,
         )
 
-        # Cruza y mutación
+        # Cruza y mutación para generar hijos
+        offspring = []
         i = 0
-        while len(new_individuals) < pop_size:
+        while len(offspring) < num_offspring:
             parent1 = parents[i % len(parents)]
             parent2 = parents[(i + 1) % len(parents)]
 
@@ -186,11 +199,34 @@ class GeneticEngine:
             child1 = self.mutator.mutate(child1)
             child2 = self.mutator.mutate(child2)
 
-            new_individuals.append(child1)
-            if len(new_individuals) < pop_size:
-                new_individuals.append(child2)
+            offspring.append(child1)
+            if len(offspring) < num_offspring:
+                offspring.append(child2)
 
             i += 2
+
+        # Evaluar fitness de los hijos
+        self.evaluator.evaluate_population(offspring)
+
+        # Aplicar estrategia de supervivencia
+        if self.survival is not None:
+            # Usar la estrategia de supervivencia configurada
+            new_individuals = self.survival.survive(
+                parents=population.individuals,
+                offspring=offspring,
+                target_size=pop_size,
+            )
+        else:
+            # Comportamiento por defecto: supervivencia exclusiva simple
+            # (todos los hijos reemplazan a los padres si K = N)
+            if len(offspring) > pop_size:
+                # Seleccionar los mejores hijos si hay más de N
+                sorted_offspring = sorted(
+                    offspring, key=lambda x: x.fitness, reverse=True
+                )
+                new_individuals = sorted_offspring[:pop_size]
+            else:
+                new_individuals = offspring[:pop_size]
 
         return Population(
             individuals=new_individuals, generation=population.generation + 1
@@ -227,8 +263,8 @@ class GeneticEngine:
             # Evolucionar
             self.population = self.evolve_generation(self.population)
 
-            # Evaluar nueva generación
-            self.evaluate_population(self.population)
+            # Nota: La evaluación de fitness ya se hace dentro de evolve_generation
+            # para los hijos. Los padres que sobreviven ya tienen fitness calculado.
 
             # Actualizar mejor global
             current_best = self.population.best
@@ -286,6 +322,9 @@ def create_engine(
     boltzmann_t0: float = 100.0,
     boltzmann_tc: float = 1.0,
     boltzmann_k: float = 0.005,
+    survival_method: str = "exclusive",
+    survival_selection_method: str = "elite",
+    offspring_ratio: float = 1.0,
 ) -> GeneticEngine:
     """
     Factory para crear un motor genético configurado.
@@ -293,7 +332,7 @@ def create_engine(
     Args:
         target_image: Imagen objetivo.
         config: Configuración de evolución.
-        selection_method: Método de selección.
+        selection_method: Método de selección de padres.
         tournament_size: Tamaño de torneo.
         crossover_method: Método de cruza.
         crossover_probability: Probabilidad de cruza.
@@ -307,6 +346,9 @@ def create_engine(
         boltzmann_t0: Temperatura inicial de Boltzmann.
         boltzmann_tc: Temperatura mínima de Boltzmann.
         boltzmann_k: Constante de decaimiento de Boltzmann.
+        survival_method: Estrategia de supervivencia ("additive" o "exclusive").
+        survival_selection_method: Método de selección para supervivientes.
+        offspring_ratio: Ratio de hijos a generar (K = N * offspring_ratio).
 
     Returns:
         Motor genético configurado.
@@ -337,10 +379,23 @@ def create_engine(
         )
         mutator = Mutator(params)
 
+    # Crear estrategia de supervivencia
+    survival = create_survival_method(
+        method=survival_method,
+        selection_method=survival_selection_method,
+        tournament_size=tournament_size,
+        threshold=threshold,
+        boltzmann_t0=boltzmann_t0,
+        boltzmann_tc=boltzmann_tc,
+        boltzmann_k=boltzmann_k,
+    )
+
     return GeneticEngine(
         target_image=target_image,
         config=config,
         selection_method=selection,
         crossover_method=crossover,
         mutator=mutator,
+        survival_method=survival,
+        offspring_ratio=offspring_ratio,
     )

@@ -56,6 +56,15 @@ mutation:
   # Magnitud máxima de perturbación en alfa
   alpha_delta: 0.1
 
+# Supervivencia
+survival:
+  # Estrategia: "additive" (padres + hijos compiten) o "exclusive" (hijos tienen prioridad)
+  method: "exclusive"
+  # Método de selección para elegir sobrevivientes
+  selection_method: "elite"
+  # Ratio de hijos a generar: K = N * offspring_ratio (1.0 = misma cantidad, 1.5 = 50% más)
+  offspring_ratio: 1.0
+
 # Salida y visualización
 output:
   # Directorio de salida
