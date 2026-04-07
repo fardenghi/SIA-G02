@@ -142,6 +142,7 @@ def parse_args() -> argparse.Namespace:
             "exponential",
             "inverse_mse",
             "detail_weighted",
+            "composite",
         ],
         default=None,
         help=(
@@ -167,6 +168,20 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help="Ratio de hijos a generar respecto a la población (K = N * ratio)",
+    )
+
+    parser.add_argument(
+        "--elite-count",
+        type=int,
+        default=None,
+        help="Cantidad de individuos élite que pasan sin modificar a la siguiente generación (0 = desactivado)",
+    )
+
+    parser.add_argument(
+        "--field-probability",
+        type=float,
+        default=None,
+        help="Probabilidad de mutar cada float individual del triángulo (1.0 = todos, <1.0 = per-float)",
     )
 
     parser.add_argument(
@@ -276,6 +291,8 @@ def main():
         "crossover": args.crossover,
         "survival_method": args.survival,
         "offspring_ratio": args.offspring_ratio,
+        "elite_count": args.elite_count,
+        "field_probability": args.field_probability,
         "output": args.output,
         "save_interval": args.save_interval,
         "fitness_method": args.fitness,
@@ -331,25 +348,28 @@ def main():
 
     # Crear motor evolutivo
     engine = create_engine(
-        target_image=target_image,
-        config=config.to_evolution_config(),
-        selection_method=config.selection.method,
-        tournament_size=config.selection.tournament_size,
-        crossover_method=config.crossover.method,
-        crossover_probability=config.crossover.probability,
-        mutation_params=config.mutation.to_params(),
-        threshold=config.selection.threshold,
-        boltzmann_t0=config.selection.boltzmann_t0,
-        boltzmann_tc=config.selection.boltzmann_tc,
-        boltzmann_k=config.selection.boltzmann_k,
-        survival_method=config.survival.method,
-        survival_selection_method=config.survival.selection_method,
-        offspring_ratio=config.survival.offspring_ratio,
-        fitness_method=config.fitness.method,
-        fitness_scale=config.fitness.exponential_scale,
-        fitness_detail_weight_base=config.fitness.detail_weight_base,
-        renderer=config.rendering.backend,
-        adaptive_sigma=config.mutation.to_adaptive_sigma(),
+            target_image=target_image,
+            config=config.to_evolution_config(),
+            selection_method=config.selection.method,
+            tournament_size=config.selection.tournament_size,
+            crossover_method=config.crossover.method,
+            crossover_probability=config.crossover.probability,
+            mutation_params=config.mutation.to_params(),
+            threshold=config.selection.threshold,
+            boltzmann_t0=config.selection.boltzmann_t0,
+            boltzmann_tc=config.selection.boltzmann_tc,
+            boltzmann_k=config.selection.boltzmann_k,
+            survival_method=config.survival.method,
+            survival_selection_method=config.survival.selection_method,
+            offspring_ratio=config.survival.offspring_ratio,
+            fitness_method=config.fitness.method,
+            fitness_scale=config.fitness.exponential_scale,
+            fitness_detail_weight_base=config.fitness.detail_weight_base,
+            fitness_composite_alpha=config.fitness.composite_alpha,
+            fitness_composite_beta=config.fitness.composite_beta,
+            fitness_composite_gamma=config.fitness.composite_gamma,
+            renderer=config.rendering.backend,
+            adaptive_sigma=config.mutation.to_adaptive_sigma(),
     )
 
     # Configurar callbacks

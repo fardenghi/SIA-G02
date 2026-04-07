@@ -53,6 +53,13 @@ class MutationParams:
         position_delta: Magnitud máxima de perturbación en coordenadas.
         color_delta: Magnitud máxima de perturbación en color (0-255).
         alpha_delta: Magnitud máxima de perturbación en alfa.
+        field_probability: Probabilidad de mutar cada float individual dentro de
+            un triángulo seleccionado (vértices, R, G, B, alpha).
+            1.0 = todos los campos mutan siempre (comportamiento original).
+            < 1.0 = mutación per-float; en promedio se tocan field_probability * 10
+            valores por triángulo.
+        guided_ratio: Fracción de mutaciones guiadas por error map vs uniformes aleatorias.
+            Solo aplica a ERROR_MAP_GUIDED: 0.75 → 75% guiadas, 25% aleatorias.
     """
 
     mutation_type: MutationType = MutationType.UNIFORM_MULTIGEN
@@ -62,8 +69,7 @@ class MutationParams:
     position_delta: float = 0.1
     color_delta: int = 30
     alpha_delta: float = 0.1
-    # Fracción de mutaciones guiadas por error map vs uniformes aleatorias.
-    # Solo aplica a ERROR_MAP_GUIDED: 0.75 → 75% guiadas, 25% aleatorias.
+    field_probability: float = 1.0
     guided_ratio: float = 0.75
 
     def __post_init__(self):
@@ -80,6 +86,8 @@ class MutationParams:
             raise ValueError("alpha_delta debe estar en [0, 1]")
         if self.max_genes < 1:
             raise ValueError("max_genes debe ser >= 1")
+        if not 0 <= self.field_probability <= 1:
+            raise ValueError("field_probability debe estar en [0, 1]")
         if not 0 <= self.guided_ratio <= 1:
             raise ValueError("guided_ratio debe estar en [0, 1]")
 
@@ -124,10 +132,10 @@ def mutate_triangle(triangle: Triangle, params: MutationParams) -> Triangle:
     """
     Muta un triángulo.
 
-    Puede mutar:
-    - Posiciones de vértices
-    - Componentes de color (RGB)
-    - Canal alfa
+    Con field_probability < 1.0 opera en modo per-float: cada valor individual
+    (coordenadas de vértices, R, G, B, alpha) se muta de forma independiente
+    con probabilidad field_probability. Con field_probability = 1.0 (default)
+    todos los campos mutan siempre, igual que el comportamiento original.
 
     Args:
         triangle: Triángulo a mutar.
@@ -136,19 +144,21 @@ def mutate_triangle(triangle: Triangle, params: MutationParams) -> Triangle:
     Returns:
         Nuevo triángulo mutado.
     """
+    p = params.field_probability
+
     # Mutar vértices
     new_vertices = []
     for x, y in triangle.vertices:
-        new_x = mutate_value(x, params.position_delta, 0.0, 1.0)
-        new_y = mutate_value(y, params.position_delta, 0.0, 1.0)
+        new_x = mutate_value(x, params.position_delta, 0.0, 1.0) if random.random() < p else x
+        new_y = mutate_value(y, params.position_delta, 0.0, 1.0) if random.random() < p else y
         new_vertices.append((new_x, new_y))
 
     # Mutar color
     r, g, b, a = triangle.color
-    new_r = mutate_int_value(r, params.color_delta, 0, 255)
-    new_g = mutate_int_value(g, params.color_delta, 0, 255)
-    new_b = mutate_int_value(b, params.color_delta, 0, 255)
-    new_a = mutate_value(a, params.alpha_delta, 0.0, 1.0)
+    new_r = mutate_int_value(r, params.color_delta, 0, 255) if random.random() < p else r
+    new_g = mutate_int_value(g, params.color_delta, 0, 255) if random.random() < p else g
+    new_b = mutate_int_value(b, params.color_delta, 0, 255) if random.random() < p else b
+    new_a = mutate_value(a, params.alpha_delta, 0.0, 1.0) if random.random() < p else a
 
     return Triangle(vertices=new_vertices, color=(new_r, new_g, new_b, new_a))
 
@@ -370,11 +380,12 @@ def _mutate_triangle_guided(
                 mutate_value(y, params.position_delta, 0.0, 1.0),
             )
 
+    p = params.field_probability
     r, g_c, b, a = triangle.color
-    new_r = mutate_int_value(r, params.color_delta, 0, 255)
-    new_g_c = mutate_int_value(g_c, params.color_delta, 0, 255)
-    new_b = mutate_int_value(b, params.color_delta, 0, 255)
-    new_a = mutate_value(a, params.alpha_delta, 0.0, 1.0)
+    new_r = mutate_int_value(r, params.color_delta, 0, 255) if random.random() < p else r
+    new_g_c = mutate_int_value(g_c, params.color_delta, 0, 255) if random.random() < p else g_c
+    new_b = mutate_int_value(b, params.color_delta, 0, 255) if random.random() < p else b
+    new_a = mutate_value(a, params.alpha_delta, 0.0, 1.0) if random.random() < p else a
 
     return Triangle(
         vertices=new_vertices,
@@ -696,6 +707,7 @@ class Mutator:
                 position_delta=self.params.position_delta * scale,
                 color_delta=max(1, int(self.params.color_delta * scale)),
                 alpha_delta=self.params.alpha_delta * scale,
+                field_probability=self.params.field_probability,
                 guided_ratio=self.params.guided_ratio,
             )
         else:
@@ -733,6 +745,7 @@ def create_mutation_params(
     position_delta: float = 0.1,
     color_delta: int = 30,
     alpha_delta: float = 0.1,
+    field_probability: float = 1.0,
     guided_ratio: float = 0.75,
 ) -> MutationParams:
     """
@@ -748,6 +761,8 @@ def create_mutation_params(
         position_delta: Delta de posición.
         color_delta: Delta de color.
         alpha_delta: Delta de alfa.
+        field_probability: Probabilidad de mutar cada float individual dentro
+            del triángulo seleccionado. 1.0 = todos los campos (default).
         guided_ratio: Fracción guiada por error map (solo para error_map_guided).
 
     Returns:
@@ -779,5 +794,6 @@ def create_mutation_params(
         position_delta=position_delta,
         color_delta=color_delta,
         alpha_delta=alpha_delta,
+        field_probability=field_probability,
         guided_ratio=guided_ratio,
     )

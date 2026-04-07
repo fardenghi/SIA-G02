@@ -35,13 +35,17 @@ class FitnessConfig:
     """Configuración de la función de fitness."""
 
     # Método: "linear", "rmse", "inverse_normalized", "exponential",
-    #         "inverse_mse", "detail_weighted"
+    #         "inverse_mse", "detail_weighted", "composite"
     method: str = "linear"
     # Escala para método exponencial: fitness = exp(-MSE_norm / scale)
     exponential_scale: float = 0.1
     # Peso base para regiones lisas en detail_weighted (0.0–1.0).
     # 0.0 = solo pesan los bordes; 1.0 = equivalente a MSE uniforme.
     detail_weight_base: float = 0.3
+    # Pesos para fitness compuesto: 1 - (α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss) / (α+β+γ)
+    composite_alpha: float = 0.5   # peso de (1 - SSIM)
+    composite_beta: float = 0.2    # peso de MSE normalizado
+    composite_gamma: float = 0.3   # peso de EdgeLoss
 
 
 @dataclass
@@ -75,6 +79,9 @@ class MutationConfig:
     position_delta: float = 0.1
     color_delta: int = 30
     alpha_delta: float = 0.1
+    # Probabilidad de mutar cada float individual dentro del triángulo.
+    # 1.0 = todos los campos mutan siempre (default). < 1.0 = per-float.
+    field_probability: float = 1.0
     # Fracción de mutaciones guiadas (0-1). Solo para error_map_guided.
     # El resto (1 - guided_ratio) son mutaciones uniformes aleatorias.
     guided_ratio: float = 0.75
@@ -98,6 +105,7 @@ class MutationConfig:
             position_delta=self.position_delta,
             color_delta=self.color_delta,
             alpha_delta=self.alpha_delta,
+            field_probability=self.field_probability,
             guided_ratio=self.guided_ratio,
         )
 
@@ -136,6 +144,7 @@ class SurvivalConfig:
     method: str = "exclusive"  # "additive" o "exclusive"
     selection_method: str = "elite"  # método para seleccionar sobrevivientes
     offspring_ratio: float = 1.0  # K = N * offspring_ratio
+    elite_count: int = 0  # individuos élite que siempre pasan a la siguiente gen
 
 
 @dataclass
@@ -191,6 +200,7 @@ class Config:
             fitness_threshold=self.fitness_threshold,
             alpha_min=self.alpha_min,
             alpha_max=self.alpha_max,
+            elite_count=self.survival.elite_count,
         )
 
     @classmethod
@@ -212,6 +222,7 @@ class Config:
         survival_data = data.pop("survival", {})
         output_data = data.pop("output", {})
         rendering_data = data.pop("rendering", {})
+        data.pop("island", {})  # ignorar sección legacy de islas si existe
 
         # Extraer de secciones legacy si existen
         if "fitness_threshold" not in data and "error_threshold" in data:
@@ -343,11 +354,17 @@ class Config:
         if kwargs.get("guided_ratio") is not None:
             new_config.mutation.guided_ratio = kwargs["guided_ratio"]
 
+        if kwargs.get("field_probability") is not None:
+            new_config.mutation.field_probability = kwargs["field_probability"]
+
         if kwargs.get("survival_method"):
             new_config.survival.method = kwargs["survival_method"]
 
         if kwargs.get("offspring_ratio"):
             new_config.survival.offspring_ratio = kwargs["offspring_ratio"]
+
+        if kwargs.get("elite_count") is not None:
+            new_config.survival.elite_count = kwargs["elite_count"]
 
         if kwargs.get("fitness_method"):
             new_config.fitness.method = kwargs["fitness_method"]

@@ -39,6 +39,8 @@ fitness:
   #   inverse_mse        → 1 / (1 + MSE)            (0, 0.003]  NO recomendado
   #   detail_weighted    → MSE ponderado por bordes  [0, 1]  upweightea regiones con detalle;
   #                         útil cuando hay fondo liso + símbolo pequeño
+  #   composite          → α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss  [0, 1]
+  #                         combina estructura, color y bordes; recomendado para imágenes complejas
   method: "inverse_normalized"
   # Escala para método exponencial (menor = curva más pronunciada)
   exponential_scale: 0.1
@@ -46,11 +48,17 @@ fitness:
   # 0.0 = solo pesan los bordes; 1.0 = equivalente a MSE uniforme.
   # Recomendado: 0.2–0.4 para imágenes con fondo dominante + símbolo pequeño.
   detail_weight_base: 0.3
+  # Pesos del fitness compuesto (method: "composite").
+  # Fitness = 1 - (α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss) / (α+β+γ)
+  # Los pesos se normalizan automáticamente, no necesitan sumar 1.
+  composite_alpha: 0.5   # peso de (1 - SSIM): estructura global
+  composite_beta: 0.2    # peso de MSE normalizado: ajuste fino de color
+  composite_gamma: 0.3   # peso de EdgeLoss: alineación geométrica de bordes
 
 # Selección
 selection:
   # Método: "elite", "tournament", "probabilistic_tournament", "roulette", "universal", "boltzmann", "rank" (alias: "ranking")
-  method: "boltzmann"
+  method: "tournament"
   # Tamaño del torneo determinístico
   tournament_size: 3
   # Umbral para torneo probabilístico (0.5 - 1.0)
@@ -91,6 +99,11 @@ mutation:
   # El resto (1 - guided_ratio) son mutaciones uniformes aleatorias para mantener diversidad.
   # Rango: [0.0, 1.0]. Recomendado: 0.7–0.8.
   guided_ratio: 0.75
+  # Probabilidad de mutar cada float individual dentro de un triángulo seleccionado.
+  # 1.0 = todos los campos mutan siempre (comportamiento original).
+  # < 1.0 = per-float: cada coordenada, canal de color y alfa decide independientemente.
+  # Recomendado: 0.3–0.5 para exploración fina; 1.0 para máxima perturbación.
+  field_probability: 0.4
 
   # Sigma adaptativo: escala los deltas según el progreso real del fitness.
   # Si hay estancamiento → reduce los deltas (refina).
@@ -117,6 +130,9 @@ survival:
   selection_method: "elite"
   # Ratio de hijos a generar: K = N * offspring_ratio (1.0 = misma cantidad, 1.5 = 50% más)
   offspring_ratio: 1.0
+  # Cantidad de individuos élite que pasan sin modificar a la siguiente generación.
+  # 0 = desactivado. Recomendado: 1–5% de population_size (ej: 1–5 para pop=100).
+  elite_count: 8
 
 # Salida y visualización
 output:

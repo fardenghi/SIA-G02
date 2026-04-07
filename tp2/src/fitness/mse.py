@@ -29,8 +29,13 @@ FITNESS_METHODS = frozenset(
         "exponential",
         "inverse_mse",
         "detail_weighted",
+        "composite",
     }
 )
+
+# Magnitud máxima de gradiente para uint8: cada canal puede cambiar 255 unidades
+# entre píxeles adyacentes; np.gradient da diferencias centradas, máximo ~255.
+_MAX_GRADIENT = 255.0 * math.sqrt(2.0)
 
 
 def compute_detail_weight_map(target: np.ndarray, base: float = 0.3) -> np.ndarray:
@@ -67,6 +72,93 @@ def compute_detail_weight_map(target: np.ndarray, base: float = 0.3) -> np.ndarr
     weights = base + (1.0 - base) * grad_norm  # [base, 1]
     weights /= weights.mean() + 1e-8  # media ≈ 1
     return weights.astype(np.float32)
+
+
+def compute_ssim(rendered: np.ndarray, target: np.ndarray) -> float:
+    """
+    SSIM global (sin ventana deslizante) entre dos imágenes RGB.
+
+    Calcula el índice de similitud estructural usando estadísticas globales
+    (media, varianza y covarianza sobre todo el canal). Es más rápido que el
+    SSIM ventaneado estándar y suficiente como señal para el AG.
+
+    Args:
+        rendered: Array uint8 (H, W, 3) de la imagen renderizada.
+        target:   Array uint8 (H, W, 3) de la imagen objetivo.
+
+    Returns:
+        SSIM ∈ [-1, 1]; en la práctica ∈ [0, 1] para imágenes naturales.
+    """
+    C1 = (0.01 * 255.0) ** 2  # ≈ 6.50
+    C2 = (0.03 * 255.0) ** 2  # ≈ 58.52
+
+    rendered_f = rendered.astype(np.float64)
+    target_f = target.astype(np.float64)
+
+    ssim_channels = []
+    for c in range(3):
+        x = rendered_f[:, :, c]
+        y = target_f[:, :, c]
+        mu_x = x.mean()
+        mu_y = y.mean()
+        sigma_x2 = float(x.var())
+        sigma_y2 = float(y.var())
+        sigma_xy = float(np.mean((x - mu_x) * (y - mu_y)))
+
+        num = (2.0 * mu_x * mu_y + C1) * (2.0 * sigma_xy + C2)
+        den = (mu_x**2 + mu_y**2 + C1) * (sigma_x2 + sigma_y2 + C2)
+        ssim_channels.append(num / den)
+
+    return float(np.mean(ssim_channels))
+
+
+def compute_target_edge_map(target: np.ndarray) -> np.ndarray:
+    """
+    Precomputa el mapa de bordes del target (magnitud del gradiente).
+
+    Convierte a escala de grises con coeficientes perceptuales, aplica
+    np.gradient y normaliza por la magnitud máxima teórica (_MAX_GRADIENT)
+    para obtener valores en [0, 1].
+
+    Args:
+        target: Array uint8 (H, W, 3) de la imagen objetivo.
+
+    Returns:
+        Array float32 (H, W) con valores en [0, 1].
+    """
+    gray = (
+        0.299 * target[:, :, 0].astype(np.float32)
+        + 0.587 * target[:, :, 1].astype(np.float32)
+        + 0.114 * target[:, :, 2].astype(np.float32)
+    )
+    gy, gx = np.gradient(gray)
+    edges = np.sqrt(gx**2 + gy**2) / _MAX_GRADIENT
+    return edges.astype(np.float32)
+
+
+def compute_edge_loss(rendered: np.ndarray, target_edges: np.ndarray) -> float:
+    """
+    MSE entre el mapa de bordes del rendered y el del target.
+
+    Ambos mapas se normalizan por _MAX_GRADIENT para obtener valores en [0, 1],
+    por lo que el MSE resultante también está en [0, 1].
+
+    Args:
+        rendered:      Array uint8 (H, W, 3) de la imagen renderizada.
+        target_edges:  Mapa de bordes precomputado del target, float32 [0, 1].
+
+    Returns:
+        EdgeLoss ∈ [0, 1].
+    """
+    gray = (
+        0.299 * rendered[:, :, 0].astype(np.float32)
+        + 0.587 * rendered[:, :, 1].astype(np.float32)
+        + 0.114 * rendered[:, :, 2].astype(np.float32)
+    )
+    gy, gx = np.gradient(gray)
+    rendered_edges = np.sqrt(gx**2 + gy**2) / _MAX_GRADIENT
+    diff = rendered_edges - target_edges
+    return float(np.mean(diff**2))
 
 
 def calculate_mse(rendered: np.ndarray, target: np.ndarray) -> float:
@@ -145,16 +237,24 @@ def compute_fitness(
     method: str = "linear",
     exponential_scale: float = 0.1,
     weight_map: np.ndarray | None = None,
+    target_edges: np.ndarray | None = None,
+    composite_alpha: float = 0.5,
+    composite_beta: float = 0.2,
+    composite_gamma: float = 0.3,
 ) -> float:
     """
     Calcula el fitness entre dos imágenes con el método especificado.
 
     Args:
-        rendered: Imagen renderizada como array uint8 (H, W, 3).
-        target:   Imagen objetivo como array uint8 (H, W, 3).
-        method:   Uno de los métodos en :data:`FITNESS_METHODS`.
+        rendered:         Imagen renderizada como array uint8 (H, W, 3).
+        target:           Imagen objetivo como array uint8 (H, W, 3).
+        method:           Uno de los métodos en :data:`FITNESS_METHODS`.
         exponential_scale: Escala para el método ``"exponential"``.
-            Valores menores = curva más pronunciada (mayor presión selectiva).
+        weight_map:       Mapa de pesos precomputado para ``"detail_weighted"``.
+        target_edges:     Mapa de bordes precomputado para ``"composite"``.
+        composite_alpha:  Peso de (1 - SSIM) en el fitness compuesto.
+        composite_beta:   Peso de MSE normalizado en el fitness compuesto.
+        composite_gamma:  Peso de EdgeLoss en el fitness compuesto.
 
     Returns:
         Valor de fitness en (0, 1] (mayor es mejor).
@@ -194,6 +294,21 @@ def compute_fitness(
         weighted_nmse = weighted_mse / 65025.0
         return 1.0 - min(weighted_nmse, 1.0)
 
+    if method == "composite":
+        # Fitness = 1 - (α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss) / (α+β+γ)
+        ssim_val = compute_ssim(rendered, target)
+        t_edges = target_edges if target_edges is not None else compute_target_edge_map(target)
+        edge_loss = compute_edge_loss(rendered, t_edges)
+        total_w = composite_alpha + composite_beta + composite_gamma
+        if total_w < 1e-9:
+            return 1.0 - nmse  # fallback a linear
+        loss = (
+            composite_alpha * (1.0 - ssim_val)
+            + composite_beta * nmse
+            + composite_gamma * edge_loss
+        ) / total_w
+        return max(0.0, 1.0 - loss)
+
     raise AssertionError(f"Método de fitness no manejado: {method}")
 
 
@@ -221,6 +336,9 @@ class FitnessEvaluator:
         normalize: bool = False,
         renderer: str = "cpu",
         detail_weight_base: float = 0.3,
+        composite_alpha: float = 0.5,
+        composite_beta: float = 0.2,
+        composite_gamma: float = 0.3,
     ):
         """
         Inicializa el evaluador.
@@ -260,6 +378,15 @@ class FitnessEvaluator:
             self._weight_map = compute_detail_weight_map(
                 self.target, base=detail_weight_base
             )
+
+        # Mapa de bordes para composite: precomputado una sola vez.
+        self._target_edges: np.ndarray | None = None
+        if method == "composite":
+            self._target_edges = compute_target_edge_map(self.target)
+
+        self.composite_alpha = composite_alpha
+        self.composite_beta = composite_beta
+        self.composite_gamma = composite_gamma
 
         if renderer == "gpu":
             if MODERNGL_AVAILABLE:
@@ -309,6 +436,17 @@ class FitnessEvaluator:
                 self.method,
                 self.exponential_scale,
                 weight_map=self._weight_map,
+            )
+
+        if self.method == "composite":
+            return compute_fitness(
+                rendered,
+                self.target,
+                self.method,
+                target_edges=self._target_edges,
+                composite_alpha=self.composite_alpha,
+                composite_beta=self.composite_beta,
+                composite_gamma=self.composite_gamma,
             )
 
         diff = rendered.astype(np.float32) - self._target_f32

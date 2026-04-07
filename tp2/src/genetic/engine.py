@@ -43,6 +43,7 @@ class EvolutionConfig:
     fitness_threshold: Optional[float] = None
     alpha_min: float = 0.1
     alpha_max: float = 0.8
+    elite_count: int = 0
 
 
 @dataclass
@@ -87,6 +88,9 @@ class GeneticEngine:
         fitness_method: str = "linear",
         fitness_scale: float = 0.1,
         fitness_detail_weight_base: float = 0.3,
+        fitness_composite_alpha: float = 0.5,
+        fitness_composite_beta: float = 0.2,
+        fitness_composite_gamma: float = 0.3,
         renderer: str = "cpu",
     ):
         """
@@ -103,6 +107,9 @@ class GeneticEngine:
             fitness_method: Función de fitness a usar.
             fitness_scale: Escala para el método exponencial.
             fitness_detail_weight_base: Peso base para regiones lisas en detail_weighted.
+            fitness_composite_alpha: Peso de (1-SSIM) en el fitness compuesto.
+            fitness_composite_beta: Peso de MSE_norm en el fitness compuesto.
+            fitness_composite_gamma: Peso de EdgeLoss en el fitness compuesto.
             renderer: Backend de renderizado ("cpu" o "gpu").
         """
         self.config = config
@@ -112,6 +119,9 @@ class GeneticEngine:
             exponential_scale=fitness_scale,
             renderer=renderer,
             detail_weight_base=fitness_detail_weight_base,
+            composite_alpha=fitness_composite_alpha,
+            composite_beta=fitness_composite_beta,
+            composite_gamma=fitness_composite_gamma,
         )
         self.selection = selection_method
         self.crossover = crossover_method
@@ -189,6 +199,19 @@ class GeneticEngine:
             Nueva población (siguiente generación).
         """
         pop_size = len(population)
+        elite_count = min(self.config.elite_count, pop_size)
+
+        # Elitismo: copiar los mejores individuos antes de cualquier operación
+        if elite_count > 0:
+            sorted_parents = sorted(
+                population.individuals, key=lambda ind: ind.fitness or 0.0, reverse=True
+            )
+            elites = [ind.copy() for ind in sorted_parents[:elite_count]]
+        else:
+            elites = []
+
+        # Spots que deben llenarse con individuos no-élite
+        effective_size = pop_size - elite_count
 
         # Actualizar error map para mutación guiada (una vez por generación)
         if self.mutator.mutation_type == MutationType.ERROR_MAP_GUIDED:
@@ -198,7 +221,11 @@ class GeneticEngine:
             error_map = (diff ** 2).mean(axis=2)  # (H, W)
             self.mutator.set_error_map(error_map)
 
+        if effective_size == 0:
+            return Population(individuals=elites, generation=population.generation + 1)
+
         # Calcular cantidad de hijos a generar (K = N * offspring_ratio)
+        # Se genera siempre sobre pop_size completo para mantener diversidad
         num_offspring = max(pop_size, int(pop_size * self.offspring_ratio))
 
         # Seleccionar padres (necesitamos suficientes para generar num_offspring hijos)
@@ -232,28 +259,25 @@ class GeneticEngine:
         # Evaluar fitness de los hijos
         self.evaluator.evaluate_population(offspring)
 
-        # Aplicar estrategia de supervivencia
+        # Aplicar estrategia de supervivencia sobre los spots no-élite
         if self.survival is not None:
-            # Usar la estrategia de supervivencia configurada
             new_individuals = self.survival.survive(
                 parents=population.individuals,
                 offspring=offspring,
-                target_size=pop_size,
+                target_size=effective_size,
             )
         else:
             # Comportamiento por defecto: supervivencia exclusiva simple
-            # (todos los hijos reemplazan a los padres si K = N)
-            if len(offspring) > pop_size:
-                # Seleccionar los mejores hijos si hay más de N
+            if len(offspring) > effective_size:
                 sorted_offspring = sorted(
                     offspring, key=lambda x: x.fitness, reverse=True
                 )
-                new_individuals = sorted_offspring[:pop_size]
+                new_individuals = sorted_offspring[:effective_size]
             else:
-                new_individuals = offspring[:pop_size]
+                new_individuals = offspring[:effective_size]
 
         return Population(
-            individuals=new_individuals, generation=population.generation + 1
+            individuals=elites + new_individuals, generation=population.generation + 1
         )
 
     def run(self) -> EvolutionResult:
@@ -355,6 +379,9 @@ def create_engine(
     fitness_method: str = "linear",
     fitness_scale: float = 0.1,
     fitness_detail_weight_base: float = 0.3,
+    fitness_composite_alpha: float = 0.5,
+    fitness_composite_beta: float = 0.2,
+    fitness_composite_gamma: float = 0.3,
     renderer: str = "cpu",
     adaptive_sigma: Optional[AdaptiveSigma] = None,
 ) -> GeneticEngine:
@@ -433,5 +460,8 @@ def create_engine(
         fitness_method=fitness_method,
         fitness_scale=fitness_scale,
         fitness_detail_weight_base=fitness_detail_weight_base,
+        fitness_composite_alpha=fitness_composite_alpha,
+        fitness_composite_beta=fitness_composite_beta,
+        fitness_composite_gamma=fitness_composite_gamma,
         renderer=renderer,
     )
