@@ -8,11 +8,12 @@ un lienzo blanco.
 
 from __future__ import annotations
 
-from typing import Tuple, List
+from typing import TYPE_CHECKING, Tuple, List
 from PIL import Image, ImageDraw
 import numpy as np
 
-from src.genetic.individual import Individual, Triangle
+if TYPE_CHECKING:
+    from src.genetic.individual import Individual, Triangle
 
 
 class Canvas:
