@@ -20,9 +20,28 @@ genetic:
   population_size: 100
   # Número máximo de generaciones
   max_generations: 5000
-  # Umbral de fitness para parada temprana (1 / (1 + MSE))
+  # Umbral de fitness para parada temprana. Depende del método de fitness:
+  #   linear             → 1 - MSE/65025  ∈ [0,1]  ej: 0.92 ≈ error promedio ~67/canal
+  #   rmse               → 1 - sqrt(MSE)/255 ∈ [0,1]
+  #   inverse_normalized → 1 / (1 + MSE/65025) ∈ (0.5,1]
+  #   exponential        → exp(-NMSE/scale) ∈ (0,1]
+  #   inverse_mse        → 1 / (1 + MSE)  ∈ (0,0.003]  (NO recomendado)
+  # null = sin parada temprana, corre hasta max_generations
   fitness_threshold: null
   
+# Fitness
+fitness:
+  # Función de fitness:
+  #   linear             → 1 - MSE/65025          [0, 1]  recomendado, lineal
+  #   rmse               → 1 - sqrt(MSE)/255       [0, 1]  penaliza menos errores grandes
+  #   inverse_normalized → 1 / (1 + MSE/65025)     (0.5, 1]  más discriminativo cerca de 1
+  #   exponential        → exp(-MSE_norm / scale)  (0, 1]  escala configurable
+  #   ssim               → SSIM mapeado a [0,1]    (0, 1]  perceptual, requiere scikit-image
+  #   inverse_mse        → 1 / (1 + MSE)           (0, 0.003]  NO recomendado
+  method: "linear"
+  # Escala para método exponencial (menor = curva más pronunciada)
+  exponential_scale: 0.1
+
 # Selección
 selection:
   # Método: "elite", "tournament", "probabilistic_tournament", "roulette", "universal", "boltzmann", "rank" (alias: "ranking")
@@ -59,7 +78,7 @@ mutation:
 # Supervivencia
 survival:
   # Estrategia: "additive" (padres + hijos compiten) o "exclusive" (hijos tienen prioridad)
-  method: "exclusive"
+  method: "additive"
   # Método de selección para elegir sobrevivientes
   selection_method: "elite"
   # Ratio de hijos a generar: K = N * offspring_ratio (1.0 = misma cantidad, 1.5 = 50% más)
@@ -77,3 +96,7 @@ output:
   export_triangles: true
   # Generar gráfico de evolución del fitness
   plot_fitness: true
+  # Exportar métricas por generación a CSV (pandas) — útil para comparar corridas
+  export_metrics_csv: true
+  # Exportar enumeración de triángulos a CSV (una fila por triángulo)
+  export_triangles_csv: false

@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import math
 import random
-import bisect
 from abc import ABC, abstractmethod
 from typing import List
+
+import numpy as np
 
 from src.genetic.individual import Individual
 
@@ -125,36 +126,27 @@ class RouletteSelection(SelectionMethod):
         if num_parents <= 0:
             return []
 
-        fitness_values = [ind.fitness for ind in population]
+        weights = np.array([ind.fitness for ind in population], dtype=np.float64)
 
-        # Si hay fitness <= 0, desplazar para que todos los pesos sean positivos
-        min_fitness = min(fitness_values)
-        epsilon = 1e-10
-        if min_fitness <= 0:
-            weights = [f - min_fitness + epsilon for f in fitness_values]
-        else:
-            weights = fitness_values
+        # Desplazar si hay fitness <= 0
+        min_w = weights.min()
+        if min_w <= 0:
+            weights = weights - min_w + 1e-10
 
-        total = sum(weights)
+        total = weights.sum()
         if total <= 0:
             raise ValueError("No se pudieron construir pesos válidos para ruleta")
 
-        # Construir fitness relativo acumulado q_i
-        cumulative = []
-        acc = 0.0
-        for w in weights:
-            acc += w / total
-            cumulative.append(acc)
+        # CDF normalizada; forzar último a 1.0 para evitar errores de punto flotante
+        cumulative = np.cumsum(weights / total)
+        cumulative[-1] = 1.0
 
-        # Generar K r_j ~ U[0,1) y elegir q_(i-1) < r_j <= q_i
-        selected = []
-        for _ in range(num_parents):
-            r = random.random()
-            idx = bisect.bisect_left(cumulative, r)
-            idx = min(idx, len(population) - 1)
-            selected.append(population[idx])
+        # K búsquedas en la CDF en una sola llamada vectorizada
+        randoms = np.random.uniform(0.0, 1.0, num_parents)
+        indices = np.searchsorted(cumulative, randoms)
+        np.clip(indices, 0, len(population) - 1, out=indices)
 
-        return selected
+        return [population[i] for i in indices]
 
 
 class UniversalSelection(SelectionMethod):
@@ -176,40 +168,29 @@ class UniversalSelection(SelectionMethod):
         if num_parents <= 0:
             return []
 
-        fitness_values = [ind.fitness for ind in population]
+        weights = np.array([ind.fitness for ind in population], dtype=np.float64)
 
         # Desplazar si hay fitness <= 0
-        min_fitness = min(fitness_values)
-        epsilon = 1e-10
-        if min_fitness <= 0:
-            weights = [f - min_fitness + epsilon for f in fitness_values]
-        else:
-            weights = list(fitness_values)
+        min_w = weights.min()
+        if min_w <= 0:
+            weights = weights - min_w + 1e-10
 
-        total = sum(weights)
+        total = weights.sum()
         if total <= 0:
             raise ValueError(
                 "No se pudieron construir pesos válidos para selección universal"
             )
 
-        # Construir CDF normalizada
-        cumulative = []
-        acc = 0.0
-        for w in weights:
-            acc += w / total
-            cumulative.append(acc)
+        cumulative = np.cumsum(weights / total)
+        cumulative[-1] = 1.0
 
-        # Un único punto de inicio aleatorio; K punteros equiespaciados
-        r = random.random()
-        selected = []
-        for j in range(num_parents):
-            r_j = (r + j) / num_parents
-            # bisect_left sobre la CDF da el índice del individuo seleccionado
-            idx = bisect.bisect_left(cumulative, r_j)
-            idx = min(idx, len(population) - 1)
-            selected.append(population[idx])
+        # K punteros equiespaciados desde un único punto de inicio aleatorio
+        r = np.random.uniform(0.0, 1.0)
+        pointers = (r + np.arange(num_parents)) / num_parents
+        indices = np.searchsorted(cumulative, pointers)
+        np.clip(indices, 0, len(population) - 1, out=indices)
 
-        return selected
+        return [population[i] for i in indices]
 
 
 class BoltzmannSelection(SelectionMethod):
@@ -256,18 +237,17 @@ class BoltzmannSelection(SelectionMethod):
         T = self._temperature(generation)
 
         # Estabilidad numérica: restar el máximo antes de exp (log-sum-exp trick)
-        scaled = [ind.fitness / T for ind in population]
-        max_scaled = max(scaled)
-        exp_vals = [math.exp(s - max_scaled) for s in scaled]
-        avg_exp = sum(exp_vals) / len(exp_vals)
+        fitness_arr = np.array([ind.fitness for ind in population], dtype=np.float64)
+        scaled = fitness_arr / T
+        scaled -= scaled.max()
+        exp_vals = np.exp(scaled)
 
-        # Pseudo-aptitud normalizada por el promedio poblacional
-        weights = [ev / avg_exp for ev in exp_vals]
+        # Pseudo-aptitud normalizada por el promedio poblacional → pesos para ruleta
+        weights = exp_vals / exp_vals.mean()
+        probs = weights / weights.sum()
 
-        # Selección por ruleta con los pesos de Boltzmann
-        selected = random.choices(population, weights=weights, k=num_parents)
-
-        return selected
+        indices = np.random.choice(len(population), size=num_parents, p=probs)
+        return [population[i] for i in indices]
 
 
 class RankSelection(SelectionMethod):
@@ -292,31 +272,23 @@ class RankSelection(SelectionMethod):
 
         n = len(sorted_pop)
 
-        # Caso degenerado: con N=1 la fórmula da 0/1, así que seleccionamos
-        # siempre al único individuo disponible.
+        # Caso degenerado: con N=1 la fórmula da 0/1
         if n == 1:
             return [sorted_pop[0]] * num_parents
 
-        # Pseudo-aptitud teórica:
-        # f'(i) = (N - rank(i)) / N, con rank(i) en [1, N]
-        pseudo_fitness = [(n - rank) / n for rank in range(1, n + 1)]
-        total = sum(pseudo_fitness)
+        # Pseudo-aptitud teórica: f'(i) = (N - rank(i)) / N, rank(i) en [1, N]
+        # Con índice 0-based: pseudo[i] = (n - 1 - i) / n
+        pseudo = (np.arange(n - 1, -1, -1, dtype=np.float64)) / n
+        total = pseudo.sum()
 
-        cumulative = []
-        acc = 0.0
-        for pf in pseudo_fitness:
-            acc += pf / total
-            cumulative.append(acc)
+        cumulative = np.cumsum(pseudo / total)
+        cumulative[-1] = 1.0
 
-        # Aplicar ruleta sobre la pseudo-aptitud
-        selected = []
-        for _ in range(num_parents):
-            r = random.random()
-            idx = bisect.bisect_left(cumulative, r)
-            idx = min(idx, n - 1)
-            selected.append(sorted_pop[idx])
+        randoms = np.random.uniform(0.0, 1.0, num_parents)
+        indices = np.searchsorted(cumulative, randoms)
+        np.clip(indices, 0, n - 1, out=indices)
 
-        return selected
+        return [sorted_pop[i] for i in indices]
 
 
 class EliteSelection(SelectionMethod):

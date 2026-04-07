@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional, Any, Dict
 
 from src.genetic.engine import EvolutionConfig
-from src.genetic.mutation import MutationParams
+from src.genetic.mutation import MutationParams, create_mutation_params
 
 
 def _legacy_error_threshold_to_fitness(error_threshold: Any) -> Optional[float]:
@@ -23,6 +23,16 @@ def _legacy_error_threshold_to_fitness(error_threshold: Any) -> Optional[float]:
 
     value = float(error_threshold)
     return 1.0 / (1.0 + value)
+
+
+@dataclass
+class FitnessConfig:
+    """Configuración de la función de fitness."""
+
+    # Método: "linear", "rmse", "inverse_normalized", "exponential", "ssim", "inverse_mse"
+    method: str = "linear"
+    # Escala para método exponencial: fitness = exp(-MSE_norm / scale)
+    exponential_scale: float = 0.1
 
 
 @dataclass
@@ -49,6 +59,7 @@ class CrossoverConfig:
 class MutationConfig:
     """Configuración de mutación."""
 
+    method: str = "uniform_multigen"
     probability: float = 0.3
     gene_probability: float = 0.1
     position_delta: float = 0.1
@@ -57,7 +68,8 @@ class MutationConfig:
 
     def to_params(self) -> MutationParams:
         """Convierte a MutationParams."""
-        return MutationParams(
+        return create_mutation_params(
+            mutation_method=self.method,
             probability=self.probability,
             gene_probability=self.gene_probability,
             position_delta=self.position_delta,
@@ -75,6 +87,8 @@ class OutputConfig:
     log_interval: int = 10
     export_triangles: bool = True
     plot_fitness: bool = True
+    export_metrics_csv: bool = True   # métricas por generación (pandas)
+    export_triangles_csv: bool = False  # enumeración de triángulos en CSV
 
 
 @dataclass
@@ -108,6 +122,9 @@ class Config:
     max_generations: int = 5000
     fitness_threshold: Optional[float] = None
 
+    # Fitness
+    fitness: FitnessConfig = field(default_factory=FitnessConfig)
+
     # Operadores
     selection: SelectionConfig = field(default_factory=SelectionConfig)
     crossover: CrossoverConfig = field(default_factory=CrossoverConfig)
@@ -140,6 +157,7 @@ class Config:
             Instancia de Config.
         """
         # Extraer secciones anidadas
+        fitness_data = data.pop("fitness", {})
         selection_data = data.pop("selection", {})
         crossover_data = data.pop("crossover", {})
         mutation_data = data.pop("mutation", {})
@@ -186,6 +204,7 @@ class Config:
             population_size=data.get("population_size", 100),
             max_generations=data.get("max_generations", 5000),
             fitness_threshold=data.get("fitness_threshold"),
+            fitness=FitnessConfig(**fitness_data) if fitness_data else FitnessConfig(),
             selection=SelectionConfig(**selection_data)
             if selection_data
             else SelectionConfig(),
@@ -265,6 +284,21 @@ class Config:
 
         if kwargs.get("crossover"):
             new_config.crossover.method = kwargs["crossover"]
+
+        if kwargs.get("mutation_method"):
+            new_config.mutation.method = kwargs["mutation_method"]
+
+        if kwargs.get("survival_method"):
+            new_config.survival.method = kwargs["survival_method"]
+
+        if kwargs.get("offspring_ratio"):
+            new_config.survival.offspring_ratio = kwargs["offspring_ratio"]
+
+        if kwargs.get("fitness_method"):
+            new_config.fitness.method = kwargs["fitness_method"]
+
+        if kwargs.get("fitness_scale") is not None:
+            new_config.fitness.exponential_scale = kwargs["fitness_scale"]
 
         return new_config
 

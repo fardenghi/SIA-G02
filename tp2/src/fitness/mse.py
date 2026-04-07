@@ -1,18 +1,28 @@
 """
 Cálculo de error (MSE) y transformación a fitness.
 
-El MSE se usa como señal de error base (menor es mejor), y luego se transforma
-a fitness con `fitness = 1 / (1 + error)` para trabajar con la convención
-clásica de algoritmos genéticos (mayor es mejor).
+Métodos de fitness disponibles:
+
+- ``"linear"``              1 - MSE/65025           rango [0, 1], lineal, recomendado
+- ``"rmse"``                1 - sqrt(MSE)/255        rango [0, 1], penaliza menos errores grandes
+- ``"inverse_normalized"``  1 / (1 + MSE/65025)      rango (0.5, 1], más discriminativo cerca de 1
+- ``"exponential"``         exp(-MSE_norm / scale)   rango (0, 1], escala ajustable
+- ``"ssim"``                SSIM mapeado a [0, 1]    requiere scikit-image, métrica perceptual
+- ``"inverse_mse"``         1 / (1 + MSE)            rango (0, 0.003] en la práctica, NO recomendado
 """
 
 from __future__ import annotations
 
+import math
 import numpy as np
 from PIL import Image
 
 from src.genetic.individual import Individual
 from src.rendering.canvas import Canvas
+
+FITNESS_METHODS = frozenset(
+    {"linear", "rmse", "inverse_normalized", "exponential", "ssim", "inverse_mse"}
+)
 
 
 def calculate_mse(rendered: np.ndarray, target: np.ndarray) -> float:
@@ -37,24 +47,16 @@ def calculate_mse(rendered: np.ndarray, target: np.ndarray) -> float:
             f"rendered={rendered.shape}, target={target.shape}"
         )
 
-    # Convertir a float64 para evitar overflow en la resta
     rendered_f = rendered.astype(np.float64)
     target_f = target.astype(np.float64)
-
-    # Calcular diferencias al cuadrado
     diff_squared = (rendered_f - target_f) ** 2
-
-    # MSE promedio sobre todos los píxeles y canales
-    mse = np.mean(diff_squared)
-
-    return float(mse)
+    return float(np.mean(diff_squared))
 
 
 def calculate_normalized_mse(rendered: np.ndarray, target: np.ndarray) -> float:
     """
     Calcula el MSE normalizado en el rango [0, 1].
 
-    Útil para comparar fitness entre imágenes de diferentes tamaños.
     El valor máximo posible de MSE es 255² = 65025.
 
     Args:
@@ -64,57 +66,91 @@ def calculate_normalized_mse(rendered: np.ndarray, target: np.ndarray) -> float:
     Returns:
         Valor MSE normalizado (0 = idénticas, 1 = máxima diferencia).
     """
-    mse = calculate_mse(rendered, target)
-    max_mse = 255.0**2  # Máxima diferencia posible
-    return mse / max_mse
+    return calculate_mse(rendered, target) / (255.0 ** 2)
 
 
 def error_to_fitness(error: float) -> float:
     """
-    Convierte una métrica de error a fitness.
-
-    Aplica la transformación:
-
-        fitness = 1 / (1 + error)
+    Convierte una métrica de error a fitness con ``1 / (1 + error)``.
 
     Args:
         error: Error no negativo (0 = ajuste perfecto).
 
     Returns:
-        Fitness en el rango (0, 1], donde valores más altos son mejores.
-
-    Raises:
-        ValueError: Si el error es negativo.
+        Fitness en el rango (0, 1].
     """
     if error < 0:
         raise ValueError(f"El error debe ser no negativo, recibido: {error}")
-
     return 1.0 / (1.0 + error)
 
 
 def calculate_fitness(
-    rendered: np.ndarray, target: np.ndarray, normalize_error: bool = False
+    rendered: np.ndarray,
+    target: np.ndarray,
+    normalize_error: bool = False,
+) -> float:
+    """Calcula fitness con ``inverse_mse`` o ``inverse_normalized`` según ``normalize_error``."""
+    if normalize_error:
+        return error_to_fitness(calculate_normalized_mse(rendered, target))
+    return error_to_fitness(calculate_mse(rendered, target))
+
+
+def compute_fitness(
+    rendered: np.ndarray,
+    target: np.ndarray,
+    method: str = "linear",
+    exponential_scale: float = 0.1,
 ) -> float:
     """
-    Calcula fitness entre una imagen renderizada y la imagen objetivo.
-
-    Si `normalize_error=True`, primero normaliza el MSE a [0, 1] y luego aplica
-    la transformación a fitness.
+    Calcula el fitness entre dos imágenes con el método especificado.
 
     Args:
-        rendered: Array de la imagen renderizada.
-        target: Array de la imagen objetivo.
-        normalize_error: Si True, usa MSE normalizado antes de convertir.
+        rendered: Imagen renderizada como array uint8 (H, W, 3).
+        target:   Imagen objetivo como array uint8 (H, W, 3).
+        method:   Uno de los métodos en :data:`FITNESS_METHODS`.
+        exponential_scale: Escala para el método ``"exponential"``.
+            Valores menores = curva más pronunciada (mayor presión selectiva).
 
     Returns:
-        Valor de fitness (mayor es mejor).
-    """
-    if normalize_error:
-        error = calculate_normalized_mse(rendered, target)
-    else:
-        error = calculate_mse(rendered, target)
+        Valor de fitness en (0, 1] (mayor es mejor).
 
-    return error_to_fitness(error)
+    Raises:
+        ValueError: Si ``method`` no es reconocido.
+        ImportError: Si ``method="ssim"`` y scikit-image no está instalado.
+    """
+    if method not in FITNESS_METHODS:
+        raise ValueError(
+            f"Método de fitness desconocido: {method!r}. "
+            f"Válidos: {sorted(FITNESS_METHODS)}"
+        )
+
+    if method == "inverse_mse":
+        return error_to_fitness(calculate_mse(rendered, target))
+
+    nmse = calculate_normalized_mse(rendered, target)
+
+    if method == "linear":
+        return 1.0 - nmse
+
+    if method == "rmse":
+        return 1.0 - math.sqrt(nmse)
+
+    if method == "inverse_normalized":
+        return error_to_fitness(nmse)
+
+    if method == "exponential":
+        return math.exp(-nmse / max(exponential_scale, 1e-9))
+
+    # method == "ssim"
+    try:
+        from skimage.metrics import structural_similarity as ssim_fn  # type: ignore
+    except ImportError as exc:
+        raise ImportError(
+            "El método 'ssim' requiere scikit-image: pip install scikit-image"
+        ) from exc
+    score = ssim_fn(rendered, target, channel_axis=2, data_range=255)
+    # ssim ∈ [-1, 1] → mapeamos a [0, 1]
+    return float((score + 1.0) / 2.0)
 
 
 class FitnessEvaluator:
@@ -125,19 +161,30 @@ class FitnessEvaluator:
     el fitness de múltiples individuos de forma eficiente.
 
     Attributes:
-        target: Array NumPy de la imagen objetivo.
-        canvas: Canvas para renderizar individuos.
-        evaluations: Contador de evaluaciones realizadas.
+        target:            Array NumPy de la imagen objetivo.
+        canvas:            Canvas para renderizar individuos.
+        method:            Método de fitness activo.
+        exponential_scale: Escala para el método exponencial.
+        evaluations:       Contador de evaluaciones realizadas.
     """
 
-    def __init__(self, target_image: Image.Image | np.ndarray, normalize: bool = False):
+    def __init__(
+        self,
+        target_image: Image.Image | np.ndarray,
+        method: str = "linear",
+        exponential_scale: float = 0.1,
+        # normalize mantenido para compatibilidad, ignorado si method != "linear"
+        normalize: bool = False,
+    ):
         """
         Inicializa el evaluador.
 
         Args:
-            target_image: Imagen objetivo (PIL Image o NumPy array).
-            normalize: Si True, normaliza el error MSE a [0, 1] antes de
-                convertir a fitness.
+            target_image:      Imagen objetivo (PIL Image o NumPy array).
+            method:            Método de fitness. Ver :data:`FITNESS_METHODS`.
+            exponential_scale: Escala para método ``"exponential"``.
+            normalize:         Obsoleto. Si True y method="linear",
+                               usa ``"inverse_normalized"`` (compatibilidad).
         """
         if isinstance(target_image, Image.Image):
             target_image = target_image.convert("RGB")
@@ -147,8 +194,23 @@ class FitnessEvaluator:
             self.target = target_image.astype(np.uint8)
             height, width = target_image.shape[:2]
 
+        # Backward-compat: normalize=True equivale a inverse_normalized
+        if normalize and method == "linear":
+            method = "inverse_normalized"
+
+        if method not in FITNESS_METHODS:
+            raise ValueError(
+                f"Método de fitness desconocido: {method!r}. "
+                f"Válidos: {sorted(FITNESS_METHODS)}"
+            )
+
+        # Cache float32 del target: evita reconversión en cada evaluación.
+        # El target nunca cambia; rendered sí se recalcula cada vez.
+        self._target_f32 = self.target.astype(np.float32)
+
         self.canvas = Canvas(width=width, height=height)
-        self.normalize = normalize
+        self.method = method
+        self.exponential_scale = exponential_scale
         self.evaluations = 0
 
     @property
@@ -161,12 +223,45 @@ class FitnessEvaluator:
         """Alto de la imagen objetivo."""
         return self.canvas.height
 
+    def _compute_fitness_fast(self, rendered: np.ndarray) -> float:
+        """
+        Calcula fitness usando el target pre-convertido a float32.
+
+        Evita reconvertir self.target en cada llamada. SSIM delega al path
+        original porque skimage espera uint8.
+
+        Args:
+            rendered: Array uint8 (H, W, 3) recién renderizado.
+
+        Returns:
+            Valor de fitness en (0, 1].
+        """
+        if self.method == "ssim":
+            return compute_fitness(
+                rendered, self.target, self.method, self.exponential_scale
+            )
+
+        diff = rendered.astype(np.float32) - self._target_f32
+        # nmse = MSE / 255² ∈ [0, 1]; dot product evita array intermedio de cuadrados
+        nmse = float(np.dot(diff.ravel(), diff.ravel())) / (diff.size * 65025.0)
+
+        if self.method == "linear":
+            return 1.0 - nmse
+        if self.method == "rmse":
+            return 1.0 - math.sqrt(max(nmse, 0.0))
+        if self.method == "inverse_normalized":
+            return 1.0 / (1.0 + nmse)
+        if self.method == "exponential":
+            return math.exp(-nmse / max(self.exponential_scale, 1e-9))
+        # inverse_mse: usa MSE crudo, no normalizado
+        return 1.0 / (1.0 + nmse * 65025.0)
+
     def evaluate(self, individual: Individual) -> float:
         """
         Evalúa el fitness de un individuo.
 
         Renderiza el individuo y calcula fitness contra la imagen objetivo.
-        El resultado se almacena en individual.fitness.
+        El resultado se almacena en ``individual.fitness``.
 
         Args:
             individual: Individuo a evaluar.
@@ -174,20 +269,13 @@ class FitnessEvaluator:
         Returns:
             Valor de fitness (mayor es mejor).
         """
-        # Si ya tiene fitness calculado, devolverlo
         if individual.fitness is not None:
             return individual.fitness
 
-        # Renderizar y calcular fitness
         rendered = self.canvas.render_to_array(individual)
-
-        fitness = calculate_fitness(
-            rendered, self.target, normalize_error=self.normalize
-        )
-
+        fitness = self._compute_fitness_fast(rendered)
         individual.fitness = fitness
         self.evaluations += 1
-
         return fitness
 
     def evaluate_population(self, population: list[Individual]) -> list[float]:

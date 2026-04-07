@@ -82,6 +82,8 @@ class GeneticEngine:
         mutator: Mutator,
         survival_method: Optional[SurvivalMethod] = None,
         offspring_ratio: float = 1.0,
+        fitness_method: str = "linear",
+        fitness_scale: float = 0.1,
     ):
         """
         Args:
@@ -94,9 +96,13 @@ class GeneticEngine:
                 Si es None, se usa supervivencia exclusiva por defecto.
             offspring_ratio: Ratio de hijos a generar respecto al tamaño
                 de la población (K = N * offspring_ratio).
+            fitness_method: Función de fitness a usar.
+            fitness_scale: Escala para el método exponencial.
         """
         self.config = config
-        self.evaluator = FitnessEvaluator(target_image)
+        self.evaluator = FitnessEvaluator(
+            target_image, method=fitness_method, exponential_scale=fitness_scale
+        )
         self.selection = selection_method
         self.crossover = crossover_method
         self.mutator = mutator
@@ -325,6 +331,8 @@ def create_engine(
     survival_method: str = "exclusive",
     survival_selection_method: str = "elite",
     offspring_ratio: float = 1.0,
+    fitness_method: str = "linear",
+    fitness_scale: float = 0.1,
 ) -> GeneticEngine:
     """
     Factory para crear un motor genético configurado.
@@ -398,4 +406,6 @@ def create_engine(
         mutator=mutator,
         survival_method=survival,
         offspring_ratio=offspring_ratio,
+        fitness_method=fitness_method,
+        fitness_scale=fitness_scale,
     )

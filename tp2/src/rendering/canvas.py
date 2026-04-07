@@ -79,14 +79,18 @@ class Canvas:
         """
         Renderiza un individuo a array NumPy.
 
+        Delega en render() (Pillow): la rasterización de polígonos y el
+        alpha compositing de Pillow están implementados en C y son más
+        rápidos que cualquier alternativa pura de numpy para imágenes
+        pequeñas con muchos triángulos.
+
         Args:
             individual: Individuo a renderizar.
 
         Returns:
             Array NumPy de forma (height, width, 3) con valores uint8.
         """
-        image = self.render(individual)
-        return np.array(image, dtype=np.uint8)
+        return np.array(self.render(individual), dtype=np.uint8)
 
     def _draw_triangle(self, image: Image.Image, triangle: Triangle):
         """

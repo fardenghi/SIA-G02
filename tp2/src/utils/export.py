@@ -102,23 +102,35 @@ def save_fitness_plot(history: List[Dict[str, Any]], path: str | Path):
 
 def save_metrics_csv(history: List[Dict[str, Any]], path: str | Path):
     """
-    Guarda las métricas en formato CSV.
+    Guarda las métricas del historial de generaciones en formato CSV usando pandas.
 
     Args:
-        history: Historial de estadísticas.
+        history: Historial de estadísticas por generación.
         path: Ruta del archivo CSV.
     """
-    import csv
-
     if not history:
         return
 
-    fieldnames = list(history[0].keys())
+    import pandas as pd
 
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(history)
+    pd.DataFrame(history).to_csv(path, index=False)
+
+
+def export_triangles_csv(individual: "Individual", path: str | Path, run_id: str | None = None):
+    """
+    Exporta los triángulos del individuo como CSV (una fila por triángulo).
+
+    Columnas: order, x0, y0, x1, y1, x2, y2, r, g, b, alpha[, run_id]
+
+    Args:
+        individual: Individuo con los triángulos.
+        path: Ruta del archivo CSV.
+        run_id: Identificador de corrida opcional.
+    """
+    from src.utils.metrics import MetricsTracker
+
+    df = MetricsTracker.triangles_dataframe(individual, run_id=run_id)
+    df.to_csv(path, index=False)
 
 
 def print_summary(result, output_dir: Path):

@@ -168,9 +168,11 @@ class TestFitnessEvaluator:
         assert all(ind.fitness is not None for ind in population)
 
     def test_normalized_evaluator(self):
-        """Debe normalizar fitness cuando se solicita."""
+        """Debe normalizar fitness cuando se solicita (normalize=True → inverse_normalized)."""
         img = Image.new("RGB", (20, 20))
         evaluator = FitnessEvaluator(img, normalize=True)
+
+        assert evaluator.method == "inverse_normalized"
 
         individual = Individual.random(num_triangles=5)
         fitness = evaluator.evaluate(individual)

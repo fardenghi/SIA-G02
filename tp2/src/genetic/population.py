@@ -9,6 +9,8 @@ from __future__ import annotations
 from typing import List, Callable
 import random
 
+import numpy as np
+
 from src.genetic.individual import Individual
 
 
@@ -98,17 +100,29 @@ class Population:
         """
         Obtiene estadísticas de la población.
 
+        Usa numpy para calcular max/min/mean en un solo pass sobre el array
+        de fitness, evitando tres iteraciones separadas sobre la población.
+
         Returns:
             Diccionario con best_fitness, worst_fitness, avg_fitness, generation.
         """
-        best = self.best
-        worst = self.worst
-
+        fitnesses = np.fromiter(
+            (ind.fitness for ind in self.individuals if ind.fitness is not None),
+            dtype=np.float32,
+        )
+        if fitnesses.size == 0:
+            return {
+                "generation": self.generation,
+                "best_fitness": None,
+                "worst_fitness": None,
+                "avg_fitness": None,
+                "size": len(self),
+            }
         return {
             "generation": self.generation,
-            "best_fitness": best.fitness if best else None,
-            "worst_fitness": worst.fitness if worst else None,
-            "avg_fitness": self.average_fitness,
+            "best_fitness": float(fitnesses.max()),
+            "worst_fitness": float(fitnesses.min()),
+            "avg_fitness": float(fitnesses.mean()),
             "size": len(self),
         }
 

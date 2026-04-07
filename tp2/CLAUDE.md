@@ -215,6 +215,68 @@ Por eso el proyecto debe dejar claros:
 
 ---
 
+## Manejo de datos con pandas
+
+El proyecto usa **pandas** para registrar, comparar y exportar métricas experimentales.
+La clase central es `MetricsTracker` en `src/utils/metrics.py`.
+
+### Qué registra por corrida
+
+Cada llamada a `tracker.record()` en el callback `on_generation` de `main.py` genera una fila con:
+
+| columna | descripción |
+|---|---|
+| `run_id` | timestamp `YYYYMMDD_HHMMSS` único por ejecución |
+| `generation` | número de generación |
+| `best_fitness` | mejor fitness de la población en esa generación |
+| `avg_fitness` | fitness promedio |
+| `worst_fitness` | peor fitness |
+| `error` | `1 - best_fitness` (proxy del MSE normalizado) |
+| `time_s` | segundos transcurridos desde el inicio |
+| `selection` | método de selección configurado |
+| `crossover` | método de cruza configurado |
+| `mutation` | método de mutación configurado |
+| `triangles` | cantidad de triángulos |
+| `population` | tamaño de la población |
+| `survival` | estrategia de supervivencia |
+| `fitness_method` | función de fitness usada |
+| `max_generations` | generaciones máximas configuradas |
+
+### Archivos generados
+
+- `output/metrics.csv` — métricas por generación (activo por defecto, `export_metrics_csv: true`)
+- `output/triangles.csv` — una fila por triángulo con color/posición/alpha (opt-in: `export_triangles_csv: true`)
+
+### Usos principales
+
+```python
+from src.utils.metrics import MetricsTracker
+
+# Cargar una corrida
+df = MetricsTracker.load_csv("output/metrics.csv")
+print(df[["generation", "best_fitness", "error"]].tail())
+
+# Comparar varias corridas
+df = MetricsTracker.compare_runs(["run1/metrics.csv", "run2/metrics.csv"])
+df.groupby("selection")[["best_fitness", "error"]].agg(["min", "max", "mean"])
+
+# Estadísticas de una corrida
+tracker.summary()  # describe() sobre best_fitness, avg_fitness, error, time_s
+
+# Enumeración de triángulos como DataFrame
+df_tri = MetricsTracker.triangles_dataframe(best_individual, run_id="mi_run")
+df_tri.to_csv("triangles.csv", index=False)
+```
+
+### Notas para agentes
+
+- No usar el módulo `csv` de stdlib para métricas: toda exportación pasa por `MetricsTracker` o pandas directamente.
+- `save_metrics_csv` en `export.py` también usa pandas internamente.
+- El `run_id` se genera en `main.py` como `datetime.now().strftime("%Y%m%d_%H%M%S")` y se pasa al tracker y a los exports de triángulos.
+- Para experimentos masivos: generar una corrida por config, guardar el CSV, luego `compare_runs([...])` para el análisis.
+
+---
+
 ## Fuente de verdad para este archivo
 Este archivo resume la consigna del TP2 y los contenidos de teoría vistos en clase sobre Algoritmos Genéticos. Si hay dudas, priorizar siempre:
 
