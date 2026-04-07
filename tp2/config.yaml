@@ -39,7 +39,7 @@ fitness:
   #   inverse_mse        → 1 / (1 + MSE)            (0, 0.003]  NO recomendado
   #   detail_weighted    → MSE ponderado por bordes  [0, 1]  upweightea regiones con detalle;
   #                         útil cuando hay fondo liso + símbolo pequeño
-  method: "detail_weighted"
+  method: "inverse_normalized"
   # Escala para método exponencial (menor = curva más pronunciada)
   exponential_scale: 0.1
   # Peso base para regiones lisas en detail_weighted.
@@ -74,7 +74,7 @@ mutation:
   #         "uniform_multigen"   → cada triángulo muta independientemente con gene_probability
   #         "complete"           → muta todos los triángulos
   #         "error_map_guided"   → sesga la mutación hacia triángulos en zonas con mayor error
-  method: "error_map_guided"
+  method: "uniform_multigen"
   # Probabilidad de mutar un individuo (Pm) — usado por single_gene, limited_multigen, complete
   probability: 0.3
   # Probabilidad de mutar cada gen (triángulo) — usado por uniform_multigen
@@ -139,4 +139,4 @@ output:
 rendering:
   # "cpu" = Pillow (siempre disponible, default)
   # "gpu" = moderngl/OpenGL (requiere: pip install moderngl  o  uv sync --extra gpu)
-  backend: "cpu"
+  backend: "gpu"

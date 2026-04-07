@@ -61,15 +61,27 @@ MSE = (1 / n) × Σ (pixel_original - pixel_renderizado)²
 Fitness = 1 / (1 + MSE)
 ```
 
-Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitness = mejor individuo**.
+Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitness = mejor individuo**. Existen múltiples métodos de evaluación (como `linear`, `rmse`, `exponential`), incluyendo un método especializado `detail_weighted` que otorga mayor peso a mantener detalle y bordes.
 
 ### Operadores Genéticos
 
 | Operador | Métodos Disponibles | Descripción |
 |----------|---------------------|-------------|
-| **Selección** | `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank` (`ranking` alias) | Elige individuos para reproducción |
+| **Selección** | `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank` | Elige individuos para reproducción |
 | **Cruza** | `single_point`, `two_point`, `uniform`, `annular` | Combina genes de dos padres |
-| **Mutación** | Gaussiana | Altera posiciones, colores y orden Z |
+| **Mutación** | `single_gene`, `limited_multigen`, `uniform_multigen`, `complete`, `error_map_guided` | Altera atributos de triángulos. Incluye mutación guiada por mapa de error y control de deltas adaptativo. |
+
+---
+
+## Optimizaciones y Rendimiento
+
+El algoritmo implementa diferentes técnicas para mejorar la convergencia visual, la eficiencia y reducir los tiempos de ejecución:
+
+1. **Mutación Guiada por Mapa de Error (`error_map_guided`)**: En vez de alterar parámetros de forma estocástica pura, se favorece la mutación intencionada de aquellos triángulos ubicados en las zonas funcionales específicas que más difieren de la imagen objetivo original.
+2. **Mutación con Sigma Adaptativo (`adaptive_sigma_enabled`)**: Las magnitudes de mutación (ej. variaciones de color y saltos en la posición) se ajustan dinámicamente. Crecen si se encadenan mejoras constantes en el fitness de la población (exploración a grandes escalas), y decrecen si se percibe un estancamiento (facilita un refinamiento local y detallista o *fine-tuning*).
+3. **Fitness Ponderado por Detalle (`detail_weighted`)**: Para aquellas metas compuestas mayormente de fondos homogéneos con elementos intrincados chicos, los métodos tradicionales desperdician triángulos alisando el fondo. Como alternativa, este método da menor peso al MSE del fondo y escala los castigos en áreas puntillosas con bordes, promoviendo el trazo de figuras más ricas en detalle.
+4. **Parada Temprana (`fitness_threshold`)**: Permite la interrupción temprana del proceso evolutivo, si este verifica que se ha alcanzado el umbral de calidad propuesto por el usuario antes de completar `max_generations`, ahorrando una importante carga computacional.
+5. **Aceleración Renderizada en GPU (` backend: gpu`)**: Evaluando constantemente candidatos el procesamiento del superpuesto traslúcido resulta muy punitivo para el núcleo de CPU base (donde ejecuta en defecto `Pillow`). Seleccionando el *backend* de renderizado por GPU acelerado invoca subrutinas de la tarjeta gráfica a través de OpenGL (`moderngl`), proveyendo mejor soporte frente a crecimientos exponenciales de `population_size` o `num_triangles`. Para activarlo requiera su dependencia extra en la etapa de instalación.
 
 ---
 
@@ -89,6 +101,9 @@ cd tp2
 
 # Sincronizar dependencias (runtime + desarrollo)
 uv sync --dev
+
+# (Opcional) Instalar soporte acelerado de procesamiento de texturas en GPU
+uv sync --dev --extra gpu
 ```
 
 ### Verificar instalación
@@ -236,6 +251,10 @@ output:
   log_interval: 10        # mostrar progreso cada N generaciones
   export_triangles: true  # exportar JSON con triángulos
   plot_fitness: true      # generar gráfico de evolución
+
+# Backend de renderizado
+rendering:
+  backend: "cpu"          # "cpu" (Pillow, fallback) o "gpu" (moderngl)
 ```
 
 Los argumentos CLI **sobreescriben** los valores del archivo YAML.
