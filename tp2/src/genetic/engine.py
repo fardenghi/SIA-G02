@@ -84,6 +84,7 @@ class GeneticEngine:
         offspring_ratio: float = 1.0,
         fitness_method: str = "linear",
         fitness_scale: float = 0.1,
+        renderer: str = "cpu",
     ):
         """
         Args:
@@ -98,10 +99,14 @@ class GeneticEngine:
                 de la población (K = N * offspring_ratio).
             fitness_method: Función de fitness a usar.
             fitness_scale: Escala para el método exponencial.
+            renderer: Backend de renderizado ("cpu" o "gpu").
         """
         self.config = config
         self.evaluator = FitnessEvaluator(
-            target_image, method=fitness_method, exponential_scale=fitness_scale
+            target_image,
+            method=fitness_method,
+            exponential_scale=fitness_scale,
+            renderer=renderer,
         )
         self.selection = selection_method
         self.crossover = crossover_method
@@ -333,6 +338,7 @@ def create_engine(
     offspring_ratio: float = 1.0,
     fitness_method: str = "linear",
     fitness_scale: float = 0.1,
+    renderer: str = "cpu",
 ) -> GeneticEngine:
     """
     Factory para crear un motor genético configurado.
@@ -408,4 +414,5 @@ def create_engine(
         offspring_ratio=offspring_ratio,
         fitness_method=fitness_method,
         fitness_scale=fitness_scale,
+        renderer=renderer,
     )

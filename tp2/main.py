@@ -17,6 +17,7 @@ from PIL import Image
 from src.utils.config import Config, load_config
 from src.genetic.engine import create_engine
 from src.rendering.canvas import Canvas, resize_image
+from src.rendering.gpu_canvas import GPUCanvas, MODERNGL_AVAILABLE
 from src.utils.export import (
     save_result_image,
     export_triangles_json,
@@ -164,6 +165,14 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--renderer",
+        type=str,
+        choices=["cpu", "gpu"],
+        default=None,
+        help="Backend de renderizado: cpu (Pillow, default) o gpu (moderngl/OpenGL)",
+    )
+
+    parser.add_argument(
         "--quiet", "-q", action="store_true", help="Modo silencioso (menos output)"
     )
 
@@ -176,6 +185,7 @@ def setup_callbacks(
     output_dir: Path,
     quiet: bool,
     tracker: MetricsTracker | None = None,
+    renderer: str = "cpu",
 ):
     """
     Configura los callbacks del motor evolutivo.
@@ -187,7 +197,10 @@ def setup_callbacks(
         quiet: Si es True, menos output.
         tracker: Tracker de métricas pandas (opcional).
     """
-    canvas = Canvas(width=engine.width, height=engine.height)
+    if renderer == "gpu" and MODERNGL_AVAILABLE:
+        canvas = GPUCanvas(width=engine.width, height=engine.height)
+    else:
+        canvas = Canvas(width=engine.width, height=engine.height)
     log_interval = config.output.log_interval
     save_interval = config.output.save_interval
     start_time = time.time()
@@ -243,6 +256,7 @@ def main():
         "save_interval": args.save_interval,
         "fitness_method": args.fitness,
         "fitness_scale": args.fitness_scale,
+        "renderer": args.renderer,
     }
     # Filtrar None
     cli_args = {k: v for k, v in cli_args.items() if v is not None}
@@ -309,10 +323,11 @@ def main():
         offspring_ratio=config.survival.offspring_ratio,
         fitness_method=config.fitness.method,
         fitness_scale=config.fitness.exponential_scale,
+        renderer=config.rendering.backend,
     )
 
     # Configurar callbacks
-    setup_callbacks(engine, config, output_dir, args.quiet, tracker=tracker)
+    setup_callbacks(engine, config, output_dir, args.quiet, tracker=tracker, renderer=config.rendering.backend)
 
     # Ejecutar evolución
     if not args.quiet:

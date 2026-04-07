@@ -101,6 +101,13 @@ class SurvivalConfig:
 
 
 @dataclass
+class RenderingConfig:
+    """Backend de renderizado: 'cpu' (Pillow) o 'gpu' (moderngl/OpenGL)."""
+
+    backend: str = "cpu"
+
+
+@dataclass
 class Config:
     """
     Configuración completa del sistema.
@@ -134,6 +141,9 @@ class Config:
     # Salida
     output: OutputConfig = field(default_factory=OutputConfig)
 
+    # Renderizado
+    rendering: RenderingConfig = field(default_factory=RenderingConfig)
+
     def to_evolution_config(self) -> EvolutionConfig:
         """Convierte a EvolutionConfig para el motor."""
         return EvolutionConfig(
@@ -163,6 +173,7 @@ class Config:
         mutation_data = data.pop("mutation", {})
         survival_data = data.pop("survival", {})
         output_data = data.pop("output", {})
+        rendering_data = data.pop("rendering", {})
 
         # Extraer de secciones legacy si existen
         if "fitness_threshold" not in data and "error_threshold" in data:
@@ -218,6 +229,7 @@ class Config:
             if survival_data
             else SurvivalConfig(),
             output=OutputConfig(**output_data) if output_data else OutputConfig(),
+            rendering=RenderingConfig(**rendering_data) if rendering_data else RenderingConfig(),
         )
 
     @classmethod
@@ -299,6 +311,9 @@ class Config:
 
         if kwargs.get("fitness_scale") is not None:
             new_config.fitness.exponential_scale = kwargs["fitness_scale"]
+
+        if kwargs.get("renderer"):
+            new_config.rendering.backend = kwargs["renderer"]
 
         return new_config
 

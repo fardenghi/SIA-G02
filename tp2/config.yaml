@@ -100,3 +100,9 @@ output:
   export_metrics_csv: true
   # Exportar enumeración de triángulos a CSV (una fila por triángulo)
   export_triangles_csv: false
+
+# Backend de renderizado
+rendering:
+  # "cpu" = Pillow (siempre disponible, default)
+  # "gpu" = moderngl/OpenGL (requiere: pip install moderngl  o  uv sync --extra gpu)
+  backend: "cpu"

@@ -19,6 +19,7 @@ from PIL import Image
 
 from src.genetic.individual import Individual
 from src.rendering.canvas import Canvas
+from src.rendering.gpu_canvas import GPUCanvas, MODERNGL_AVAILABLE
 
 FITNESS_METHODS = frozenset(
     {"linear", "rmse", "inverse_normalized", "exponential", "ssim", "inverse_mse"}
@@ -175,6 +176,7 @@ class FitnessEvaluator:
         exponential_scale: float = 0.1,
         # normalize mantenido para compatibilidad, ignorado si method != "linear"
         normalize: bool = False,
+        renderer: str = "cpu",
     ):
         """
         Inicializa el evaluador.
@@ -208,7 +210,20 @@ class FitnessEvaluator:
         # El target nunca cambia; rendered sí se recalcula cada vez.
         self._target_f32 = self.target.astype(np.float32)
 
-        self.canvas = Canvas(width=width, height=height)
+        if renderer == "gpu":
+            if MODERNGL_AVAILABLE:
+                self.canvas = GPUCanvas(width=width, height=height)
+            else:
+                import warnings
+                warnings.warn(
+                    "moderngl no instalado; usando CPU. "
+                    "Instalar con: pip install moderngl  o  uv sync --extra gpu",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                self.canvas = Canvas(width=width, height=height)
+        else:
+            self.canvas = Canvas(width=width, height=height)
         self.method = method
         self.exponential_scale = exponential_scale
         self.evaluations = 0
