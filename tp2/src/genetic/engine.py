@@ -9,13 +9,15 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
+
+import numpy as np
 from PIL import Image
 
 from src.genetic.individual import Individual
 from src.genetic.population import Population
 from src.genetic.selection import SelectionMethod, create_selection_method
 from src.genetic.crossover import CrossoverMethod, create_crossover_method
-from src.genetic.mutation import Mutator, MutationParams, create_mutation_params
+from src.genetic.mutation import Mutator, MutationParams, MutationType, AdaptiveSigma, create_mutation_params
 from src.genetic.survival import SurvivalMethod, create_survival_method
 from src.fitness.mse import FitnessEvaluator
 
@@ -84,6 +86,7 @@ class GeneticEngine:
         offspring_ratio: float = 1.0,
         fitness_method: str = "linear",
         fitness_scale: float = 0.1,
+        fitness_detail_weight_base: float = 0.3,
         renderer: str = "cpu",
     ):
         """
@@ -99,6 +102,7 @@ class GeneticEngine:
                 de la población (K = N * offspring_ratio).
             fitness_method: Función de fitness a usar.
             fitness_scale: Escala para el método exponencial.
+            fitness_detail_weight_base: Peso base para regiones lisas en detail_weighted.
             renderer: Backend de renderizado ("cpu" o "gpu").
         """
         self.config = config
@@ -107,6 +111,7 @@ class GeneticEngine:
             method=fitness_method,
             exponential_scale=fitness_scale,
             renderer=renderer,
+            detail_weight_base=fitness_detail_weight_base,
         )
         self.selection = selection_method
         self.crossover = crossover_method
@@ -184,6 +189,14 @@ class GeneticEngine:
             Nueva población (siguiente generación).
         """
         pop_size = len(population)
+
+        # Actualizar error map para mutación guiada (una vez por generación)
+        if self.mutator.mutation_type == MutationType.ERROR_MAP_GUIDED:
+            best = max(population.individuals, key=lambda ind: ind.fitness or 0.0)
+            rendered = self.evaluator.canvas.render_to_array(best)
+            diff = rendered.astype(np.float32) - self.evaluator.target.astype(np.float32)
+            error_map = (diff ** 2).mean(axis=2)  # (H, W)
+            self.mutator.set_error_map(error_map)
 
         # Calcular cantidad de hijos a generar (K = N * offspring_ratio)
         num_offspring = max(pop_size, int(pop_size * self.offspring_ratio))
@@ -284,6 +297,9 @@ class GeneticEngine:
                 best_fitness_ever = best_ever.fitness
                 self._notify_improvement(gen, best_ever, best_fitness_ever)
 
+            # Actualizar sigma adaptativo con el mejor fitness de esta generación
+            self.mutator.update(best_fitness_ever)
+
             # Registrar estadísticas
             stats = self.population.get_statistics()
             self.history.append(stats)
@@ -338,7 +354,9 @@ def create_engine(
     offspring_ratio: float = 1.0,
     fitness_method: str = "linear",
     fitness_scale: float = 0.1,
+    fitness_detail_weight_base: float = 0.3,
     renderer: str = "cpu",
+    adaptive_sigma: Optional[AdaptiveSigma] = None,
 ) -> GeneticEngine:
     """
     Factory para crear un motor genético configurado.
@@ -383,7 +401,7 @@ def create_engine(
     # Si se proveen mutation_params, usarlos directamente
     # Si no, crear los params a partir de los argumentos individuales
     if mutation_params is not None:
-        mutator = Mutator(mutation_params)
+        mutator = Mutator(mutation_params, adaptive_sigma=adaptive_sigma)
     else:
         params = create_mutation_params(
             mutation_method=mutation_method,
@@ -391,7 +409,7 @@ def create_engine(
             gene_probability=mutation_gene_probability,
             max_genes=mutation_max_genes,
         )
-        mutator = Mutator(params)
+        mutator = Mutator(params, adaptive_sigma=adaptive_sigma)
 
     # Crear estrategia de supervivencia
     survival = create_survival_method(
@@ -414,5 +432,6 @@ def create_engine(
         offspring_ratio=offspring_ratio,
         fitness_method=fitness_method,
         fitness_scale=fitness_scale,
+        fitness_detail_weight_base=fitness_detail_weight_base,
         renderer=renderer,
     )

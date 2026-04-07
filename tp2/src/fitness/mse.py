@@ -3,12 +3,12 @@ Cálculo de error (MSE) y transformación a fitness.
 
 Métodos de fitness disponibles:
 
-- ``"linear"``              1 - MSE/65025           rango [0, 1], lineal, recomendado
-- ``"rmse"``                1 - sqrt(MSE)/255        rango [0, 1], penaliza menos errores grandes
-- ``"inverse_normalized"``  1 / (1 + MSE/65025)      rango (0.5, 1], más discriminativo cerca de 1
-- ``"exponential"``         exp(-MSE_norm / scale)   rango (0, 1], escala ajustable
-- ``"ssim"``                SSIM mapeado a [0, 1]    requiere scikit-image, métrica perceptual
-- ``"inverse_mse"``         1 / (1 + MSE)            rango (0, 0.003] en la práctica, NO recomendado
+- ``"linear"``           1 - MSE/65025           rango [0, 1], lineal, recomendado
+- ``"rmse"``             1 - sqrt(MSE)/255        rango [0, 1], penaliza menos errores grandes
+- ``"inverse_normalized" 1 / (1 + MSE/65025)      rango (0.5, 1], más discriminativo cerca de 1
+- ``"exponential"``      exp(-MSE_norm / scale)   rango (0, 1], escala ajustable
+- ``"inverse_mse"``      1 / (1 + MSE)            rango (0, 0.003] en la práctica, NO recomendado
+- ``"detail_weighted"``  MSE ponderado por bordes  refuerza regiones con detalle/contraste
 """
 
 from __future__ import annotations
@@ -22,8 +22,51 @@ from src.rendering.canvas import Canvas
 from src.rendering.gpu_canvas import GPUCanvas, MODERNGL_AVAILABLE
 
 FITNESS_METHODS = frozenset(
-    {"linear", "rmse", "inverse_normalized", "exponential", "ssim", "inverse_mse"}
+    {
+        "linear",
+        "rmse",
+        "inverse_normalized",
+        "exponential",
+        "inverse_mse",
+        "detail_weighted",
+    }
 )
+
+
+def compute_detail_weight_map(target: np.ndarray, base: float = 0.3) -> np.ndarray:
+    """
+    Construye un mapa de pesos basado en el gradiente del target.
+
+    Píxeles con alto contraste/borde reciben mayor peso; regiones lisas
+    reciben el peso base. El mapa se normaliza para que su media sea 1,
+    de forma que el weighted-MSE sea comparable en escala al MSE ordinario.
+
+    Algoritmo:
+        1. Convertir target a grises con coeficientes perceptuales.
+        2. Calcular magnitud del gradiente con np.gradient (diferencias centradas).
+        3. Normalizar al rango [0, 1].
+        4. Mezclar con el peso base: weight = base + (1 - base) * grad_norm.
+        5. Dividir por la media para que sum(w) / n = 1.
+
+    Args:
+        target: Array uint8 (H, W, 3) de la imagen objetivo.
+        base:   Fracción de peso mínimo para regiones lisas. 0.0 = solo bordes
+                pesan; 1.0 = equivalente a MSE uniforme. Valor recomendado: 0.3.
+
+    Returns:
+        Array float32 (H, W) de pesos, con media ≈ 1.
+    """
+    gray = (
+        0.299 * target[:, :, 0].astype(np.float32)
+        + 0.587 * target[:, :, 1].astype(np.float32)
+        + 0.114 * target[:, :, 2].astype(np.float32)
+    )
+    gy, gx = np.gradient(gray)
+    grad_mag = np.sqrt(gx**2 + gy**2)
+    grad_norm = grad_mag / (grad_mag.max() + 1e-8)  # [0, 1]
+    weights = base + (1.0 - base) * grad_norm  # [base, 1]
+    weights /= weights.mean() + 1e-8  # media ≈ 1
+    return weights.astype(np.float32)
 
 
 def calculate_mse(rendered: np.ndarray, target: np.ndarray) -> float:
@@ -67,7 +110,7 @@ def calculate_normalized_mse(rendered: np.ndarray, target: np.ndarray) -> float:
     Returns:
         Valor MSE normalizado (0 = idénticas, 1 = máxima diferencia).
     """
-    return calculate_mse(rendered, target) / (255.0 ** 2)
+    return calculate_mse(rendered, target) / (255.0**2)
 
 
 def error_to_fitness(error: float) -> float:
@@ -101,6 +144,7 @@ def compute_fitness(
     target: np.ndarray,
     method: str = "linear",
     exponential_scale: float = 0.1,
+    weight_map: np.ndarray | None = None,
 ) -> float:
     """
     Calcula el fitness entre dos imágenes con el método especificado.
@@ -117,7 +161,6 @@ def compute_fitness(
 
     Raises:
         ValueError: Si ``method`` no es reconocido.
-        ImportError: Si ``method="ssim"`` y scikit-image no está instalado.
     """
     if method not in FITNESS_METHODS:
         raise ValueError(
@@ -142,16 +185,16 @@ def compute_fitness(
     if method == "exponential":
         return math.exp(-nmse / max(exponential_scale, 1e-9))
 
-    # method == "ssim"
-    try:
-        from skimage.metrics import structural_similarity as ssim_fn  # type: ignore
-    except ImportError as exc:
-        raise ImportError(
-            "El método 'ssim' requiere scikit-image: pip install scikit-image"
-        ) from exc
-    score = ssim_fn(rendered, target, channel_axis=2, data_range=255)
-    # ssim ∈ [-1, 1] → mapeamos a [0, 1]
-    return float((score + 1.0) / 2.0)
+    if method == "detail_weighted":
+        w = weight_map if weight_map is not None else compute_detail_weight_map(target)
+        diff = rendered.astype(np.float32) - target.astype(np.float32)
+        sq = diff**2  # (H, W, 3)
+        per_pixel = sq.mean(axis=2)  # (H, W)  — media de canales
+        weighted_mse = float(np.mean(w * per_pixel))
+        weighted_nmse = weighted_mse / 65025.0
+        return 1.0 - min(weighted_nmse, 1.0)
+
+    raise AssertionError(f"Método de fitness no manejado: {method}")
 
 
 class FitnessEvaluator:
@@ -177,6 +220,7 @@ class FitnessEvaluator:
         # normalize mantenido para compatibilidad, ignorado si method != "linear"
         normalize: bool = False,
         renderer: str = "cpu",
+        detail_weight_base: float = 0.3,
     ):
         """
         Inicializa el evaluador.
@@ -210,11 +254,19 @@ class FitnessEvaluator:
         # El target nunca cambia; rendered sí se recalcula cada vez.
         self._target_f32 = self.target.astype(np.float32)
 
+        # Mapa de pesos para detail_weighted: precomputado una sola vez.
+        self._weight_map: np.ndarray | None = None
+        if method == "detail_weighted":
+            self._weight_map = compute_detail_weight_map(
+                self.target, base=detail_weight_base
+            )
+
         if renderer == "gpu":
             if MODERNGL_AVAILABLE:
                 self.canvas = GPUCanvas(width=width, height=height)
             else:
                 import warnings
+
                 warnings.warn(
                     "moderngl no instalado; usando CPU. "
                     "Instalar con: pip install moderngl  o  uv sync --extra gpu",
@@ -242,8 +294,7 @@ class FitnessEvaluator:
         """
         Calcula fitness usando el target pre-convertido a float32.
 
-        Evita reconvertir self.target en cada llamada. SSIM delega al path
-        original porque skimage espera uint8.
+        Evita reconvertir self.target en cada llamada.
 
         Args:
             rendered: Array uint8 (H, W, 3) recién renderizado.
@@ -251,9 +302,13 @@ class FitnessEvaluator:
         Returns:
             Valor de fitness en (0, 1].
         """
-        if self.method == "ssim":
+        if self.method == "detail_weighted":
             return compute_fitness(
-                rendered, self.target, self.method, self.exponential_scale
+                rendered,
+                self.target,
+                self.method,
+                self.exponential_scale,
+                weight_map=self._weight_map,
             )
 
         diff = rendered.astype(np.float32) - self._target_f32

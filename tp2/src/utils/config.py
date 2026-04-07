@@ -13,7 +13,12 @@ from pathlib import Path
 from typing import Optional, Any, Dict
 
 from src.genetic.engine import EvolutionConfig
-from src.genetic.mutation import MutationParams, create_mutation_params
+from src.genetic.mutation import (
+    MutationParams,
+    create_mutation_params,
+    AdaptiveSigma,
+    AdaptiveSigmaConfig,
+)
 
 
 def _legacy_error_threshold_to_fitness(error_threshold: Any) -> Optional[float]:
@@ -29,10 +34,14 @@ def _legacy_error_threshold_to_fitness(error_threshold: Any) -> Optional[float]:
 class FitnessConfig:
     """Configuración de la función de fitness."""
 
-    # Método: "linear", "rmse", "inverse_normalized", "exponential", "ssim", "inverse_mse"
+    # Método: "linear", "rmse", "inverse_normalized", "exponential",
+    #         "inverse_mse", "detail_weighted"
     method: str = "linear"
     # Escala para método exponencial: fitness = exp(-MSE_norm / scale)
     exponential_scale: float = 0.1
+    # Peso base para regiones lisas en detail_weighted (0.0–1.0).
+    # 0.0 = solo pesan los bordes; 1.0 = equivalente a MSE uniforme.
+    detail_weight_base: float = 0.3
 
 
 @dataclass
@@ -62,9 +71,22 @@ class MutationConfig:
     method: str = "uniform_multigen"
     probability: float = 0.3
     gene_probability: float = 0.1
+    max_genes: int = 3
     position_delta: float = 0.1
     color_delta: int = 30
     alpha_delta: float = 0.1
+    # Fracción de mutaciones guiadas (0-1). Solo para error_map_guided.
+    # El resto (1 - guided_ratio) son mutaciones uniformes aleatorias.
+    guided_ratio: float = 0.75
+
+    # Sigma adaptativo: escala los deltas según el progreso real del fitness
+    adaptive_sigma_enabled: bool = False
+    adaptive_sigma_scale_min: float = 0.1
+    adaptive_sigma_scale_max: float = 1.0
+    adaptive_sigma_decay_factor: float = 0.9
+    adaptive_sigma_recovery_factor: float = 1.1
+    adaptive_sigma_window: int = 15
+    adaptive_sigma_min_improvement: float = 1e-4
 
     def to_params(self) -> MutationParams:
         """Convierte a MutationParams."""
@@ -72,10 +94,26 @@ class MutationConfig:
             mutation_method=self.method,
             probability=self.probability,
             gene_probability=self.gene_probability,
+            max_genes=self.max_genes,
             position_delta=self.position_delta,
             color_delta=self.color_delta,
             alpha_delta=self.alpha_delta,
+            guided_ratio=self.guided_ratio,
         )
+
+    def to_adaptive_sigma(self) -> AdaptiveSigma | None:
+        """Crea un AdaptiveSigma si está habilitado, None si no."""
+        if not self.adaptive_sigma_enabled:
+            return None
+        cfg = AdaptiveSigmaConfig(
+            scale_min=self.adaptive_sigma_scale_min,
+            scale_max=self.adaptive_sigma_scale_max,
+            decay_factor=self.adaptive_sigma_decay_factor,
+            recovery_factor=self.adaptive_sigma_recovery_factor,
+            stagnation_window=self.adaptive_sigma_window,
+            min_improvement=self.adaptive_sigma_min_improvement,
+        )
+        return AdaptiveSigma(cfg)
 
 
 @dataclass
@@ -87,7 +125,7 @@ class OutputConfig:
     log_interval: int = 10
     export_triangles: bool = True
     plot_fitness: bool = True
-    export_metrics_csv: bool = True   # métricas por generación (pandas)
+    export_metrics_csv: bool = True  # métricas por generación (pandas)
     export_triangles_csv: bool = False  # enumeración de triángulos en CSV
 
 
@@ -229,7 +267,9 @@ class Config:
             if survival_data
             else SurvivalConfig(),
             output=OutputConfig(**output_data) if output_data else OutputConfig(),
-            rendering=RenderingConfig(**rendering_data) if rendering_data else RenderingConfig(),
+            rendering=RenderingConfig(**rendering_data)
+            if rendering_data
+            else RenderingConfig(),
         )
 
     @classmethod
@@ -300,6 +340,9 @@ class Config:
         if kwargs.get("mutation_method"):
             new_config.mutation.method = kwargs["mutation_method"]
 
+        if kwargs.get("guided_ratio") is not None:
+            new_config.mutation.guided_ratio = kwargs["guided_ratio"]
+
         if kwargs.get("survival_method"):
             new_config.survival.method = kwargs["survival_method"]
 
@@ -352,6 +395,13 @@ class Config:
         if self.fitness_threshold is not None:
             if not 0 < self.fitness_threshold <= 1:
                 errors.append("fitness_threshold debe estar en (0, 1]")
+
+        from src.fitness.mse import FITNESS_METHODS
+
+        if self.fitness.method not in FITNESS_METHODS:
+            errors.append(
+                f"fitness.method debe ser uno de: {', '.join(sorted(FITNESS_METHODS))}"
+            )
 
         return errors
 

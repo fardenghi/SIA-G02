@@ -103,9 +103,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mutation",
         type=str,
-        choices=["single_gene", "limited_multigen", "uniform_multigen", "complete"],
+        choices=[
+            "single_gene",
+            "limited_multigen",
+            "uniform_multigen",
+            "complete",
+            "error_map_guided",
+        ],
         default=None,
         help="Método de mutación",
+    )
+
+    parser.add_argument(
+        "--guided-ratio",
+        type=float,
+        default=None,
+        help=(
+            "Fracción de mutaciones guiadas por error map (solo para error_map_guided). "
+            "Rango [0,1]. Recomendado: 0.7–0.8."
+        ),
     )
 
     parser.add_argument(
@@ -119,7 +135,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fitness",
         type=str,
-        choices=["linear", "rmse", "inverse_normalized", "exponential", "ssim", "inverse_mse"],
+        choices=[
+            "linear",
+            "rmse",
+            "inverse_normalized",
+            "exponential",
+            "inverse_mse",
+            "detail_weighted",
+        ],
         default=None,
         help=(
             "Función de fitness: "
@@ -127,8 +150,8 @@ def parse_args() -> argparse.Namespace:
             "rmse=1-RMSE/255, "
             "inverse_normalized=1/(1+MSE_norm), "
             "exponential=exp(-MSE_norm/scale), "
-            "ssim=similitud estructural (requiere scikit-image), "
-            "inverse_mse=1/(1+MSE) (no recomendado, valores muy pequeños)"
+            "inverse_mse=1/(1+MSE) (no recomendado, valores muy pequeños), "
+            "detail_weighted=MSE ponderado por detalle"
         ),
     )
 
@@ -248,6 +271,7 @@ def main():
         "generations": args.generations,
         "mutation_rate": args.mutation_rate,
         "mutation_method": args.mutation,
+        "guided_ratio": args.guided_ratio,
         "selection": args.selection,
         "crossover": args.crossover,
         "survival_method": args.survival,
@@ -323,11 +347,20 @@ def main():
         offspring_ratio=config.survival.offspring_ratio,
         fitness_method=config.fitness.method,
         fitness_scale=config.fitness.exponential_scale,
+        fitness_detail_weight_base=config.fitness.detail_weight_base,
         renderer=config.rendering.backend,
+        adaptive_sigma=config.mutation.to_adaptive_sigma(),
     )
 
     # Configurar callbacks
-    setup_callbacks(engine, config, output_dir, args.quiet, tracker=tracker, renderer=config.rendering.backend)
+    setup_callbacks(
+        engine,
+        config,
+        output_dir,
+        args.quiet,
+        tracker=tracker,
+        renderer=config.rendering.backend,
+    )
 
     # Ejecutar evolución
     if not args.quiet:
