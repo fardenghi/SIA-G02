@@ -8,11 +8,12 @@ un lienzo blanco.
 
 from __future__ import annotations
 
-from typing import Tuple, List
+from typing import TYPE_CHECKING, Tuple, List
 from PIL import Image, ImageDraw
 import numpy as np
 
-from src.genetic.individual import Individual, Triangle
+if TYPE_CHECKING:
+    from src.genetic.individual import Individual, Triangle
 
 
 class Canvas:
@@ -103,20 +104,24 @@ class Canvas:
             image: Imagen RGBA sobre la cual dibujar.
             triangle: Triángulo a dibujar.
         """
-        # Convertir coordenadas normalizadas a absolutas
         abs_vertices, abs_color = triangle.to_absolute(self.width, self.height)
 
-        # Crear capa temporal para el triángulo
-        overlay = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+        # Bounding box del triángulo: la capa temporal solo cubre esa región,
+        # reduciendo el costo del paste de O(W×H) a O(bbox_area).
+        vx = [v[0] for v in abs_vertices]
+        vy = [v[1] for v in abs_vertices]
+        x0 = max(0, min(vx) - 1)
+        y0 = max(0, min(vy) - 1)
+        x1 = min(self.width,  max(vx) + 2)
+        y1 = min(self.height, max(vy) + 2)
+        bw, bh = x1 - x0, y1 - y0
+        if bw <= 0 or bh <= 0:
+            return
+
+        overlay = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
-
-        # Dibujar triángulo sólido en la capa
-        # Pillow espera una lista de tuplas para el polígono
-        polygon = [tuple(v) for v in abs_vertices]
-        draw.polygon(polygon, fill=abs_color)
-
-        # Componer sobre la imagen principal usando alpha
-        image.paste(overlay, (0, 0), overlay)
+        draw.polygon([(v[0] - x0, v[1] - y0) for v in abs_vertices], fill=abs_color)
+        image.paste(overlay, (x0, y0), overlay)
 
     def save(self, individual: Individual, path: str):
         """

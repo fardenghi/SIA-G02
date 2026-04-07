@@ -19,7 +19,7 @@ genetic:
   # Tamaño de la población
   population_size: 100
   # Número máximo de generaciones
-  max_generations: 5000
+  max_generations: 10000
   # Umbral de fitness para parada temprana. Depende del método de fitness:
   #   linear             → 1 - MSE/65025  ∈ [0,1]  ej: 0.92 ≈ error promedio ~67/canal
   #   rmse               → 1 - sqrt(MSE)/255 ∈ [0,1]
@@ -32,20 +32,25 @@ genetic:
 # Fitness
 fitness:
   # Función de fitness:
-  #   linear             → 1 - MSE/65025          [0, 1]  recomendado, lineal
-  #   rmse               → 1 - sqrt(MSE)/255       [0, 1]  penaliza menos errores grandes
-  #   inverse_normalized → 1 / (1 + MSE/65025)     (0.5, 1]  más discriminativo cerca de 1
-  #   exponential        → exp(-MSE_norm / scale)  (0, 1]  escala configurable
-  #   ssim               → SSIM mapeado a [0,1]    (0, 1]  perceptual, requiere scikit-image
-  #   inverse_mse        → 1 / (1 + MSE)           (0, 0.003]  NO recomendado
-  method: "linear"
+  #   linear             → 1 - MSE/65025           [0, 1]  recomendado, lineal
+  #   rmse               → 1 - sqrt(MSE)/255        [0, 1]  penaliza menos errores grandes
+  #   inverse_normalized → 1 / (1 + MSE/65025)      (0.5, 1]  más discriminativo cerca de 1
+  #   exponential        → exp(-MSE_norm / scale)   (0, 1]  escala configurable
+  #   inverse_mse        → 1 / (1 + MSE)            (0, 0.003]  NO recomendado
+  #   detail_weighted    → MSE ponderado por bordes  [0, 1]  upweightea regiones con detalle;
+  #                         útil cuando hay fondo liso + símbolo pequeño
+  method: "detail_weighted"
   # Escala para método exponencial (menor = curva más pronunciada)
   exponential_scale: 0.1
+  # Peso base para regiones lisas en detail_weighted.
+  # 0.0 = solo pesan los bordes; 1.0 = equivalente a MSE uniforme.
+  # Recomendado: 0.2–0.4 para imágenes con fondo dominante + símbolo pequeño.
+  detail_weight_base: 0.3
 
 # Selección
 selection:
   # Método: "elite", "tournament", "probabilistic_tournament", "roulette", "universal", "boltzmann", "rank" (alias: "ranking")
-  method: "tournament"
+  method: "boltzmann"
   # Tamaño del torneo determinístico
   tournament_size: 3
   # Umbral para torneo probabilístico (0.5 - 1.0)
@@ -64,16 +69,45 @@ crossover:
 
 # Mutación
 mutation:
-  # Probabilidad de mutar un individuo
+  # Método: "single_gene"        → muta exactamente 1 triángulo
+  #         "limited_multigen"   → muta entre 1 y max_genes triángulos
+  #         "uniform_multigen"   → cada triángulo muta independientemente con gene_probability
+  #         "complete"           → muta todos los triángulos
+  #         "error_map_guided"   → sesga la mutación hacia triángulos en zonas con mayor error
+  method: "error_map_guided"
+  # Probabilidad de mutar un individuo (Pm) — usado por single_gene, limited_multigen, complete
   probability: 0.3
-  # Probabilidad de mutar cada gen (triángulo) dado que el individuo muta
+  # Probabilidad de mutar cada gen (triángulo) — usado por uniform_multigen
   gene_probability: 0.1
+  # Máximo de genes a mutar — usado por limited_multigen
+  max_genes: 3
   # Magnitud máxima de perturbación en coordenadas (fracción del tamaño)
   position_delta: 0.1
   # Magnitud máxima de perturbación en color (0-255)
   color_delta: 30
   # Magnitud máxima de perturbación en alfa
   alpha_delta: 0.1
+  # Fracción de mutaciones guiadas por error map (solo para error_map_guided).
+  # El resto (1 - guided_ratio) son mutaciones uniformes aleatorias para mantener diversidad.
+  # Rango: [0.0, 1.0]. Recomendado: 0.7–0.8.
+  guided_ratio: 0.75
+
+  # Sigma adaptativo: escala los deltas según el progreso real del fitness.
+  # Si hay estancamiento → reduce los deltas (refina).
+  # Si hay mejoras reales → los recupera (explora).
+  adaptive_sigma_enabled: true
+  # Ventana de generaciones a observar para detectar estancamiento
+  adaptive_sigma_window: 30
+  # Mejora mínima en la ventana para no considerarse estancamiento
+  adaptive_sigma_min_improvement: 0.0001
+  # Factor de decaimiento cuando hay estancamiento (< 1)
+  adaptive_sigma_decay_factor: 0.9
+  # Factor de recuperación cuando hay mejoras (> 1)
+  adaptive_sigma_recovery_factor: 1.1
+  # Escala mínima permitida (piso de refinamiento)
+  adaptive_sigma_scale_min: 0.1
+  # Escala máxima permitida y valor inicial (techo de exploración)
+  adaptive_sigma_scale_max: 1.0
 
 # Supervivencia
 survival:
@@ -100,3 +134,9 @@ output:
   export_metrics_csv: true
   # Exportar enumeración de triángulos a CSV (una fila por triángulo)
   export_triangles_csv: false
+
+# Backend de renderizado
+rendering:
+  # "cpu" = Pillow (siempre disponible, default)
+  # "gpu" = moderngl/OpenGL (requiere: pip install moderngl  o  uv sync --extra gpu)
+  backend: "cpu"

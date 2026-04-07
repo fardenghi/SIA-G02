@@ -10,6 +10,7 @@ from src.fitness.mse import (
     calculate_normalized_mse,
     error_to_fitness,
     calculate_fitness,
+    compute_fitness,
     FitnessEvaluator,
 )
 
@@ -101,6 +102,13 @@ class TestFitnessTransform:
         fitness = calculate_fitness(black, white)
 
         assert 0 < fitness <= 1
+
+    def test_ssim_is_not_supported_anymore(self):
+        """Debe rechazar ssim porque fue removido del proyecto."""
+        img = np.zeros((10, 10, 3), dtype=np.uint8)
+
+        with pytest.raises(ValueError, match="Método de fitness desconocido"):
+            compute_fitness(img, img, method="ssim")
 
 
 class TestFitnessEvaluator:

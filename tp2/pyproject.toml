@@ -10,7 +10,11 @@ dependencies = [
     "pandas>=2.0.0",
     "Pillow>=10.0.0",
     "PyYAML>=6.0",
-    "scikit-image>=0.21.0",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "moderngl>=5.10.0",
 ]
 
 [dependency-groups]

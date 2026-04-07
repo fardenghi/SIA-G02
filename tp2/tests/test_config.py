@@ -192,6 +192,15 @@ class TestConfig:
 
         assert any("fitness_threshold" in e for e in errors)
 
+    def test_validate_invalid_fitness_method(self):
+        """Debe detectar métodos de fitness removidos o inválidos."""
+        config = Config(target_path="/dummy/path.png")
+        config.fitness.method = "ssim"
+
+        errors = config.validate()
+
+        assert any("fitness.method" in e for e in errors)
+
 
 class TestLoadConfig:
     """Tests para la función load_config."""
