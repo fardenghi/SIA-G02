@@ -61,7 +61,7 @@ MSE = (1 / n) × Σ (pixel_original - pixel_renderizado)²
 Fitness = 1 / (1 + MSE)
 ```
 
-Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitness = mejor individuo**. Existen múltiples métodos de evaluación (como `linear`, `rmse`, `exponential`), incluyendo un método especializado `detail_weighted` que otorga mayor peso a mantener detalle y bordes.
+Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitness = mejor individuo**. Existen múltiples métodos de evaluación (como `linear`, `rmse`, `exponential`, `detail_weighted`) y métricas perceptuales avanzadas (`composite` combinando variables morfológicas o `ssim` evaluando la similitud estructural pura).
 
 ### Operadores Genéticos
 
@@ -82,6 +82,7 @@ El algoritmo implementa diferentes técnicas para mejorar la convergencia visual
 3. **Fitness Ponderado por Detalle (`detail_weighted`)**: Para aquellas metas compuestas mayormente de fondos homogéneos con elementos intrincados chicos, los métodos tradicionales desperdician triángulos alisando el fondo. Como alternativa, este método da menor peso al MSE del fondo y escala los castigos en áreas puntillosas con bordes, promoviendo el trazo de figuras más ricas en detalle.
 4. **Parada Temprana (`fitness_threshold`)**: Permite la interrupción temprana del proceso evolutivo, si este verifica que se ha alcanzado el umbral de calidad propuesto por el usuario antes de completar `max_generations`, ahorrando una importante carga computacional.
 5. **Aceleración Renderizada en GPU (` backend: gpu`)**: Evaluando constantemente candidatos el procesamiento del superpuesto traslúcido resulta muy punitivo para el núcleo de CPU base (donde ejecuta en defecto `Pillow`). Seleccionando el *backend* de renderizado por GPU acelerado invoca subrutinas de la tarjeta gráfica a través de OpenGL (`moderngl`), proveyendo mejor soporte frente a crecimientos exponenciales de `population_size` o `num_triangles`. Para activarlo requiera su dependencia extra en la etapa de instalación.
+6. **Curriculum Learning (Transición Dinámica de Fitness)**: Permite ejecutar tu evaluación bajo dos regímenes. Si se lo configura de modo no-Nulo, el algoritmo inicia la optimización con la función rápida normal en búsqueda de siluetas clave y, cuando detecta un evento de agotamiento (`stagnation_threshold`), gatilla un reinicio algorítmico traspasando la brújula evolutiva hacia una función secundaria detallista (e.j. refinamiento de texturas mediante `transition_methods`). Se acompaña de un reinicio en caliente (Hot Restart) interno que reescala históricos de élites al vuelo eliminando saltos matemáticos bruscos.
 
 ---
 
@@ -221,6 +222,11 @@ genetic:
   population_size: 100
   max_generations: 5000
   fitness_threshold: null  # null = sin parada temprana
+  transition_methods:      # O null para desactivar Curriculum Learning
+    - "ssim"
+    - "detail_weighted"
+  stagnation_threshold: 0.0005
+  max_patience: 20
 
 # Selección
 selection:

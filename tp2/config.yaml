@@ -26,8 +26,19 @@ genetic:
   #   inverse_normalized → 1 / (1 + MSE/65025) ∈ (0.5,1]
   #   exponential        → exp(-NMSE/scale) ∈ (0,1]
   #   inverse_mse        → 1 / (1 + MSE)  ∈ (0,0.003]  (NO recomendado)
-  # null = sin parada temprana, corre hasta max_generations
+  #   null = sin parada temprana, corre hasta max_generations
   fitness_threshold: null
+  
+  # Curriculum Learning: Transición Dinámica de Fitness
+  # Si el aprendizaje se estanca, transiciona cíclicamente entre estos métodos (ej. base -> "ssim" -> "detail_weighted" -> base)
+  # null = deshabilitado. Puede ser un string o una lista de strings.
+  transition_methods:
+    - "detail_weighted"
+    - "edge_loss"
+  # Umbral mínimo de mejora esperado entre generaciones para no considerarlo estancamiento
+  stagnation_threshold: 0.00005
+  # Cantidad máxima de generaciones consecutivas por debajo del umbral antes de cambiar la métrica
+  max_patience: 50
   
 # Fitness
 fitness:
@@ -41,6 +52,7 @@ fitness:
   #                         útil cuando hay fondo liso + símbolo pequeño
   #   composite          → α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss  [0, 1]
   #                         combina estructura, color y bordes; recomendado para imágenes complejas
+  #   ssim               → Índice de Similitud Estructural puro [0, 1] evalúa percepción global
   method: "inverse_normalized"
   # Escala para método exponencial (menor = curva más pronunciada)
   exponential_scale: 0.1

@@ -30,6 +30,8 @@ FITNESS_METHODS = frozenset(
         "inverse_mse",
         "detail_weighted",
         "composite",
+        "ssim",
+        "edge_loss",
     }
 )
 
@@ -309,6 +311,14 @@ def compute_fitness(
         ) / total_w
         return max(0.0, 1.0 - loss)
 
+    if method == "ssim":
+        return compute_ssim(rendered, target)
+
+    if method == "edge_loss":
+        t_edges = target_edges if target_edges is not None else compute_target_edge_map(target)
+        loss = compute_edge_loss(rendered, t_edges)
+        return max(0.0, 1.0 - loss)
+
     raise AssertionError(f"Método de fitness no manejado: {method}")
 
 
@@ -379,9 +389,9 @@ class FitnessEvaluator:
                 self.target, base=detail_weight_base
             )
 
-        # Mapa de bordes para composite: precomputado una sola vez.
+        # Mapa de bordes para composite y edge_loss: precomputado una sola vez.
         self._target_edges: np.ndarray | None = None
-        if method == "composite":
+        if method in {"composite", "edge_loss"}:
             self._target_edges = compute_target_edge_map(self.target)
 
         self.composite_alpha = composite_alpha
@@ -449,6 +459,17 @@ class FitnessEvaluator:
                 composite_gamma=self.composite_gamma,
             )
 
+        if self.method == "edge_loss":
+             return compute_fitness(
+                rendered,
+                self.target,
+                self.method,
+                target_edges=self._target_edges,
+             )
+
+        if self.method == "ssim":
+            return compute_ssim(rendered, self.target)
+
         diff = rendered.astype(np.float32) - self._target_f32
         # nmse = MSE / 255² ∈ [0, 1]; dot product evita array intermedio de cuadrados
         nmse = float(np.dot(diff.ravel(), diff.ravel())) / (diff.size * 65025.0)
@@ -501,3 +522,16 @@ class FitnessEvaluator:
     def reset_counter(self):
         """Reinicia el contador de evaluaciones."""
         self.evaluations = 0
+
+    def preload_maps(self, methods: list[str], detail_weight_base: float = 0.3) -> None:
+        """Precomputa mapas pesados en caso de que vayan a ser utilizados luego en transiciones dinámicas."""
+        if any(m in {"composite", "edge_loss"} for m in methods) and self._target_edges is None:
+            self._target_edges = compute_target_edge_map(self.target)
+        if "detail_weighted" in methods and getattr(self, '_weight_map', None) is None:
+            self._weight_map = compute_detail_weight_map(self.target, base=detail_weight_base)
+
+    def set_method(self, method: str):
+        """Cambia la métrica dinámica de fitness."""
+        if method not in FITNESS_METHODS:
+            raise ValueError(f"Método desconocido: {method}")
+        self.method = method

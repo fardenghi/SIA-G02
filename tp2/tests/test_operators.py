@@ -508,7 +508,7 @@ class TestMutateIndividual:
     def test_no_mutation_when_probability_zero(self):
         """No debe mutar si probabilidad es 0."""
         individual = Individual.random(num_triangles=5)
-        params = MutationParams(probability=0.0)
+        params = MutationParams(probability=0.0, gene_probability=0.0)
 
         mutated = mutate_individual(individual, params)
 

@@ -13,6 +13,7 @@ de los triángulos.
 
 from __future__ import annotations
 
+import copy
 import random
 from dataclasses import dataclass, field
 from enum import Enum
@@ -622,6 +623,7 @@ class Mutator:
                 los deltas de mutación en función del progreso del fitness.
         """
         self.params = params or MutationParams()
+        self._base_params = copy.deepcopy(self.params)
         self._adaptive_sigma = adaptive_sigma
         # Estado precomputado para mutación guiada (actualizado por set_error_map)
         self._integral_map: Optional[np.ndarray] = None   # imagen integral (H+1, W+1)
@@ -681,6 +683,44 @@ class Mutator:
         """
         if self._adaptive_sigma is not None:
             self._adaptive_sigma.update(best_fitness)
+
+    def apply_profile(self, fitness_method: str) -> None:
+        """
+        Ajusta internamente los parámetros de mutación según el método de fitness activo
+        para acoplar la fase de búsqueda (El Pintor, El Restaurador, El Dibujante, El Cirujano).
+        """
+        p = copy.deepcopy(self._base_params)
+        
+        if fitness_method == "ssim":
+            # Fase SSIM (El Restaurador): Micro-mutación estructural
+            p.mutation_type = MutationType.UNIFORM_MULTIGEN
+            p.position_delta = 0.01  # saltos de 1-2 px
+            p.color_delta = 5        # colores estables
+            p.alpha_delta = 0.05
+            p.gene_probability = 0.5 # alto número de genes, pero impacto ínfimo
+            p.field_probability = 1.0
+            
+        elif fitness_method == "edge_loss":
+            # Fase Edge_Loss (El Dibujante Técnico): Mutación direccional guiada
+            p.mutation_type = MutationType.ERROR_MAP_GUIDED
+            p.position_delta = 0.05
+            p.color_delta = 0        # puramente estructural, no toca color
+            p.alpha_delta = 0        # no toca alpha
+            p.guided_ratio = 1.0     # 100% probabilidad hacia mapa de bordes
+            
+        elif fitness_method == "detail_weighted":
+            # Fase Detail_Weighted (El Cirujano): Mutaciones finas y Zonal (Z-Index alto)
+            p.mutation_type = MutationType.SINGLE_GENE
+            p.position_delta = 0.02
+            p.color_delta = 10
+            p.alpha_delta = 0.02
+            p.gene_probability = 0.8 # Altísima probabilidad de _apply_zindex_swap
+            
+        else:
+            # Fase Base MSE/linear/rmse (El Pintor de Brocha Gorda): Exploración original
+            pass
+            
+        self.params = p
 
     def mutate(self, individual: Individual) -> Individual:
         """

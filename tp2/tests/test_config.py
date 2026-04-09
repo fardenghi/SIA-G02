@@ -195,7 +195,7 @@ class TestConfig:
     def test_validate_invalid_fitness_method(self):
         """Debe detectar métodos de fitness removidos o inválidos."""
         config = Config(target_path="/dummy/path.png")
-        config.fitness.method = "ssim"
+        config.fitness.method = "unknown_method"
 
         errors = config.validate()
 

@@ -44,6 +44,9 @@ class EvolutionConfig:
     alpha_min: float = 0.1
     alpha_max: float = 0.8
     elite_count: int = 0
+    stagnation_threshold: float = 0.0005
+    max_patience: int = 20
+    transition_methods: Optional[List[str]] = None
 
 
 @dataclass
@@ -128,6 +131,22 @@ class GeneticEngine:
         self.mutator = mutator
         self.survival = survival_method
         self.offspring_ratio = offspring_ratio
+        
+        self.base_fitness_method = fitness_method
+
+        self.cv_methods: List[str] = []
+        if self.config.transition_methods:
+            self.cv_methods = list(self.config.transition_methods)
+            if self.base_fitness_method not in self.cv_methods:
+                self.cv_methods.insert(0, self.base_fitness_method)
+            
+        self.cv_idx = 0
+        if self.cv_methods and self.base_fitness_method in self.cv_methods:
+            self.cv_idx = self.cv_methods.index(self.base_fitness_method)
+            
+        # Precompute maps for dynamic transitions (AOS optimization)
+        if self.cv_methods:
+            self.evaluator.preload_maps(self.cv_methods, detail_weight_base=fitness_detail_weight_base)
 
         self.population: Optional[Population] = None
         self.history: List[dict] = []
@@ -294,6 +313,9 @@ class GeneticEngine:
         if self.population is None:
             self.initialize_population()
 
+        # Acoplar el perfil de mutación inicial a la fase de fitness correspondiente
+        self.mutator.apply_profile(self.base_fitness_method)
+
         # Evaluar población inicial
         self.evaluate_population(self.population)
 
@@ -306,13 +328,44 @@ class GeneticEngine:
         self.history.append(stats)
         self._notify_generation(0, self.population, stats)
 
+        patience_counter = 0
+
         # Bucle evolutivo principal
         for gen in range(1, self.config.max_generations + 1):
+            previous_gen_best_fitness = self.population.best.fitness
+
             # Evolucionar
             self.population = self.evolve_generation(self.population)
 
-            # Nota: La evaluación de fitness ya se hace dentro de evolve_generation
-            # para los hijos. Los padres que sobreviven ya tienen fitness calculado.
+            # --- Curriculum Learning (Dinámico y Genérico) ---
+            if self.cv_methods and len(self.cv_methods) > 1:
+                current_gen_best_fitness = self.population.best.fitness
+                improvement = current_gen_best_fitness - previous_gen_best_fitness
+                
+                if improvement < self.config.stagnation_threshold:
+                    patience_counter += 1
+                else:
+                    patience_counter = 0
+                
+                # --- El Gatillo de Transición (Hot Restart) ---
+                if patience_counter >= self.config.max_patience:
+                    self.cv_idx = (self.cv_idx + 1) % len(self.cv_methods)
+                    next_method = self.cv_methods[self.cv_idx]
+                    
+                    print(f"\n[Engine] Estancamiento detectado en gen {gen}: Cambiando métrica de fitness a '{next_method}'.")
+                    print("[Engine] Realizando 'Hot Restart': invalidando y reconectando la población base y genotipo Élite al vuelo...")
+                    self.evaluator.set_method(next_method)
+                    self.mutator.apply_profile(next_method)
+                    patience_counter = 0
+                    
+                    # Reinicio en Caliente (Hot Restart)
+                    for ind in self.population.individuals:
+                        ind.fitness = None
+                    
+                    self.evaluate_population(self.population)
+                    
+                    best_ever.fitness = None
+                    best_fitness_ever = self.evaluator.evaluate(best_ever)
 
             # Actualizar mejor global
             current_best = self.population.best

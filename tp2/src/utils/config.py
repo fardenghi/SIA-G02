@@ -175,6 +175,9 @@ class Config:
     population_size: int = 100
     max_generations: int = 5000
     fitness_threshold: Optional[float] = None
+    stagnation_threshold: float = 0.0005
+    max_patience: int = 20
+    transition_methods: Optional[list] = None
 
     # Fitness
     fitness: FitnessConfig = field(default_factory=FitnessConfig)
@@ -201,6 +204,9 @@ class Config:
             alpha_min=self.alpha_min,
             alpha_max=self.alpha_max,
             elite_count=self.survival.elite_count,
+            stagnation_threshold=self.stagnation_threshold,
+            max_patience=self.max_patience,
+            transition_methods=self.transition_methods,
         )
 
     @classmethod
@@ -255,6 +261,14 @@ class Config:
                     genetic_data.get("error_threshold")
                 )
             data.setdefault("fitness_threshold", fitness_threshold)
+            data.setdefault("stagnation_threshold", genetic_data.get("stagnation_threshold", 0.0005))
+            data.setdefault("max_patience", genetic_data.get("max_patience", 20))
+            
+            t_methods = genetic_data.get("transition_methods")
+            if isinstance(t_methods, str):
+                t_methods = [t_methods]
+                
+            data.setdefault("transition_methods", t_methods)
 
         return cls(
             target_path=data.get("target_path"),
@@ -264,6 +278,9 @@ class Config:
             population_size=data.get("population_size", 100),
             max_generations=data.get("max_generations", 5000),
             fitness_threshold=data.get("fitness_threshold"),
+            stagnation_threshold=data.get("stagnation_threshold", 0.0005),
+            max_patience=data.get("max_patience", 20),
+            transition_methods=data.get("transition_methods", None),
             fitness=FitnessConfig(**fitness_data) if fitness_data else FitnessConfig(),
             selection=SelectionConfig(**selection_data)
             if selection_data

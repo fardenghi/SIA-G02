@@ -93,13 +93,22 @@ class EvolutionVisualizer:
 
             with open(csv_path, "r") as f:
                 reader = csv.DictReader(f)
-                return [
-                    {
-                        k: float(v) if v and k != "generation" else (int(v) if v else 0)
-                        for k, v in row.items()
-                    }
-                    for row in reader
-                ]
+                history = []
+                for row in reader:
+                    parsed_row = {}
+                    for k, v in row.items():
+                        if not v:
+                            parsed_row[k] = 0
+                            continue
+                        if k == "generation":
+                            parsed_row[k] = int(float(v))
+                            continue
+                        try:
+                            parsed_row[k] = float(v)
+                        except ValueError:
+                            parsed_row[k] = v
+                    history.append(parsed_row)
+                return history
 
         # Si no hay CSV, intentar reconstruir desde los frames
         return []
@@ -221,17 +230,20 @@ class EvolutionVisualizer:
         self.slider.on_changed(self._on_slider_change)
 
         # Botones de navegación
-        ax_prev = plt.axes([0.25, 0.02, 0.1, 0.04])
-        ax_next = plt.axes([0.65, 0.02, 0.1, 0.04])
-        ax_play = plt.axes([0.45, 0.02, 0.1, 0.04])
+        ax_reset = plt.axes([0.15, 0.02, 0.1, 0.04])
+        ax_prev = plt.axes([0.35, 0.02, 0.1, 0.04])
+        ax_play = plt.axes([0.55, 0.02, 0.1, 0.04])
+        ax_next = plt.axes([0.75, 0.02, 0.1, 0.04])
 
+        self.btn_reset = Button(ax_reset, "⏮ Reiniciar")
         self.btn_prev = Button(ax_prev, "◀ Anterior")
-        self.btn_next = Button(ax_next, "Siguiente ▶")
         self.btn_play = Button(ax_play, "▶ Play")
+        self.btn_next = Button(ax_next, "Siguiente ▶")
 
+        self.btn_reset.on_clicked(self._on_reset)
         self.btn_prev.on_clicked(self._on_prev)
-        self.btn_next.on_clicked(self._on_next)
         self.btn_play.on_clicked(self._on_play)
+        self.btn_next.on_clicked(self._on_next)
 
         # Estado de reproducción
         self.playing = False
@@ -323,6 +335,14 @@ class EvolutionVisualizer:
         """Callback cuando cambia el slider."""
         self.current_frame = int(val)
         self._update_display()
+
+    def _on_reset(self, event):
+        """Callback para botón de reiniciar."""
+        self.current_frame = 0
+        self.slider.set_val(0)
+        # Pause playback to comfortably observe the initial frame
+        if self.playing:
+            self._on_play(None)
 
     def _on_prev(self, event):
         """Callback para botón anterior."""
