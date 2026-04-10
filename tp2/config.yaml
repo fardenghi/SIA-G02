@@ -40,6 +40,14 @@ genetic:
   # Cantidad máxima de generaciones consecutivas por debajo del umbral antes de cambiar la métrica
   max_patience: 50
   
+  # Sembrado inteligente de la población inicial (Grid Seeding).
+  # Fracción [0.0, 1.0] de la población que se pre-inicializa con una aproximación
+  # cubista de la imagen objetivo (grilla de triángulos con color promedio por celda).
+  # El resto (1 - seed_ratio) se inicializa de forma aleatoria para garantizar diversidad genética.
+  # Recomendación: 0.0 = 100% aleatorio (clásico). 0.1 = 10% seeded + 90% aleatorio (Regla del 10%).
+  # Evitar valores > 0.5 para no degradar a un Hill Climber por falta de diversidad.
+  seed_ratio: 0.1
+  
 # Fitness
 fitness:
   # Función de fitness:

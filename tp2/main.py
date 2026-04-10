@@ -382,12 +382,22 @@ def main():
         renderer=config.rendering.backend,
     )
 
-    # Ejecutar evolución
-    if not args.quiet:
-        print("Iniciando evolución...")
-        print("-" * 50)
+    # Pre-visualización de la Generación 0 (impacto del Grid Seeding)
+    if config.seed_ratio > 0.0:
+        engine.initialize_population()
+        engine.evaluate_population(engine.population)
+        seed_preview_path = output_dir / "seed_preview_gen0.png"
+        save_result_image(
+            engine.population.best, engine.width, engine.height, seed_preview_path
+        )
+        if not args.quiet:
+            print(f"[Seed Preview] Generación 0 guardada en: {seed_preview_path}")
+            print(f"  Best fitness gen 0: {engine.population.best.fitness:.6f}")
+            print("-" * 50)
 
+    # Ejecutar evolución
     result = engine.run()
+
 
     if not args.quiet:
         print("-" * 50)

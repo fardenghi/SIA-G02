@@ -47,6 +47,7 @@ class EvolutionConfig:
     stagnation_threshold: float = 0.0005
     max_patience: int = 20
     transition_methods: Optional[List[str]] = None
+    seed_ratio: float = 0.0  # Fracción de la población inicial sembrada por grilla [0.0, 1.0]
 
 
 @dataclass
@@ -194,17 +195,106 @@ class GeneticEngine:
 
     def initialize_population(self) -> Population:
         """
-        Inicializa una población aleatoria.
+        Inicializa la población, opcionalmente sembrando una fracción con individuos
+        pre-calculados por Grilla de Color Promedio ("Grid Seeding").
+
+        La fracción configurada en `seed_ratio` de la población se inicializa con triángulos
+        que cubren una grilla regular de la imagen objetivo, con el color promedio de cada celda.
+        El resto se inicializa de forma aleatoria para garantizar diversidad genética.
 
         Returns:
             Nueva población.
         """
-        self.population = Population.random(
-            size=self.config.population_size,
-            num_triangles=self.config.num_triangles,
-            alpha_min=self.config.alpha_min,
-            alpha_max=self.config.alpha_max,
-        )
+        import numpy as np
+        from src.genetic.individual import Individual, Triangle
+
+        pop_size = self.config.population_size
+        n_triangles = self.config.num_triangles
+
+        # Cuántos individuos sembrados (redondeamos hacia abajo)
+        n_seeded = int(pop_size * max(0.0, min(1.0, self.config.seed_ratio)))
+        n_random = pop_size - n_seeded
+
+        individuals = []
+
+        # --- Siembra por Grilla ---
+        if n_seeded > 0:
+            target = self.evaluator.target  # ndarray (H, W, 3) uint8
+            H, W = target.shape[:2]
+
+            # Calcular dimensiones de la grilla: ~sqrt de triángulos/2 para tener pares de triángulos
+            # Cada celda se cubre con 2 triángulos (triángulo superior-izquierdo + inferior-derecho)
+            n_cells = n_triangles // 2
+            grid_cols = max(1, int(np.ceil(np.sqrt(n_cells * W / H))))
+            grid_rows = max(1, int(np.ceil(n_cells / grid_cols)))
+
+            # Ajustar para no exceder la cantidad de triángulos
+            actual_cells = min(grid_rows * grid_cols, n_cells)
+            grid_cols = max(1, int(np.ceil(np.sqrt(actual_cells * W / H))))
+            grid_rows = max(1, int(np.ceil(actual_cells / grid_cols)))
+
+            cell_w = 1.0 / grid_cols
+            cell_h = 1.0 / grid_rows
+
+            grid_triangles = []
+            for row in range(grid_rows):
+                for col in range(grid_cols):
+                    if len(grid_triangles) >= n_triangles:
+                        break
+
+                    # Esquinas normalizadas de la celda
+                    x0, y0 = col * cell_w, row * cell_h
+                    x1, y1 = x0 + cell_w, y0 + cell_h
+
+                    # Color promedio de la celda (operación vectorial NumPy)
+                    px0 = int(x0 * W)
+                    px1 = int(x1 * W)
+                    py0 = int(y0 * H)
+                    py1 = int(y1 * H)
+                    patch = target[py0:py1, px0:px1]  # (h, w, 3)
+                    if patch.size == 0:
+                        avg_color = (128, 128, 128)
+                    else:
+                        avg_color = tuple(int(c) for c in patch.mean(axis=(0, 1))[:3])
+
+                    alpha = (self.config.alpha_min + self.config.alpha_max) / 2.0
+
+                    # Triángulo superior-izquierdo de la celda
+                    tri_a = Triangle(
+                        vertices=[(x0, y0), (x1, y0), (x0, y1)],
+                        color=(*avg_color, alpha),
+                    )
+                    # Triángulo inferior-derecho de la celda
+                    tri_b = Triangle(
+                        vertices=[(x1, y0), (x1, y1), (x0, y1)],
+                        color=(*avg_color, alpha),
+                    )
+
+                    grid_triangles.append(tri_a)
+                    if len(grid_triangles) < n_triangles:
+                        grid_triangles.append(tri_b)
+
+            # Rellenar con triángulos aleatorios si la grilla no alcanza a cubrir todos
+            while len(grid_triangles) < n_triangles:
+                from src.genetic.individual import Triangle
+                grid_triangles.append(
+                    Triangle.random(alpha_min=self.config.alpha_min, alpha_max=self.config.alpha_max)
+                )
+
+            for _ in range(n_seeded):
+                individuals.append(Individual(triangles=[t.copy() for t in grid_triangles]))
+
+        # --- Individuos aleatorios (restantes) para diversidad genética ---
+        for _ in range(n_random):
+            individuals.append(
+                Individual.random(
+                    num_triangles=n_triangles,
+                    alpha_min=self.config.alpha_min,
+                    alpha_max=self.config.alpha_max,
+                )
+            )
+
+        self.population = Population(individuals=individuals)
         return self.population
 
     def evaluate_population(self, population: Population):

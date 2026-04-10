@@ -178,6 +178,7 @@ class Config:
     stagnation_threshold: float = 0.0005
     max_patience: int = 20
     transition_methods: Optional[list] = None
+    seed_ratio: float = 0.0  # Fracción [0–1] de la pob. inicial sembrada por grilla
 
     # Fitness
     fitness: FitnessConfig = field(default_factory=FitnessConfig)
@@ -207,6 +208,7 @@ class Config:
             stagnation_threshold=self.stagnation_threshold,
             max_patience=self.max_patience,
             transition_methods=self.transition_methods,
+            seed_ratio=self.seed_ratio,
         )
 
     @classmethod
@@ -263,6 +265,7 @@ class Config:
             data.setdefault("fitness_threshold", fitness_threshold)
             data.setdefault("stagnation_threshold", genetic_data.get("stagnation_threshold", 0.0005))
             data.setdefault("max_patience", genetic_data.get("max_patience", 20))
+            data.setdefault("seed_ratio", genetic_data.get("seed_ratio", 0.0))
             
             t_methods = genetic_data.get("transition_methods")
             if isinstance(t_methods, str):
@@ -281,6 +284,7 @@ class Config:
             stagnation_threshold=data.get("stagnation_threshold", 0.0005),
             max_patience=data.get("max_patience", 20),
             transition_methods=data.get("transition_methods", None),
+            seed_ratio=data.get("seed_ratio", 0.0),
             fitness=FitnessConfig(**fitness_data) if fitness_data else FitnessConfig(),
             selection=SelectionConfig(**selection_data)
             if selection_data
