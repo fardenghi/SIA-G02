@@ -395,8 +395,12 @@ def main():
         print()
 
     # Guardar resultados
+    # Guardamos 2 versiones: una en la resolución de entrenamiento y otra en la resolución de la imagen original
     save_result_image(
-        result.best_individual, engine.width, engine.height, output_dir / "result.png"
+        result.best_individual, engine.width, engine.height, output_dir / "result_train_res.png"
+    )
+    save_result_image(
+        result.best_individual, original_size[0], original_size[1], output_dir / "result_high_res.png"
     )
 
     if config.output.export_triangles:

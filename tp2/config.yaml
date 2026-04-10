@@ -34,7 +34,7 @@ genetic:
   # null = deshabilitado. Puede ser un string o una lista de strings.
   transition_methods:
     - "detail_weighted"
-    - "edge_loss"
+    - "ssim"
   # Umbral mínimo de mejora esperado entre generaciones para no considerarlo estancamiento
   stagnation_threshold: 0.00005
   # Cantidad máxima de generaciones consecutivas por debajo del umbral antes de cambiar la métrica
@@ -83,7 +83,7 @@ selection:
 # Cruza (Crossover)
 crossover:
   # Método: "single_point", "two_point", "uniform", "annular"
-  method: "uniform"
+  method: "single_point"
   # Probabilidad de cruza
   probability: 0.8
 

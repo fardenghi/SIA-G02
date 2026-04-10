@@ -498,24 +498,25 @@ class FitnessEvaluator:
         Returns:
             Valor de fitness (mayor es mejor).
         """
+        """
+        Evalúa el fitness de un individuo aisalado.
+        """
         if individual.fitness is not None:
             return individual.fitness
 
-        rendered = self.canvas.render_to_array(individual)
-        fitness = self._compute_fitness_fast(rendered)
+        fitness = self._evaluate_stateless(individual)
         individual.fitness = fitness
         self.evaluations += 1
         return fitness
 
+    def _evaluate_stateless(self, individual: Individual) -> float:
+        """Rutina de renderizado sin tocar contadores globales para hilos."""
+        rendered = self.canvas.render_to_array(individual)
+        return self._compute_fitness_fast(rendered)
+
     def evaluate_population(self, population: list[Individual]) -> list[float]:
         """
-        Evalúa el fitness de toda una población.
-
-        Args:
-            population: Lista de individuos.
-
-        Returns:
-            Lista de valores de fitness.
+        Evalúa el fitness de toda una población de manera secuencial.
         """
         return [self.evaluate(ind) for ind in population]
 

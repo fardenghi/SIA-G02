@@ -39,6 +39,7 @@ class MutationType(Enum):
     UNIFORM_MULTIGEN = "uniform_multigen"
     COMPLETE = "complete"
     ERROR_MAP_GUIDED = "error_map_guided"
+    SSIM_MAP_GUIDED = "ssim_map_guided"
 
 
 @dataclass
@@ -394,6 +395,43 @@ def _mutate_triangle_guided(
     )
 
 
+def _mutate_triangle_ssim(triangle: Triangle, params: MutationParams) -> Triangle:
+    """
+    Mutación específica pro-SSIM: Contracción + Suavizado (Anti-Aliasing).
+    - Contracción: Encoge el triángulo moviendo los vértices hacia el centroide.
+    - Suavizado: Reduce el canal Alpha para difuminar bordes contra el fondo.
+    """
+    # 1. Contracción
+    v_arr = np.array(triangle.vertices, dtype=np.float64)
+    centroid = v_arr.mean(axis=0)
+    
+    new_vertices = []
+    # Encogemos aprox 10-20% hacia el centroide multiplicado por el delta
+    shrink_factor = min(1.0, 5.0 * params.position_delta) 
+    
+    for i in range(3):
+        vx, vy = v_arr[i]
+        cx, cy = centroid
+        nx = vx + (cx - vx) * shrink_factor
+        
+        # micro-jitter
+        nx += random.gauss(0, params.position_delta * 0.1)
+        ny = vy + (cy - vy) * shrink_factor
+        ny += random.gauss(0, params.position_delta * 0.1)
+        
+        new_vertices.append((max(0.0, min(1.0, nx)), max(0.0, min(1.0, ny))))
+            
+    # 2. Suavizado (Anti-Aliasing)
+    r, g, b, a = triangle.color
+    # Bajamos el alpha un porcentaje basado en alpha_delta
+    new_a = max(0.01, a - random.uniform(0, params.alpha_delta))
+    
+    return Triangle(
+        vertices=new_vertices,
+        color=(r, g, b, new_a),
+    )
+
+
 def mutate_error_map_guided(
     individual: Individual,
     params: MutationParams,
@@ -454,6 +492,9 @@ def mutate_error_map_guided(
     )
     global_mean = integral_map[-1, -1] / max(H * W, 1)
     weights = np.where(areas > 0, box_sums / np.maximum(areas, 1), global_mean)
+    
+    # Previene que errores de punto flotante generen probabilidades ínfimamente negativas (ej. -1e-16)
+    weights = np.maximum(weights, 0.0)
 
     w_sum = weights.sum()
     tri_probs = weights / w_sum if w_sum > 1e-12 else np.ones(n) / n
@@ -469,10 +510,14 @@ def mutate_error_map_guided(
     if num_guided > 0:
         k = min(num_guided, n)
         guided_idx = np.random.choice(n, size=k, replace=False, p=tri_probs)
+        is_ssim = params.mutation_type == MutationType.SSIM_MAP_GUIDED
         for idx in guided_idx:
-            new_triangles[idx] = _mutate_triangle_guided(
-                new_triangles[idx], params, sample_cdf, sample_shape
-            )
+            if is_ssim:
+                new_triangles[idx] = _mutate_triangle_ssim(new_triangles[idx], params)
+            else:
+                new_triangles[idx] = _mutate_triangle_guided(
+                    new_triangles[idx], params, sample_cdf, sample_shape
+                )
             mutated.add(int(idx))
 
     remaining = [i for i in range(n) if i not in mutated]
@@ -692,13 +737,13 @@ class Mutator:
         p = copy.deepcopy(self._base_params)
         
         if fitness_method == "ssim":
-            # Fase SSIM (El Restaurador): Micro-mutación estructural
-            p.mutation_type = MutationType.UNIFORM_MULTIGEN
-            p.position_delta = 0.01  # saltos de 1-2 px
-            p.color_delta = 5        # colores estables
-            p.alpha_delta = 0.05
-            p.gene_probability = 0.5 # alto número de genes, pero impacto ínfimo
-            p.field_probability = 1.0
+            # Fase SSIM (El Restaurador): Mutación guiada por mapa local SSIM
+            p.mutation_type = MutationType.SSIM_MAP_GUIDED
+            p.position_delta = 0.02  # Define cuánto se encoge hacia el centroide
+            p.color_delta = 0        # puramente estructural y transparencia
+            p.alpha_delta = 0.05     # Define cuán rápido se suaviza (anti-aliasing)
+            p.gene_probability = 0.2
+            p.guided_ratio = 1.0     # 100% de operaciones apuntadas a los peores bordes SSIM
             
         elif fitness_method == "edge_loss":
             # Fase Edge_Loss (El Dibujante Técnico): Mutación direccional guiada
@@ -753,9 +798,9 @@ class Mutator:
         else:
             effective_params = self.params
 
-        if effective_params.mutation_type == MutationType.ERROR_MAP_GUIDED:
+        if effective_params.mutation_type in {MutationType.ERROR_MAP_GUIDED, MutationType.SSIM_MAP_GUIDED}:
             if self._integral_map is None:
-                # Sin error map todavía (primera generación): fallback uniforme
+                # Sin error map todavía (primera generación o no computado): fallback
                 return mutate_uniform_multigen(individual, effective_params)
             return mutate_error_map_guided(
                 individual, effective_params,
@@ -817,6 +862,7 @@ def create_mutation_params(
         "uniform_multigen": MutationType.UNIFORM_MULTIGEN,
         "complete": MutationType.COMPLETE,
         "error_map_guided": MutationType.ERROR_MAP_GUIDED,
+        "ssim_map_guided": MutationType.SSIM_MAP_GUIDED,
     }
 
     if mutation_method not in method_map:

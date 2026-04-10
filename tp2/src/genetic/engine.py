@@ -128,6 +128,11 @@ class GeneticEngine:
         )
         self.selection = selection_method
         self.crossover = crossover_method
+        self.base_crossover = crossover_method  # Guardar el operador configurado en YAML
+        
+        from src.genetic.selection import TournamentSelection
+        self.base_tournament_size = getattr(self.selection, "tournament_size", 3) if isinstance(self.selection, TournamentSelection) else 3
+        
         self.mutator = mutator
         self.survival = survival_method
         self.offspring_ratio = offspring_ratio
@@ -150,6 +155,10 @@ class GeneticEngine:
 
         self.population: Optional[Population] = None
         self.history: List[dict] = []
+        
+        # --- Computación Evolutiva Avanzada ---
+        self.active_fitness_method = fitness_method
+        self.hall_of_fame = {}  # type: dict[str, Individual]
 
         # Callbacks para eventos
         self._on_generation_callbacks: List[Callable] = []
@@ -233,11 +242,25 @@ class GeneticEngine:
         effective_size = pop_size - elite_count
 
         # Actualizar error map para mutación guiada (una vez por generación)
-        if self.mutator.mutation_type == MutationType.ERROR_MAP_GUIDED:
+        if self.mutator.mutation_type in {MutationType.ERROR_MAP_GUIDED, MutationType.SSIM_MAP_GUIDED}:
             best = max(population.individuals, key=lambda ind: ind.fitness or 0.0)
             rendered = self.evaluator.canvas.render_to_array(best)
-            diff = rendered.astype(np.float32) - self.evaluator.target.astype(np.float32)
-            error_map = (diff ** 2).mean(axis=2)  # (H, W)
+            
+            if self.mutator.mutation_type == MutationType.ERROR_MAP_GUIDED:
+                diff = rendered.astype(np.float32) - self.evaluator.target.astype(np.float32)
+                error_map = (diff ** 2).mean(axis=2)  # (H, W)
+            else:
+                # SSIM_MAP_GUIDED: Extraemos el mapa local de skimage, donde valores bajos indican rotura
+                from skimage.metrics import structural_similarity
+                _, ssim_map = structural_similarity(
+                    self.evaluator.target, rendered, 
+                    channel_axis=-1, data_range=255, full=True
+                )
+                if ssim_map.ndim == 3:
+                    ssim_map = ssim_map.mean(axis=2)
+                # Invertimos (1.0 - SSIM) para que el Mutator (que maximiza sampling en errores altos) ataque estas zonas.
+                error_map = 1.0 - ssim_map
+                
             self.mutator.set_error_map(error_map)
 
         if effective_size == 0:
@@ -257,6 +280,16 @@ class GeneticEngine:
 
         # Cruza y mutación para generar hijos
         offspring = []
+        
+        # --- ELITISMO MULTIOBJETIVO (SALÓN DE LA FAMA) ---
+        # Inyectamos incondicionalmente a los campeones históricos.
+        # Al poner fitness=None, obligamos al motor a re-evaluarlos con la moneda local
+        # ("El Pasaporte Genético") evitando el engaño de Cross-Metric Fitness.
+        for champ in self.hall_of_fame.values():
+            inmigrante = champ.copy()
+            inmigrante.fitness = None
+            offspring.append(inmigrante)
+
         i = 0
         while len(offspring) < num_offspring:
             parent1 = parents[i % len(parents)]
@@ -299,6 +332,25 @@ class GeneticEngine:
             individuals=elites + new_individuals, generation=population.generation + 1
         )
 
+    def _apply_crossover_profile(self, fitness_method: str) -> None:
+        """Cambia dinámicamente el método de cruza según la fase."""
+        from src.genetic.crossover import create_crossover_method
+        if fitness_method in {"ssim", "detail_weighted"}:
+            self.crossover = create_crossover_method("spatial_zindex", probability=self.base_crossover.probability)
+        else:
+            self.crossover = self.base_crossover
+
+    def _apply_selection_profile(self, fitness_method: str) -> None:
+        """Torneo Dinámico: Ajusta la Presión Selectiva acoplando el tamaño del torneo."""
+        from src.genetic.selection import TournamentSelection
+        if isinstance(self.selection, TournamentSelection):
+            if fitness_method in {"ssim", "detail_weighted"}:
+                # Presión Brutal para convergencia fina: 5 veces la configurada por el usuario
+                self.selection.tournament_size = self.base_tournament_size * 5  
+            else:
+                # Presión Baja para exploración (default del yaml)
+                self.selection.tournament_size = self.base_tournament_size
+
     def run(self) -> EvolutionResult:
         """
         Ejecuta el algoritmo genético completo.
@@ -313,8 +365,10 @@ class GeneticEngine:
         if self.population is None:
             self.initialize_population()
 
-        # Acoplar el perfil de mutación inicial a la fase de fitness correspondiente
+        # Acoplar el perfil de mutación y cruza inicial a la fase de fitness correspondiente
         self.mutator.apply_profile(self.base_fitness_method)
+        self._apply_crossover_profile(self.base_fitness_method)
+        self._apply_selection_profile(self.base_fitness_method)
 
         # Evaluar población inicial
         self.evaluate_population(self.population)
@@ -355,7 +409,10 @@ class GeneticEngine:
                     print(f"\n[Engine] Estancamiento detectado en gen {gen}: Cambiando métrica de fitness a '{next_method}'.")
                     print("[Engine] Realizando 'Hot Restart': invalidando y reconectando la población base y genotipo Élite al vuelo...")
                     self.evaluator.set_method(next_method)
+                    self.active_fitness_method = next_method
                     self.mutator.apply_profile(next_method)
+                    self._apply_crossover_profile(next_method)
+                    self._apply_selection_profile(next_method)
                     patience_counter = 0
                     
                     # Reinicio en Caliente (Hot Restart)
@@ -367,8 +424,12 @@ class GeneticEngine:
                     best_ever.fitness = None
                     best_fitness_ever = self.evaluator.evaluate(best_ever)
 
-            # Actualizar mejor global
+            # Actualizar mejor global y Salón de la Fama
             current_best = self.population.best
+            
+            # Actualizamos el Salón de la Fama con el rey local actual
+            self.hall_of_fame[self.active_fitness_method] = current_best.copy()
+            
             if current_best.fitness > best_fitness_ever:
                 best_ever = current_best.copy()
                 best_fitness_ever = best_ever.fitness
