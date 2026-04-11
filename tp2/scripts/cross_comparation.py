@@ -25,7 +25,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.genetic.engine import EvolutionConfig, create_engine
-from src.genetic.mutation import MutationParams
+from src.genetic.mutation import create_mutation_params
 from src.rendering.canvas import resize_image
 
 
@@ -95,6 +95,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-size", type=int, default=128)
     parser.add_argument("--crossover-probability", type=float, default=0.8)
     parser.add_argument("--switch-ratio", type=float, default=0.7)
+    parser.add_argument(
+        "--mutation-method",
+        choices=["single_gene", "limited_multigen", "uniform_multigen", "complete"],
+        default="uniform_multigen",
+        help="Mutation operator",
+    )
+    parser.add_argument("--mutation-probability", type=float, default=0.3)
+    parser.add_argument("--gene-probability", type=float, default=0.1)
+    parser.add_argument("--max-genes", type=int, default=3)
+    parser.add_argument("--position-delta", type=float, default=0.1)
+    parser.add_argument("--color-delta", type=int, default=30)
+    parser.add_argument("--alpha-delta", type=float, default=0.1)
+    parser.add_argument("--field-probability", type=float, default=0.4)
     parser.add_argument("--seed", type=int, default=20260411)
     parser.add_argument("--renderer", choices=["cpu", "gpu"], default="cpu")
     parser.add_argument(
@@ -134,13 +147,15 @@ def build_engine(
         phased_crossover_switch_ratio=args.switch_ratio,
     )
 
-    mutation_params = MutationParams(
-        probability=0.3,
-        gene_probability=0.1,
-        position_delta=0.1,
-        color_delta=30,
-        alpha_delta=0.1,
-        field_probability=0.4,
+    mutation_params = create_mutation_params(
+        mutation_method=args.mutation_method,
+        probability=args.mutation_probability,
+        gene_probability=args.gene_probability,
+        max_genes=args.max_genes,
+        position_delta=args.position_delta,
+        color_delta=args.color_delta,
+        alpha_delta=args.alpha_delta,
+        field_probability=args.field_probability,
     )
 
     return create_engine(
@@ -245,6 +260,14 @@ def run_all_experiments(
         "generations": args.generations,
         "switch_ratio": args.switch_ratio,
         "crossover_probability": args.crossover_probability,
+        "mutation_method": args.mutation_method,
+        "mutation_probability": args.mutation_probability,
+        "gene_probability": args.gene_probability,
+        "max_genes": args.max_genes,
+        "position_delta": args.position_delta,
+        "color_delta": args.color_delta,
+        "alpha_delta": args.alpha_delta,
+        "field_probability": args.field_probability,
         "seed": args.seed,
         "max_size": args.max_size,
         "renderer": args.renderer,
@@ -432,6 +455,11 @@ def main() -> int:
         "Settings: "
         f"runs={args.runs}, generations={args.generations}, population={args.population}, "
         f"triangles={args.triangles}, max_size={args.max_size}, renderer={args.renderer}"
+    )
+    print(
+        "Mutation: "
+        f"method={args.mutation_method}, p={args.mutation_probability}, gp={args.gene_probability}, "
+        f"max_genes={args.max_genes}"
     )
     print("Fitness method fixed to: inverse_normalized")
     print()
