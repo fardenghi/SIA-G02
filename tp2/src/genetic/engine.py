@@ -17,7 +17,13 @@ from src.genetic.individual import Individual
 from src.genetic.population import Population
 from src.genetic.selection import SelectionMethod, create_selection_method
 from src.genetic.crossover import CrossoverMethod, create_crossover_method
-from src.genetic.mutation import Mutator, MutationParams, MutationType, AdaptiveSigma, create_mutation_params
+from src.genetic.mutation import (
+    Mutator,
+    MutationParams,
+    MutationType,
+    AdaptiveSigma,
+    create_mutation_params,
+)
 from src.genetic.survival import SurvivalMethod, create_survival_method
 from src.fitness.mse import FitnessEvaluator
 
@@ -47,7 +53,13 @@ class EvolutionConfig:
     stagnation_threshold: float = 0.0005
     max_patience: int = 20
     transition_methods: Optional[List[str]] = None
-    seed_ratio: float = 0.0  # Fracción de la población inicial sembrada por grilla [0.0, 1.0]
+    seed_ratio: float = (
+        0.0  # Fracción de la población inicial sembrada por grilla [0.0, 1.0]
+    )
+    phased_crossover_enabled: bool = False
+    phased_crossover_early_method: str = "single_point"
+    phased_crossover_late_method: str = "uniform"
+    phased_crossover_switch_ratio: float = 0.6
 
 
 @dataclass
@@ -129,34 +141,66 @@ class GeneticEngine:
         )
         self.selection = selection_method
         self.crossover = crossover_method
-        self.base_crossover = crossover_method  # Guardar el operador configurado en YAML
-        
+        self.base_crossover = (
+            crossover_method  # Guardar el operador configurado en YAML
+        )
+        self._crossover_cache: dict[str, CrossoverMethod] = {
+            type(crossover_method).__name__: crossover_method,
+        }
+        self._phased_active_method_name: Optional[str] = None
+
         from src.genetic.selection import TournamentSelection
-        self.base_tournament_size = getattr(self.selection, "tournament_size", 3) if isinstance(self.selection, TournamentSelection) else 3
-        
+
+        self.base_tournament_size = (
+            getattr(self.selection, "tournament_size", 3)
+            if isinstance(self.selection, TournamentSelection)
+            else 3
+        )
+
         self.mutator = mutator
         self.survival = survival_method
         self.offspring_ratio = offspring_ratio
-        
+
         self.base_fitness_method = fitness_method
+
+        self._phased_crossover_enabled = bool(self.config.phased_crossover_enabled)
+        self._phased_crossover_early_method = self.config.phased_crossover_early_method
+        self._phased_crossover_late_method = self.config.phased_crossover_late_method
+        self._phased_crossover_switch_ratio = max(
+            0.0, min(1.0, self.config.phased_crossover_switch_ratio)
+        )
+
+        if self._phased_crossover_enabled:
+            self._crossover_cache = {
+                self._phased_crossover_early_method: create_crossover_method(
+                    self._phased_crossover_early_method,
+                    probability=self.base_crossover.probability,
+                ),
+                self._phased_crossover_late_method: create_crossover_method(
+                    self._phased_crossover_late_method,
+                    probability=self.base_crossover.probability,
+                ),
+            }
 
         self.cv_methods: List[str] = []
         if self.config.transition_methods:
             self.cv_methods = list(self.config.transition_methods)
             if self.base_fitness_method not in self.cv_methods:
                 self.cv_methods.insert(0, self.base_fitness_method)
-            
+
         self.cv_idx = 0
         if self.cv_methods and self.base_fitness_method in self.cv_methods:
             self.cv_idx = self.cv_methods.index(self.base_fitness_method)
-            
+
         # Precompute maps for dynamic transitions (AOS optimization)
         if self.cv_methods:
-            self.evaluator.preload_maps(self.cv_methods, detail_weight_base=fitness_detail_weight_base)
+            self.evaluator.preload_maps(
+                self.cv_methods, detail_weight_base=fitness_detail_weight_base
+            )
 
         self.population: Optional[Population] = None
         self.history: List[dict] = []
-        
+
         # --- Computación Evolutiva Avanzada ---
         self.active_fitness_method = fitness_method
         self.hall_of_fame = {}  # type: dict[str, Individual]
@@ -277,12 +321,17 @@ class GeneticEngine:
             # Rellenar con triángulos aleatorios si la grilla no alcanza a cubrir todos
             while len(grid_triangles) < n_triangles:
                 from src.genetic.individual import Triangle
+
                 grid_triangles.append(
-                    Triangle.random(alpha_min=self.config.alpha_min, alpha_max=self.config.alpha_max)
+                    Triangle.random(
+                        alpha_min=self.config.alpha_min, alpha_max=self.config.alpha_max
+                    )
                 )
 
             for _ in range(n_seeded):
-                individuals.append(Individual(triangles=[t.copy() for t in grid_triangles]))
+                individuals.append(
+                    Individual(triangles=[t.copy() for t in grid_triangles])
+                )
 
         # --- Individuos aleatorios (restantes) para diversidad genética ---
         for _ in range(n_random):
@@ -319,6 +368,9 @@ class GeneticEngine:
         pop_size = len(population)
         elite_count = min(self.config.elite_count, pop_size)
 
+        # Crossover por fase: temprano (single/two point) -> tardío (uniform)
+        self._apply_phased_crossover(population.generation)
+
         # Elitismo: copiar los mejores individuos antes de cualquier operación
         if elite_count > 0:
             sorted_parents = sorted(
@@ -332,25 +384,34 @@ class GeneticEngine:
         effective_size = pop_size - elite_count
 
         # Actualizar error map para mutación guiada (una vez por generación)
-        if self.mutator.mutation_type in {MutationType.ERROR_MAP_GUIDED, MutationType.SSIM_MAP_GUIDED}:
+        if self.mutator.mutation_type in {
+            MutationType.ERROR_MAP_GUIDED,
+            MutationType.SSIM_MAP_GUIDED,
+        }:
             best = max(population.individuals, key=lambda ind: ind.fitness or 0.0)
             rendered = self.evaluator.canvas.render_to_array(best)
-            
+
             if self.mutator.mutation_type == MutationType.ERROR_MAP_GUIDED:
-                diff = rendered.astype(np.float32) - self.evaluator.target.astype(np.float32)
-                error_map = (diff ** 2).mean(axis=2)  # (H, W)
+                diff = rendered.astype(np.float32) - self.evaluator.target.astype(
+                    np.float32
+                )
+                error_map = (diff**2).mean(axis=2)  # (H, W)
             else:
                 # SSIM_MAP_GUIDED: Extraemos el mapa local de skimage, donde valores bajos indican rotura
                 from skimage.metrics import structural_similarity
+
                 _, ssim_map = structural_similarity(
-                    self.evaluator.target, rendered, 
-                    channel_axis=-1, data_range=255, full=True
+                    self.evaluator.target,
+                    rendered,
+                    channel_axis=-1,
+                    data_range=255,
+                    full=True,
                 )
                 if ssim_map.ndim == 3:
                     ssim_map = ssim_map.mean(axis=2)
                 # Invertimos (1.0 - SSIM) para que el Mutator (que maximiza sampling en errores altos) ataque estas zonas.
                 error_map = 1.0 - ssim_map
-                
+
             self.mutator.set_error_map(error_map)
 
         if effective_size == 0:
@@ -370,7 +431,7 @@ class GeneticEngine:
 
         # Cruza y mutación para generar hijos
         offspring = []
-        
+
         # --- ELITISMO MULTIOBJETIVO (SALÓN DE LA FAMA) ---
         # Inyectamos incondicionalmente a los campeones históricos.
         # Al poner fitness=None, obligamos al motor a re-evaluarlos con la moneda local
@@ -424,19 +485,41 @@ class GeneticEngine:
 
     def _apply_crossover_profile(self, fitness_method: str) -> None:
         """Cambia dinámicamente el método de cruza según la fase."""
+        if self._phased_crossover_enabled:
+            return
         from src.genetic.crossover import create_crossover_method
+
         if fitness_method in {"ssim", "detail_weighted"}:
-            self.crossover = create_crossover_method("spatial_zindex", probability=self.base_crossover.probability)
+            self.crossover = create_crossover_method(
+                "spatial_zindex", probability=self.base_crossover.probability
+            )
         else:
             self.crossover = self.base_crossover
+
+    def _apply_phased_crossover(self, generation: int) -> None:
+        """Selecciona método de cruza según avance global de generaciones."""
+        if not self._phased_crossover_enabled:
+            return
+
+        progress = generation / max(1, self.config.max_generations)
+        method_name = (
+            self._phased_crossover_early_method
+            if progress < self._phased_crossover_switch_ratio
+            else self._phased_crossover_late_method
+        )
+
+        if self._phased_active_method_name != method_name:
+            self.crossover = self._crossover_cache[method_name]
+            self._phased_active_method_name = method_name
 
     def _apply_selection_profile(self, fitness_method: str) -> None:
         """Torneo Dinámico: Ajusta la Presión Selectiva acoplando el tamaño del torneo."""
         from src.genetic.selection import TournamentSelection
+
         if isinstance(self.selection, TournamentSelection):
             if fitness_method in {"ssim", "detail_weighted"}:
                 # Presión Brutal para convergencia fina: 5 veces la configurada por el usuario
-                self.selection.tournament_size = self.base_tournament_size * 5  
+                self.selection.tournament_size = self.base_tournament_size * 5
             else:
                 # Presión Baja para exploración (default del yaml)
                 self.selection.tournament_size = self.base_tournament_size
@@ -457,6 +540,7 @@ class GeneticEngine:
 
         # Acoplar el perfil de mutación y cruza inicial a la fase de fitness correspondiente
         self.mutator.apply_profile(self.base_fitness_method)
+        self._apply_phased_crossover(0)
         self._apply_crossover_profile(self.base_fitness_method)
         self._apply_selection_profile(self.base_fitness_method)
 
@@ -485,41 +569,46 @@ class GeneticEngine:
             if self.cv_methods and len(self.cv_methods) > 1:
                 current_gen_best_fitness = self.population.best.fitness
                 improvement = current_gen_best_fitness - previous_gen_best_fitness
-                
+
                 if improvement < self.config.stagnation_threshold:
                     patience_counter += 1
                 else:
                     patience_counter = 0
-                
+
                 # --- El Gatillo de Transición (Hot Restart) ---
                 if patience_counter >= self.config.max_patience:
                     self.cv_idx = (self.cv_idx + 1) % len(self.cv_methods)
                     next_method = self.cv_methods[self.cv_idx]
-                    
-                    print(f"\n[Engine] Estancamiento detectado en gen {gen}: Cambiando métrica de fitness a '{next_method}'.")
-                    print("[Engine] Realizando 'Hot Restart': invalidando y reconectando la población base y genotipo Élite al vuelo...")
+
+                    print(
+                        f"\n[Engine] Estancamiento detectado en gen {gen}: Cambiando métrica de fitness a '{next_method}'."
+                    )
+                    print(
+                        "[Engine] Realizando 'Hot Restart': invalidando y reconectando la población base y genotipo Élite al vuelo..."
+                    )
                     self.evaluator.set_method(next_method)
                     self.active_fitness_method = next_method
                     self.mutator.apply_profile(next_method)
+                    self._apply_phased_crossover(gen)
                     self._apply_crossover_profile(next_method)
                     self._apply_selection_profile(next_method)
                     patience_counter = 0
-                    
+
                     # Reinicio en Caliente (Hot Restart)
                     for ind in self.population.individuals:
                         ind.fitness = None
-                    
+
                     self.evaluate_population(self.population)
-                    
+
                     best_ever.fitness = None
                     best_fitness_ever = self.evaluator.evaluate(best_ever)
 
             # Actualizar mejor global y Salón de la Fama
             current_best = self.population.best
-            
+
             # Actualizamos el Salón de la Fama con el rey local actual
             self.hall_of_fame[self.active_fitness_method] = current_best.copy()
-            
+
             if current_best.fitness > best_fitness_ever:
                 best_ever = current_best.copy()
                 best_fitness_ever = best_ever.fitness

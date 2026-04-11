@@ -13,7 +13,7 @@ from src.genetic.engine import (
     create_engine,
 )
 from src.genetic.selection import TournamentSelection
-from src.genetic.crossover import SinglePointCrossover
+from src.genetic.crossover import SinglePointCrossover, UniformCrossover
 from src.genetic.mutation import Mutator, MutationParams
 
 
@@ -225,6 +225,24 @@ class TestGeneticEngine:
         # Debe llamar on_generation para cada generación (0 a max)
         assert len(generation_calls) == 6  # 0, 1, 2, 3, 4, 5
         assert 0 in generation_calls
+
+    def test_phased_crossover_switches_to_late_method(self):
+        """Debe cambiar al método tardío al superar switch_ratio."""
+        target = Image.new("RGB", (12, 12), color=(128, 128, 128))
+        config = EvolutionConfig(
+            population_size=10,
+            num_triangles=6,
+            max_generations=6,
+            phased_crossover_enabled=True,
+            phased_crossover_early_method="single_point",
+            phased_crossover_late_method="uniform",
+            phased_crossover_switch_ratio=0.5,
+        )
+        engine = create_engine(target, config, crossover_method="single_point")
+
+        engine.run()
+
+        assert isinstance(engine.crossover, UniformCrossover)
 
     def test_fitness_improves_or_stays(self, simple_engine):
         """El mejor fitness global debe mejorar o mantenerse."""

@@ -94,6 +94,15 @@ crossover:
   method: "single_point"
   # Probabilidad de cruza
   probability: 0.8
+  # Cruza por fases: usa método temprano al inicio y cambia al tardío en switch_ratio * max_generations.
+  # Útil para explorar estructura temprano (one/two-point) y refinar al final (uniform).
+  phased:
+    enabled: true
+    # Si es null, toma el valor de crossover.method
+    early_method: "two_point"
+    late_method: "uniform"
+    # Fracción de avance [0,1] para cambiar de método (ej: 0.6 = 60% de generaciones)
+    switch_ratio: 0.6
 
 # Mutación
 mutation:

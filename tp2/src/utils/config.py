@@ -43,9 +43,9 @@ class FitnessConfig:
     # 0.0 = solo pesan los bordes; 1.0 = equivalente a MSE uniforme.
     detail_weight_base: float = 0.3
     # Pesos para fitness compuesto: 1 - (α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss) / (α+β+γ)
-    composite_alpha: float = 0.5   # peso de (1 - SSIM)
-    composite_beta: float = 0.2    # peso de MSE normalizado
-    composite_gamma: float = 0.3   # peso de EdgeLoss
+    composite_alpha: float = 0.5  # peso de (1 - SSIM)
+    composite_beta: float = 0.2  # peso de MSE normalizado
+    composite_gamma: float = 0.3  # peso de EdgeLoss
 
 
 @dataclass
@@ -66,6 +66,10 @@ class CrossoverConfig:
 
     method: str = "single_point"
     probability: float = 0.8
+    phased_enabled: bool = False
+    early_method: Optional[str] = None
+    late_method: str = "uniform"
+    switch_ratio: float = 0.6
 
 
 @dataclass
@@ -197,6 +201,7 @@ class Config:
 
     def to_evolution_config(self) -> EvolutionConfig:
         """Convierte a EvolutionConfig para el motor."""
+        phased_early_method = self.crossover.early_method or self.crossover.method
         return EvolutionConfig(
             population_size=self.population_size,
             num_triangles=self.num_triangles,
@@ -209,6 +214,10 @@ class Config:
             max_patience=self.max_patience,
             transition_methods=self.transition_methods,
             seed_ratio=self.seed_ratio,
+            phased_crossover_enabled=self.crossover.phased_enabled,
+            phased_crossover_early_method=phased_early_method,
+            phased_crossover_late_method=self.crossover.late_method,
+            phased_crossover_switch_ratio=self.crossover.switch_ratio,
         )
 
     @classmethod
@@ -226,6 +235,9 @@ class Config:
         fitness_data = data.pop("fitness", {})
         selection_data = data.pop("selection", {})
         crossover_data = data.pop("crossover", {})
+        crossover_phased_data = (
+            crossover_data.pop("phased", {}) if isinstance(crossover_data, dict) else {}
+        )
         mutation_data = data.pop("mutation", {})
         survival_data = data.pop("survival", {})
         output_data = data.pop("output", {})
@@ -263,14 +275,16 @@ class Config:
                     genetic_data.get("error_threshold")
                 )
             data.setdefault("fitness_threshold", fitness_threshold)
-            data.setdefault("stagnation_threshold", genetic_data.get("stagnation_threshold", 0.0005))
+            data.setdefault(
+                "stagnation_threshold", genetic_data.get("stagnation_threshold", 0.0005)
+            )
             data.setdefault("max_patience", genetic_data.get("max_patience", 20))
             data.setdefault("seed_ratio", genetic_data.get("seed_ratio", 0.0))
-            
+
             t_methods = genetic_data.get("transition_methods")
             if isinstance(t_methods, str):
                 t_methods = [t_methods]
-                
+
             data.setdefault("transition_methods", t_methods)
 
         return cls(
@@ -289,9 +303,20 @@ class Config:
             selection=SelectionConfig(**selection_data)
             if selection_data
             else SelectionConfig(),
-            crossover=CrossoverConfig(**crossover_data)
+            crossover=CrossoverConfig(
+                **crossover_data,
+                phased_enabled=crossover_phased_data.get("enabled", False),
+                early_method=crossover_phased_data.get("early_method"),
+                late_method=crossover_phased_data.get("late_method", "uniform"),
+                switch_ratio=crossover_phased_data.get("switch_ratio", 0.6),
+            )
             if crossover_data
-            else CrossoverConfig(),
+            else CrossoverConfig(
+                phased_enabled=crossover_phased_data.get("enabled", False),
+                early_method=crossover_phased_data.get("early_method"),
+                late_method=crossover_phased_data.get("late_method", "uniform"),
+                switch_ratio=crossover_phased_data.get("switch_ratio", 0.6),
+            ),
             mutation=MutationConfig(**mutation_data)
             if mutation_data
             else MutationConfig(),
@@ -435,11 +460,34 @@ class Config:
                 errors.append("fitness_threshold debe estar en (0, 1]")
 
         from src.fitness.mse import FITNESS_METHODS
+        from src.genetic.crossover import create_crossover_method
 
         if self.fitness.method not in FITNESS_METHODS:
             errors.append(
                 f"fitness.method debe ser uno de: {', '.join(sorted(FITNESS_METHODS))}"
             )
+
+        try:
+            create_crossover_method(self.crossover.method, self.crossover.probability)
+        except ValueError as exc:
+            errors.append(str(exc))
+
+        if self.crossover.phased_enabled:
+            early_method = self.crossover.early_method or self.crossover.method
+            try:
+                create_crossover_method(early_method, self.crossover.probability)
+            except ValueError as exc:
+                errors.append(f"crossover.early_method inválido: {exc}")
+
+            try:
+                create_crossover_method(
+                    self.crossover.late_method, self.crossover.probability
+                )
+            except ValueError as exc:
+                errors.append(f"crossover.late_method inválido: {exc}")
+
+            if not 0 <= self.crossover.switch_ratio <= 1:
+                errors.append("crossover.switch_ratio debe estar en [0, 1]")
 
         return errors
 
