@@ -257,9 +257,14 @@ class GeneticEngine:
 
         pop_size = self.config.population_size
         n_triangles = self.config.num_triangles
+        shape_type = self.config.shape_type
 
         # Cuántos individuos sembrados (redondeamos hacia abajo)
-        n_seeded = int(pop_size * max(0.0, min(1.0, self.config.seed_ratio)))
+        # Nota: el grid seeding solo aplica al modo triangle.
+        if shape_type == "triangle":
+            n_seeded = int(pop_size * max(0.0, min(1.0, self.config.seed_ratio)))
+        else:
+            n_seeded = 0
         n_random = pop_size - n_seeded
 
         individuals = []
@@ -343,11 +348,11 @@ class GeneticEngine:
                     num_triangles=n_triangles,
                     alpha_min=self.config.alpha_min,
                     alpha_max=self.config.alpha_max,
+                    shape_type=shape_type,
                 )
             )
 
-        self.population = Population(individuals=individuals,
-                                     shape_type=self.config.shape_type)
+        self.population = Population(individuals=individuals)
         return self.population
 
     def evaluate_population(self, population: Population):
