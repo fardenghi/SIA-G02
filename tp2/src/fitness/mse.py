@@ -18,8 +18,7 @@ import numpy as np
 from PIL import Image
 
 from src.genetic.individual import Individual
-from src.rendering.canvas import Canvas
-from src.rendering.gpu_canvas import GPUCanvas, MODERNGL_AVAILABLE
+from src.rendering.factory import create_renderer
 
 FITNESS_METHODS = frozenset(
     {
@@ -299,7 +298,11 @@ def compute_fitness(
     if method == "composite":
         # Fitness = 1 - (α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss) / (α+β+γ)
         ssim_val = compute_ssim(rendered, target)
-        t_edges = target_edges if target_edges is not None else compute_target_edge_map(target)
+        t_edges = (
+            target_edges
+            if target_edges is not None
+            else compute_target_edge_map(target)
+        )
         edge_loss = compute_edge_loss(rendered, t_edges)
         total_w = composite_alpha + composite_beta + composite_gamma
         if total_w < 1e-9:
@@ -315,7 +318,11 @@ def compute_fitness(
         return compute_ssim(rendered, target)
 
     if method == "edge_loss":
-        t_edges = target_edges if target_edges is not None else compute_target_edge_map(target)
+        t_edges = (
+            target_edges
+            if target_edges is not None
+            else compute_target_edge_map(target)
+        )
         loss = compute_edge_loss(rendered, t_edges)
         return max(0.0, 1.0 - loss)
 
@@ -345,6 +352,7 @@ class FitnessEvaluator:
         # normalize mantenido para compatibilidad, ignorado si method != "linear"
         normalize: bool = False,
         renderer: str = "cpu",
+        shape_type: str = "triangle",
         detail_weight_base: float = 0.3,
         composite_alpha: float = 0.5,
         composite_beta: float = 0.2,
@@ -398,21 +406,12 @@ class FitnessEvaluator:
         self.composite_beta = composite_beta
         self.composite_gamma = composite_gamma
 
-        if renderer == "gpu":
-            if MODERNGL_AVAILABLE:
-                self.canvas = GPUCanvas(width=width, height=height)
-            else:
-                import warnings
-
-                warnings.warn(
-                    "moderngl no instalado; usando CPU. "
-                    "Instalar con: pip install moderngl  o  uv sync --extra gpu",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-                self.canvas = Canvas(width=width, height=height)
-        else:
-            self.canvas = Canvas(width=width, height=height)
+        self.canvas = create_renderer(
+            width=width,
+            height=height,
+            backend=renderer,
+            shape_type=shape_type,
+        )
         self.method = method
         self.exponential_scale = exponential_scale
         self.evaluations = 0
@@ -460,12 +459,12 @@ class FitnessEvaluator:
             )
 
         if self.method == "edge_loss":
-             return compute_fitness(
+            return compute_fitness(
                 rendered,
                 self.target,
                 self.method,
                 target_edges=self._target_edges,
-             )
+            )
 
         if self.method == "ssim":
             return compute_ssim(rendered, self.target)
@@ -526,10 +525,15 @@ class FitnessEvaluator:
 
     def preload_maps(self, methods: list[str], detail_weight_base: float = 0.3) -> None:
         """Precomputa mapas pesados en caso de que vayan a ser utilizados luego en transiciones dinámicas."""
-        if any(m in {"composite", "edge_loss"} for m in methods) and self._target_edges is None:
+        if (
+            any(m in {"composite", "edge_loss"} for m in methods)
+            and self._target_edges is None
+        ):
             self._target_edges = compute_target_edge_map(self.target)
-        if "detail_weighted" in methods and getattr(self, '_weight_map', None) is None:
-            self._weight_map = compute_detail_weight_map(self.target, base=detail_weight_base)
+        if "detail_weighted" in methods and getattr(self, "_weight_map", None) is None:
+            self._weight_map = compute_detail_weight_map(
+                self.target, base=detail_weight_base
+            )
 
     def set_method(self, method: str):
         """Cambia la métrica dinámica de fitness."""

@@ -14,6 +14,7 @@ de los triángulos.
 from __future__ import annotations
 
 import copy
+import math
 import random
 from dataclasses import dataclass, field
 from enum import Enum
@@ -21,7 +22,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from src.genetic.individual import Individual, Triangle
+from src.genetic.individual import Ellipse, Individual, ShapeGene, Triangle
 
 
 class MutationType(Enum):
@@ -151,21 +152,91 @@ def mutate_triangle(triangle: Triangle, params: MutationParams) -> Triangle:
     # Mutar vértices
     new_vertices = []
     for x, y in triangle.vertices:
-        new_x = mutate_value(x, params.position_delta, 0.0, 1.0) if random.random() < p else x
-        new_y = mutate_value(y, params.position_delta, 0.0, 1.0) if random.random() < p else y
+        new_x = (
+            mutate_value(x, params.position_delta, 0.0, 1.0)
+            if random.random() < p
+            else x
+        )
+        new_y = (
+            mutate_value(y, params.position_delta, 0.0, 1.0)
+            if random.random() < p
+            else y
+        )
         new_vertices.append((new_x, new_y))
 
     # Mutar color
     r, g, b, a = triangle.color
-    new_r = mutate_int_value(r, params.color_delta, 0, 255) if random.random() < p else r
-    new_g = mutate_int_value(g, params.color_delta, 0, 255) if random.random() < p else g
-    new_b = mutate_int_value(b, params.color_delta, 0, 255) if random.random() < p else b
+    new_r = (
+        mutate_int_value(r, params.color_delta, 0, 255) if random.random() < p else r
+    )
+    new_g = (
+        mutate_int_value(g, params.color_delta, 0, 255) if random.random() < p else g
+    )
+    new_b = (
+        mutate_int_value(b, params.color_delta, 0, 255) if random.random() < p else b
+    )
     new_a = mutate_value(a, params.alpha_delta, 0.0, 1.0) if random.random() < p else a
 
     return Triangle(vertices=new_vertices, color=(new_r, new_g, new_b, new_a))
 
 
-def _apply_zindex_swap(triangles: List[Triangle], probability: float) -> None:
+def mutate_ellipse(ellipse: Ellipse, params: MutationParams) -> Ellipse:
+    """Muta una elipse tocando centro, radios, angulo y color."""
+    p = params.field_probability
+
+    cx, cy = ellipse.center
+    rx, ry = ellipse.radii
+    angle = ellipse.angle
+
+    new_center = (
+        mutate_value(cx, params.position_delta, 0.0, 1.0)
+        if random.random() < p
+        else cx,
+        mutate_value(cy, params.position_delta, 0.0, 1.0)
+        if random.random() < p
+        else cy,
+    )
+    radius_delta = max(params.position_delta * 0.5, 0.01)
+    new_radii = (
+        mutate_value(rx, radius_delta, 0.005, 1.0) if random.random() < p else rx,
+        mutate_value(ry, radius_delta, 0.005, 1.0) if random.random() < p else ry,
+    )
+    angle_delta = max(params.position_delta * math.pi, 0.05)
+    new_angle = (
+        mutate_value(angle, angle_delta, -math.pi, math.pi)
+        if random.random() < p
+        else angle
+    )
+
+    r, g, b, a = ellipse.color
+    new_r = (
+        mutate_int_value(r, params.color_delta, 0, 255) if random.random() < p else r
+    )
+    new_g = (
+        mutate_int_value(g, params.color_delta, 0, 255) if random.random() < p else g
+    )
+    new_b = (
+        mutate_int_value(b, params.color_delta, 0, 255) if random.random() < p else b
+    )
+    new_a = mutate_value(a, params.alpha_delta, 0.0, 1.0) if random.random() < p else a
+
+    return Ellipse(
+        center=new_center,
+        radii=new_radii,
+        angle=new_angle,
+        color=(new_r, new_g, new_b, new_a),
+    )
+
+
+def mutate_gene(gene: ShapeGene, params: MutationParams) -> ShapeGene:
+    if isinstance(gene, Triangle):
+        return mutate_triangle(gene, params)
+    if isinstance(gene, Ellipse):
+        return mutate_ellipse(gene, params)
+    raise TypeError(f"Gen no soportado: {type(gene)!r}")
+
+
+def _apply_zindex_swap(triangles: List[ShapeGene], probability: float) -> None:
     """
     Aplica swap de Z-index (intercambio de posiciones) in-place.
 
@@ -204,12 +275,12 @@ def mutate_single_gene(individual: Individual, params: MutationParams) -> Indivi
     if len(new_triangles) > 0:
         # Elegir exactamente 1 gen al azar
         idx = random.randrange(len(new_triangles))
-        new_triangles[idx] = mutate_triangle(new_triangles[idx], params)
+        new_triangles[idx] = mutate_gene(new_triangles[idx], params)
 
     # Swap de Z-index con probabilidad reducida
     _apply_zindex_swap(new_triangles, params.gene_probability)
 
-    return Individual(triangles=new_triangles)
+    return Individual(triangles=new_triangles, shape_type=individual.shape_type)
 
 
 def mutate_limited_multigen(
@@ -247,12 +318,12 @@ def mutate_limited_multigen(
         indices_to_mutate = random.sample(range(len(new_triangles)), num_to_mutate)
 
         for idx in indices_to_mutate:
-            new_triangles[idx] = mutate_triangle(new_triangles[idx], params)
+            new_triangles[idx] = mutate_gene(new_triangles[idx], params)
 
     # Swap de Z-index
     _apply_zindex_swap(new_triangles, params.gene_probability)
 
-    return Individual(triangles=new_triangles)
+    return Individual(triangles=new_triangles, shape_type=individual.shape_type)
 
 
 def mutate_uniform_multigen(
@@ -283,14 +354,14 @@ def mutate_uniform_multigen(
 
     for triangle in individual.triangles:
         if random.random() < params.gene_probability:
-            new_triangles.append(mutate_triangle(triangle, params))
+            new_triangles.append(mutate_gene(triangle, params))
         else:
             new_triangles.append(triangle.copy())
 
     # Swap de Z-index
     _apply_zindex_swap(new_triangles, params.gene_probability)
 
-    return Individual(triangles=new_triangles)
+    return Individual(triangles=new_triangles, shape_type=individual.shape_type)
 
 
 def mutate_complete(individual: Individual, params: MutationParams) -> Individual:
@@ -317,12 +388,12 @@ def mutate_complete(individual: Individual, params: MutationParams) -> Individua
         return individual.copy()
 
     # Mutar TODOS los triángulos
-    new_triangles = [mutate_triangle(t, params) for t in individual.triangles]
+    new_triangles = [mutate_gene(t, params) for t in individual.triangles]
 
     # Swap de Z-index
     _apply_zindex_swap(new_triangles, params.gene_probability)
 
-    return Individual(triangles=new_triangles)
+    return Individual(triangles=new_triangles, shape_type=individual.shape_type)
 
 
 def _mutate_triangle_guided(
@@ -365,8 +436,12 @@ def _mutate_triangle_guided(
             if guided_mask[i]:
                 px, py = int(pxs[g]), int(pys[g])
                 new_vertices[i] = (
-                    max(0.0, min(1.0, px / sw + random.gauss(0, params.position_delta))),
-                    max(0.0, min(1.0, py / sh + random.gauss(0, params.position_delta))),
+                    max(
+                        0.0, min(1.0, px / sw + random.gauss(0, params.position_delta))
+                    ),
+                    max(
+                        0.0, min(1.0, py / sh + random.gauss(0, params.position_delta))
+                    ),
                 )
                 g += 1
             else:
@@ -384,14 +459,77 @@ def _mutate_triangle_guided(
 
     p = params.field_probability
     r, g_c, b, a = triangle.color
-    new_r = mutate_int_value(r, params.color_delta, 0, 255) if random.random() < p else r
-    new_g_c = mutate_int_value(g_c, params.color_delta, 0, 255) if random.random() < p else g_c
-    new_b = mutate_int_value(b, params.color_delta, 0, 255) if random.random() < p else b
+    new_r = (
+        mutate_int_value(r, params.color_delta, 0, 255) if random.random() < p else r
+    )
+    new_g_c = (
+        mutate_int_value(g_c, params.color_delta, 0, 255)
+        if random.random() < p
+        else g_c
+    )
+    new_b = (
+        mutate_int_value(b, params.color_delta, 0, 255) if random.random() < p else b
+    )
     new_a = mutate_value(a, params.alpha_delta, 0.0, 1.0) if random.random() < p else a
 
     return Triangle(
         vertices=new_vertices,
         color=(new_r, new_g_c, new_b, new_a),
+    )
+
+
+def _mutate_ellipse_guided(
+    ellipse: Ellipse,
+    params: MutationParams,
+    sample_cdf: np.ndarray,
+    sample_shape: Tuple[int, int],
+) -> Ellipse:
+    """Muta una elipse sesgando su centro hacia zonas de alto error."""
+    sh, sw = sample_shape
+    cx, cy = ellipse.center
+    rx, ry = ellipse.radii
+
+    if random.random() < params.guided_ratio:
+        u = np.random.random()
+        pixel_index = int(np.searchsorted(sample_cdf, u).clip(0, len(sample_cdf) - 1))
+        py, px = divmod(pixel_index, sw)
+        new_center = (
+            max(0.0, min(1.0, px / sw + random.gauss(0, params.position_delta))),
+            max(0.0, min(1.0, py / sh + random.gauss(0, params.position_delta))),
+        )
+    else:
+        new_center = (
+            mutate_value(cx, params.position_delta, 0.0, 1.0),
+            mutate_value(cy, params.position_delta, 0.0, 1.0),
+        )
+
+    radius_delta = max(params.position_delta * 0.5, 0.01)
+    new_radii = (
+        mutate_value(rx, radius_delta, 0.005, 1.0),
+        mutate_value(ry, radius_delta, 0.005, 1.0),
+    )
+    new_angle = mutate_value(
+        ellipse.angle, max(params.position_delta * math.pi, 0.05), -math.pi, math.pi
+    )
+
+    p = params.field_probability
+    r, g, b, a = ellipse.color
+    new_r = (
+        mutate_int_value(r, params.color_delta, 0, 255) if random.random() < p else r
+    )
+    new_g = (
+        mutate_int_value(g, params.color_delta, 0, 255) if random.random() < p else g
+    )
+    new_b = (
+        mutate_int_value(b, params.color_delta, 0, 255) if random.random() < p else b
+    )
+    new_a = mutate_value(a, params.alpha_delta, 0.0, 1.0) if random.random() < p else a
+
+    return Ellipse(
+        center=new_center,
+        radii=new_radii,
+        angle=new_angle,
+        color=(new_r, new_g, new_b, new_a),
     )
 
 
@@ -404,32 +542,84 @@ def _mutate_triangle_ssim(triangle: Triangle, params: MutationParams) -> Triangl
     # 1. Contracción
     v_arr = np.array(triangle.vertices, dtype=np.float64)
     centroid = v_arr.mean(axis=0)
-    
+
     new_vertices = []
     # Encogemos aprox 10-20% hacia el centroide multiplicado por el delta
-    shrink_factor = min(1.0, 5.0 * params.position_delta) 
-    
+    shrink_factor = min(1.0, 5.0 * params.position_delta)
+
     for i in range(3):
         vx, vy = v_arr[i]
         cx, cy = centroid
         nx = vx + (cx - vx) * shrink_factor
-        
+
         # micro-jitter
         nx += random.gauss(0, params.position_delta * 0.1)
         ny = vy + (cy - vy) * shrink_factor
         ny += random.gauss(0, params.position_delta * 0.1)
-        
+
         new_vertices.append((max(0.0, min(1.0, nx)), max(0.0, min(1.0, ny))))
-            
+
     # 2. Suavizado (Anti-Aliasing)
     r, g, b, a = triangle.color
     # Bajamos el alpha un porcentaje basado en alpha_delta
     new_a = max(0.01, a - random.uniform(0, params.alpha_delta))
-    
+
     return Triangle(
         vertices=new_vertices,
         color=(r, g, b, new_a),
     )
+
+
+def _mutate_ellipse_ssim(ellipse: Ellipse, params: MutationParams) -> Ellipse:
+    """Mutacion pro-SSIM para elipses: contraccion suave y menor alpha."""
+    cx, cy = ellipse.center
+    rx, ry = ellipse.radii
+    shrink_factor = min(0.5, max(0.05, 4.0 * params.position_delta))
+
+    new_center = (
+        max(0.0, min(1.0, cx + random.gauss(0, params.position_delta * 0.1))),
+        max(0.0, min(1.0, cy + random.gauss(0, params.position_delta * 0.1))),
+    )
+    new_radii = (
+        max(0.005, rx * (1.0 - shrink_factor)),
+        max(0.005, ry * (1.0 - shrink_factor)),
+    )
+    new_angle = mutate_value(
+        ellipse.angle,
+        max(params.position_delta * math.pi * 0.5, 0.02),
+        -math.pi,
+        math.pi,
+    )
+
+    r, g, b, a = ellipse.color
+    new_a = max(0.01, a - random.uniform(0, params.alpha_delta))
+    return Ellipse(
+        center=new_center,
+        radii=new_radii,
+        angle=new_angle,
+        color=(r, g, b, new_a),
+    )
+
+
+def _mutate_gene_guided(
+    gene: ShapeGene,
+    params: MutationParams,
+    sample_cdf: np.ndarray,
+    sample_shape: Tuple[int, int],
+) -> ShapeGene:
+    if isinstance(gene, Triangle):
+        return _mutate_triangle_guided(gene, params, sample_cdf, sample_shape)
+    if isinstance(gene, Ellipse):
+        return _mutate_ellipse_guided(gene, params, sample_cdf, sample_shape)
+    raise TypeError(f"Gen no soportado: {type(gene)!r}")
+
+
+def _mutate_gene_ssim(gene: ShapeGene, params: MutationParams) -> ShapeGene:
+    if isinstance(gene, Triangle):
+        return _mutate_triangle_ssim(gene, params)
+    if isinstance(gene, Ellipse):
+        return _mutate_ellipse_ssim(gene, params)
+    raise TypeError(f"Gen no soportado: {type(gene)!r}")
 
 
 def mutate_error_map_guided(
@@ -473,15 +663,12 @@ def mutate_error_map_guided(
     H = integral_map.shape[0] - 1
     W = integral_map.shape[1] - 1
 
-    # --- Pesos por triángulo via imagen integral (vectorizado) ---
-    # verts: (n, 3, 2)  →  xs: (n, 3), ys: (n, 3)
-    verts = np.array([t.vertices for t in individual.triangles], dtype=np.float64)
-
-    xs, ys = verts[:, :, 0], verts[:, :, 1]
-    x0s = np.maximum(0, (xs.min(axis=1) * W).astype(np.int32))
-    x1s = np.minimum(W, (xs.max(axis=1) * W).astype(np.int32) + 1)
-    y0s = np.maximum(0, (ys.min(axis=1) * H).astype(np.int32))
-    y1s = np.minimum(H, (ys.max(axis=1) * H).astype(np.int32) + 1)
+    # --- Pesos por gen via bounding box (vectorizado) ---
+    boxes = np.array([t.bounding_box() for t in individual.triangles], dtype=np.float64)
+    x0s = np.maximum(0, (boxes[:, 0] * W).astype(np.int32))
+    y0s = np.maximum(0, (boxes[:, 1] * H).astype(np.int32))
+    x1s = np.minimum(W, (boxes[:, 2] * W).astype(np.int32) + 1)
+    y1s = np.minimum(H, (boxes[:, 3] * H).astype(np.int32) + 1)
 
     areas = (x1s - x0s) * (y1s - y0s)
     box_sums = (
@@ -492,7 +679,7 @@ def mutate_error_map_guided(
     )
     global_mean = integral_map[-1, -1] / max(H * W, 1)
     weights = np.where(areas > 0, box_sums / np.maximum(areas, 1), global_mean)
-    
+
     # Previene que errores de punto flotante generen probabilidades ínfimamente negativas (ej. -1e-16)
     weights = np.maximum(weights, 0.0)
 
@@ -513,9 +700,9 @@ def mutate_error_map_guided(
         is_ssim = params.mutation_type == MutationType.SSIM_MAP_GUIDED
         for idx in guided_idx:
             if is_ssim:
-                new_triangles[idx] = _mutate_triangle_ssim(new_triangles[idx], params)
+                new_triangles[idx] = _mutate_gene_ssim(new_triangles[idx], params)
             else:
-                new_triangles[idx] = _mutate_triangle_guided(
+                new_triangles[idx] = _mutate_gene_guided(
                     new_triangles[idx], params, sample_cdf, sample_shape
                 )
             mutated.add(int(idx))
@@ -524,10 +711,10 @@ def mutate_error_map_guided(
     if num_uniform > 0 and remaining:
         uni_idx = random.sample(remaining, min(num_uniform, len(remaining)))
         for idx in uni_idx:
-            new_triangles[idx] = mutate_triangle(new_triangles[idx], params)
+            new_triangles[idx] = mutate_gene(new_triangles[idx], params)
 
     _apply_zindex_swap(new_triangles, params.gene_probability)
-    return Individual(triangles=new_triangles)
+    return Individual(triangles=new_triangles, shape_type=individual.shape_type)
 
 
 # Dispatcher de métodos de mutación
@@ -671,9 +858,9 @@ class Mutator:
         self._base_params = copy.deepcopy(self.params)
         self._adaptive_sigma = adaptive_sigma
         # Estado precomputado para mutación guiada (actualizado por set_error_map)
-        self._integral_map: Optional[np.ndarray] = None   # imagen integral (H+1, W+1)
-        self._sample_cdf: Optional[np.ndarray] = None     # CDF aplanada para searchsorted
-        self._sample_shape: Tuple[int, int] = (0, 0)      # (H, W) del mapa de muestreo
+        self._integral_map: Optional[np.ndarray] = None  # imagen integral (H+1, W+1)
+        self._sample_cdf: Optional[np.ndarray] = None  # CDF aplanada para searchsorted
+        self._sample_shape: Tuple[int, int] = (0, 0)  # (H, W) del mapa de muestreo
 
     @property
     def mutation_type(self) -> MutationType:
@@ -735,36 +922,38 @@ class Mutator:
         para acoplar la fase de búsqueda (El Pintor, El Restaurador, El Dibujante, El Cirujano).
         """
         p = copy.deepcopy(self._base_params)
-        
+
         if fitness_method == "ssim":
             # Fase SSIM (El Restaurador): Mutación guiada por mapa local SSIM
             p.mutation_type = MutationType.SSIM_MAP_GUIDED
             p.position_delta = 0.02  # Define cuánto se encoge hacia el centroide
-            p.color_delta = 0        # puramente estructural y transparencia
-            p.alpha_delta = 0.05     # Define cuán rápido se suaviza (anti-aliasing)
+            p.color_delta = 0  # puramente estructural y transparencia
+            p.alpha_delta = 0.05  # Define cuán rápido se suaviza (anti-aliasing)
             p.gene_probability = 0.2
-            p.guided_ratio = 1.0     # 100% de operaciones apuntadas a los peores bordes SSIM
-            
+            p.guided_ratio = (
+                1.0  # 100% de operaciones apuntadas a los peores bordes SSIM
+            )
+
         elif fitness_method == "edge_loss":
             # Fase Edge_Loss (El Dibujante Técnico): Mutación direccional guiada
             p.mutation_type = MutationType.ERROR_MAP_GUIDED
             p.position_delta = 0.05
-            p.color_delta = 0        # puramente estructural, no toca color
-            p.alpha_delta = 0        # no toca alpha
-            p.guided_ratio = 1.0     # 100% probabilidad hacia mapa de bordes
-            
+            p.color_delta = 0  # puramente estructural, no toca color
+            p.alpha_delta = 0  # no toca alpha
+            p.guided_ratio = 1.0  # 100% probabilidad hacia mapa de bordes
+
         elif fitness_method == "detail_weighted":
             # Fase Detail_Weighted (El Cirujano): Mutaciones finas y Zonal (Z-Index alto)
             p.mutation_type = MutationType.SINGLE_GENE
             p.position_delta = 0.02
             p.color_delta = 10
             p.alpha_delta = 0.02
-            p.gene_probability = 0.8 # Altísima probabilidad de _apply_zindex_swap
-            
+            p.gene_probability = 0.8  # Altísima probabilidad de _apply_zindex_swap
+
         else:
             # Fase Base MSE/linear/rmse (El Pintor de Brocha Gorda): Exploración original
             pass
-            
+
         self.params = p
 
     def mutate(self, individual: Individual) -> Individual:
@@ -798,13 +987,19 @@ class Mutator:
         else:
             effective_params = self.params
 
-        if effective_params.mutation_type in {MutationType.ERROR_MAP_GUIDED, MutationType.SSIM_MAP_GUIDED}:
+        if effective_params.mutation_type in {
+            MutationType.ERROR_MAP_GUIDED,
+            MutationType.SSIM_MAP_GUIDED,
+        }:
             if self._integral_map is None:
                 # Sin error map todavía (primera generación o no computado): fallback
                 return mutate_uniform_multigen(individual, effective_params)
             return mutate_error_map_guided(
-                individual, effective_params,
-                self._integral_map, self._sample_cdf, self._sample_shape,
+                individual,
+                effective_params,
+                self._integral_map,
+                self._sample_cdf,
+                self._sample_shape,
             )
 
         return mutate_individual(individual, effective_params)

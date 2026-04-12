@@ -84,10 +84,65 @@ class MetricsTracker:
         """
         df = self.to_dataframe()
         numeric_cols = [
-            c for c in ["best_fitness", "avg_fitness", "error", "time_s"]
+            c
+            for c in ["best_fitness", "avg_fitness", "error", "time_s"]
             if c in df.columns
         ]
         return df[numeric_cols].describe()
+
+    @staticmethod
+    def shapes_dataframe(
+        individual: Individual, run_id: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Crea un DataFrame con una fila por forma del individuo."""
+        rows = []
+        for i, shape in enumerate(individual.triangles):
+            row: Dict[str, Any] = {
+                "order": i,
+                "shape_type": individual.shape_type,
+                "r": shape.color[0],
+                "g": shape.color[1],
+                "b": shape.color[2],
+                "alpha": shape.color[3],
+                "x0": None,
+                "y0": None,
+                "x1": None,
+                "y1": None,
+                "x2": None,
+                "y2": None,
+                "cx": None,
+                "cy": None,
+                "rx": None,
+                "ry": None,
+                "angle": None,
+            }
+
+            if individual.shape_type == "triangle":
+                row.update(
+                    {
+                        "x0": shape.vertices[0][0],
+                        "y0": shape.vertices[0][1],
+                        "x1": shape.vertices[1][0],
+                        "y1": shape.vertices[1][1],
+                        "x2": shape.vertices[2][0],
+                        "y2": shape.vertices[2][1],
+                    }
+                )
+            else:
+                row.update(
+                    {
+                        "cx": shape.center[0],
+                        "cy": shape.center[1],
+                        "rx": shape.radii[0],
+                        "ry": shape.radii[1],
+                        "angle": shape.angle,
+                    }
+                )
+
+            if run_id is not None:
+                row["run_id"] = run_id
+            rows.append(row)
+        return pd.DataFrame(rows)
 
     @staticmethod
     def triangles_dataframe(
@@ -105,25 +160,7 @@ class MetricsTracker:
         Returns:
             DataFrame con los datos geométricos y de color de cada triángulo.
         """
-        rows = []
-        for i, t in enumerate(individual.triangles):
-            row: Dict[str, Any] = {
-                "order": i,
-                "x0": t.vertices[0][0],
-                "y0": t.vertices[0][1],
-                "x1": t.vertices[1][0],
-                "y1": t.vertices[1][1],
-                "x2": t.vertices[2][0],
-                "y2": t.vertices[2][1],
-                "r": t.color[0],
-                "g": t.color[1],
-                "b": t.color[2],
-                "alpha": t.color[3],
-            }
-            if run_id is not None:
-                row["run_id"] = run_id
-            rows.append(row)
-        return pd.DataFrame(rows)
+        return MetricsTracker.shapes_dataframe(individual, run_id=run_id)
 
     @staticmethod
     def load_csv(path: str | Path) -> pd.DataFrame:

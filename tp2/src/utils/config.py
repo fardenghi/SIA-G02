@@ -43,9 +43,9 @@ class FitnessConfig:
     # 0.0 = solo pesan los bordes; 1.0 = equivalente a MSE uniforme.
     detail_weight_base: float = 0.3
     # Pesos para fitness compuesto: 1 - (α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss) / (α+β+γ)
-    composite_alpha: float = 0.5   # peso de (1 - SSIM)
-    composite_beta: float = 0.2    # peso de MSE normalizado
-    composite_gamma: float = 0.3   # peso de EdgeLoss
+    composite_alpha: float = 0.5  # peso de (1 - SSIM)
+    composite_beta: float = 0.2  # peso de MSE normalizado
+    composite_gamma: float = 0.3  # peso de EdgeLoss
 
 
 @dataclass
@@ -168,6 +168,7 @@ class Config:
 
     # Parámetros del genotipo
     num_triangles: int = 50
+    shape_type: str = "triangle"
     alpha_min: float = 0.1
     alpha_max: float = 0.8
 
@@ -199,6 +200,7 @@ class Config:
         return EvolutionConfig(
             population_size=self.population_size,
             num_triangles=self.num_triangles,
+            shape_type=self.shape_type,
             max_generations=self.max_generations,
             fitness_threshold=self.fitness_threshold,
             alpha_min=self.alpha_min,
@@ -245,6 +247,10 @@ class Config:
         if "genotype" in data:
             genotype_data = data.pop("genotype")
             data.setdefault("num_triangles", genotype_data.get("num_triangles", 50))
+            data.setdefault(
+                "shape_type",
+                genotype_data.get("shape_type", genotype_data.get("shape", "triangle")),
+            )
             data.setdefault("alpha_min", genotype_data.get("alpha_min", 0.1))
             data.setdefault("alpha_max", genotype_data.get("alpha_max", 0.8))
 
@@ -261,18 +267,21 @@ class Config:
                     genetic_data.get("error_threshold")
                 )
             data.setdefault("fitness_threshold", fitness_threshold)
-            data.setdefault("stagnation_threshold", genetic_data.get("stagnation_threshold", 0.0005))
+            data.setdefault(
+                "stagnation_threshold", genetic_data.get("stagnation_threshold", 0.0005)
+            )
             data.setdefault("max_patience", genetic_data.get("max_patience", 20))
-            
+
             t_methods = genetic_data.get("transition_methods")
             if isinstance(t_methods, str):
                 t_methods = [t_methods]
-                
+
             data.setdefault("transition_methods", t_methods)
 
         return cls(
             target_path=data.get("target_path"),
             num_triangles=data.get("num_triangles", 50),
+            shape_type=data.get("shape_type", data.get("shape", "triangle")),
             alpha_min=data.get("alpha_min", 0.1),
             alpha_max=data.get("alpha_max", 0.8),
             population_size=data.get("population_size", 100),
@@ -344,6 +353,9 @@ class Config:
         if kwargs.get("triangles"):
             new_config.num_triangles = kwargs["triangles"]
 
+        if kwargs.get("shape"):
+            new_config.shape_type = kwargs["shape"]
+
         if kwargs.get("population"):
             new_config.population_size = kwargs["population"]
 
@@ -410,6 +422,9 @@ class Config:
 
         if self.num_triangles < 1:
             errors.append("num_triangles debe ser al menos 1")
+
+        if self.shape_type not in {"triangle", "ellipse"}:
+            errors.append("shape_type debe ser 'triangle' o 'ellipse'")
 
         if self.population_size < 2:
             errors.append("population_size debe ser al menos 2")

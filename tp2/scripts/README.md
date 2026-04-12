@@ -17,7 +17,8 @@ uv run python scripts/compare_selection.py --image input/logo.png
 - `--image, -i`: Imagen objetivo (requerido)
 - `--generations, -g`: Número de generaciones (default: 200)
 - `--population, -p`: Tamaño de población (default: 50)
-- `--triangles, -t`: Triángulos por individuo (default: 50)
+- `--triangles, -t`: Genes por individuo (default: 50)
+- `--shape`: Familia de formas (`triangle` o `ellipse`, default: `triangle`)
 - `--max-size`: Tamaño máximo de imagen (default: 128)
 - `--output, -o`: Directorio de salida (default: `output/comparativa`)
 - `--methods`: Métodos específicos a comparar (default: todos)
@@ -38,6 +39,7 @@ uv run python scripts/compare_selection.py \
     --generations 500 \
     --population 100 \
     --triangles 50 \
+    --shape ellipse \
     --methods elite tournament roulette boltzmann
 ```
 
@@ -61,7 +63,8 @@ uv run python scripts/compare_crossover.py --image input/logo.png
 - `--image, -i`: Imagen objetivo (requerido)
 - `--generations, -g`: Número de generaciones (default: 200)
 - `--population, -p`: Tamaño de población (default: 50)
-- `--triangles, -t`: Triángulos por individuo (default: 50)
+- `--triangles, -t`: Genes por individuo (default: 50)
+- `--shape`: Familia de formas (`triangle` o `ellipse`, default: `triangle`)
 - `--max-size`: Tamaño máximo de imagen (default: 128)
 - `--output, -o`: Directorio de salida (default: `output/comparativa_crossover`)
 - `--methods`: Métodos específicos a comparar (default: todos)
@@ -80,6 +83,7 @@ uv run python scripts/compare_crossover.py \
     --generations 500 \
     --population 100 \
     --triangles 50 \
+    --shape ellipse \
     --selection tournament \
     --methods single_point two_point uniform annular
 ```
@@ -97,11 +101,11 @@ uv run python scripts/compare_crossover.py \
 ```bash
 # Selección
 uv run python scripts/compare_selection.py \
-    -i input/logo.png -g 50 -p 30 -t 20 --max-size 64
+    -i input/logo.png -g 50 -p 30 -t 20 --shape ellipse --max-size 64
 
 # Crossover
 uv run python scripts/compare_crossover.py \
-    -i input/logo.png -g 50 -p 30 -t 20 --max-size 64
+    -i input/logo.png -g 50 -p 30 -t 20 --shape ellipse --max-size 64
 ```
 
 ### Comparación completa (para análisis)

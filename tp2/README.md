@@ -1,8 +1,8 @@
 # Compresor de Imágenes Evolutivo
 
-> Aproximación visual de imágenes mediante algoritmos genéticos y triángulos traslúcidos.
+> Aproximación visual de imágenes mediante algoritmos genéticos y formas traslúcidas.
 
-Sistema que utiliza un motor de **Algoritmos Genéticos (AG)** para reconstruir una imagen objetivo usando únicamente una cantidad fija de triángulos semitransparentes superpuestos sobre un lienzo blanco. El resultado es una representación artística y comprimida de la imagen original.
+Sistema que utiliza un motor de **Algoritmos Genéticos (AG)** para reconstruir una imagen objetivo usando una cantidad fija de formas semitransparentes superpuestas sobre un lienzo blanco. Actualmente soporta corridas homogéneas compuestas por **triángulos** o por **elipses rotadas**.
 
 ---
 
@@ -41,15 +41,26 @@ El sistema evoluciona una población de soluciones candidatas (individuos), dond
 
 ### Genotipo (Cromosoma)
 
-Cada individuo está representado por una **lista ordenada de N triángulos**. El orden determina el Z-index (profundidad de renderizado).
+Cada individuo está representado por una **lista ordenada de N genes geométricos**. El orden determina el Z-index (profundidad de renderizado).
 
-Cada triángulo se define por:
+Una corrida utiliza una sola familia de formas por individuo: `triangle` o `ellipse`.
+
+Para `triangle`, cada gen se define por:
 
 | Atributo       | Descripción                                      |
 |----------------|--------------------------------------------------|
 | Vértice 1      | Coordenadas (x₁, y₁) normalizadas [0, 1]         |
 | Vértice 2      | Coordenadas (x₂, y₂) normalizadas [0, 1]         |
 | Vértice 3      | Coordenadas (x₃, y₃) normalizadas [0, 1]         |
+| Color          | Valor RGBA (R, G, B en [0-255], A en [0-1])      |
+
+Para `ellipse`, cada gen se define por:
+
+| Atributo       | Descripción                                      |
+|----------------|--------------------------------------------------|
+| Centro         | Coordenadas (cx, cy) normalizadas [0, 1]         |
+| Radios         | (rx, ry) normalizados                            |
+| Rotación       | Ángulo en radianes                               |
 | Color          | Valor RGBA (R, G, B en [0-255], A en [0-1])      |
 
 ### Función de Fitness
@@ -69,7 +80,7 @@ Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitnes
 |----------|---------------------|-------------|
 | **Selección** | `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank` | Elige individuos para reproducción |
 | **Cruza** | `single_point`, `two_point`, `uniform`, `annular` | Combina genes de dos padres |
-| **Mutación** | `single_gene`, `limited_multigen`, `uniform_multigen`, `complete`, `error_map_guided` | Altera atributos de triángulos. Incluye mutación guiada por mapa de error y control de deltas adaptativo. |
+| **Mutación** | `single_gene`, `limited_multigen`, `uniform_multigen`, `complete`, `error_map_guided` | Altera atributos de los genes geométricos. Incluye mutación guiada por mapa de error y control de deltas adaptativo. |
 
 ---
 
@@ -77,9 +88,9 @@ Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitnes
 
 El algoritmo implementa diferentes técnicas para mejorar la convergencia visual, la eficiencia y reducir los tiempos de ejecución:
 
-1. **Mutación Guiada por Mapa de Error (`error_map_guided`)**: En vez de alterar parámetros de forma estocástica pura, se favorece la mutación intencionada de aquellos triángulos ubicados en las zonas funcionales específicas que más difieren de la imagen objetivo original.
+1. **Mutación Guiada por Mapa de Error (`error_map_guided`)**: En vez de alterar parámetros de forma estocástica pura, se favorece la mutación intencionada de aquellos genes ubicados en las zonas funcionales específicas que más difieren de la imagen objetivo original.
 2. **Mutación con Sigma Adaptativo (`adaptive_sigma_enabled`)**: Las magnitudes de mutación (ej. variaciones de color y saltos en la posición) se ajustan dinámicamente. Crecen si se encadenan mejoras constantes en el fitness de la población (exploración a grandes escalas), y decrecen si se percibe un estancamiento (facilita un refinamiento local y detallista o *fine-tuning*).
-3. **Fitness Ponderado por Detalle (`detail_weighted`)**: Para aquellas metas compuestas mayormente de fondos homogéneos con elementos intrincados chicos, los métodos tradicionales desperdician triángulos alisando el fondo. Como alternativa, este método da menor peso al MSE del fondo y escala los castigos en áreas puntillosas con bordes, promoviendo el trazo de figuras más ricas en detalle.
+3. **Fitness Ponderado por Detalle (`detail_weighted`)**: Para aquellas metas compuestas mayormente de fondos homogéneos con elementos intrincados chicos, los métodos tradicionales desperdician genes alisando el fondo. Como alternativa, este método da menor peso al MSE del fondo y escala los castigos en áreas puntillosas con bordes, promoviendo el trazo de figuras más ricas en detalle.
 4. **Parada Temprana (`fitness_threshold`)**: Permite la interrupción temprana del proceso evolutivo, si este verifica que se ha alcanzado el umbral de calidad propuesto por el usuario antes de completar `max_generations`, ahorrando una importante carga computacional.
 5. **Aceleración Renderizada en GPU (` backend: gpu`)**: Evaluando constantemente candidatos el procesamiento del superpuesto traslúcido resulta muy punitivo para el núcleo de CPU base (donde ejecuta en defecto `Pillow`). Seleccionando el *backend* de renderizado por GPU acelerado invoca subrutinas de la tarjeta gráfica a través de OpenGL (`moderngl`), proveyendo mejor soporte frente a crecimientos exponenciales de `population_size` o `num_triangles`. Para activarlo requiera su dependencia extra en la etapa de instalación.
 6. **Curriculum Learning (Transición Dinámica de Fitness)**: Permite ejecutar tu evaluación bajo dos regímenes. Si se lo configura de modo no-Nulo, el algoritmo inicia la optimización con la función rápida normal en búsqueda de siluetas clave y, cuando detecta un evento de agotamiento (`stagnation_threshold`), gatilla un reinicio algorítmico traspasando la brújula evolutiva hacia una función secundaria detallista (e.j. refinamiento de texturas mediante `transition_methods`). Se acompaña de un reinicio en caliente (Hot Restart) interno que reescala históricos de élites al vuelo eliminando saltos matemáticos bruscos.
@@ -123,6 +134,9 @@ uv run --dev pytest tests/ -v
 ```bash
 # Ejecutar con parámetros mínimos
 uv run main.py --image input/mi_imagen.png --triangles 50
+
+# Ejecutar en modo elipses
+uv run main.py --image input/mi_imagen.png --triangles 50 --shape ellipse
 ```
 
 ### Ejemplo completo
@@ -131,6 +145,7 @@ uv run main.py --image input/mi_imagen.png --triangles 50
 uv run main.py \
     --image input/foto.png \
     --triangles 100 \
+    --shape triangle \
     --population 50 \
     --generations 5000 \
     --output output/mi_experimento
@@ -142,7 +157,8 @@ El sistema mostrará el progreso en consola:
 Cargando imagen: input/foto.png
 Tamaño original: (512, 512)
 Tamaño de trabajo: (256, 256)
-Triángulos: 100
+Forma: triangle
+Genes: 100
 Población: 50
 Generaciones máximas: 5000
 
@@ -175,7 +191,8 @@ uv run main.py --image <ruta> [opciones]
 | Opción | Alias | Descripción | Default |
 |--------|-------|-------------|---------|
 | `--image` | `-i` | **Ruta a la imagen objetivo** (requerido) | - |
-| `--triangles` | `-t` | Cantidad de triángulos por individuo | 50 |
+| `--triangles` | `-t` | Cantidad de genes por individuo | 50 |
+| `--shape` | - | Familia de formas: `triangle`, `ellipse` | `triangle` |
 | `--population` | `-p` | Tamaño de la población | 100 |
 | `--generations` | `-g` | Número máximo de generaciones | 5000 |
 
@@ -213,6 +230,7 @@ image:
 
 # Parámetros del genotipo
 genotype:
+  shape_type: triangle
   num_triangles: 50
   alpha_min: 0.1
   alpha_max: 0.8
@@ -245,7 +263,7 @@ crossover:
 # Mutación
 mutation:
   probability: 0.3        # probabilidad de mutar individuo
-  gene_probability: 0.1   # probabilidad de mutar cada triángulo
+  gene_probability: 0.1   # probabilidad de mutar cada gen
   position_delta: 0.1     # magnitud de perturbación en posición
   color_delta: 30         # magnitud de perturbación en color (0-255)
   alpha_delta: 0.1        # magnitud de perturbación en alfa
@@ -255,7 +273,7 @@ output:
   directory: "output"
   save_interval: 100      # 0 = solo guardar al final
   log_interval: 10        # mostrar progreso cada N generaciones
-  export_triangles: true  # exportar JSON con triángulos
+  export_triangles: true  # exportar shapes.json y, en triangle, triangles.json legacy
   plot_fitness: true      # generar gráfico de evolución
 
 # Backend de renderizado
@@ -275,12 +293,13 @@ Los argumentos CLI **sobreescriben** los valores del archivo YAML.
 uv run main.py -i input/logo.png -t 30 -g 500 -p 30
 ```
 
-### Ejemplo 2: Alta calidad (más triángulos y generaciones)
+### Ejemplo 2: Alta calidad (más genes y generaciones)
 
 ```bash
 uv run main.py \
     --image input/retrato.jpg \
     --triangles 200 \
+    --shape ellipse \
     --generations 10000 \
     --population 100 \
     --save-interval 500 \
@@ -320,8 +339,11 @@ Después de ejecutar el algoritmo, se generan los siguientes archivos en el dire
 
 ```
 output/
-├── result.png              # Imagen final renderizada
-├── triangles.json          # Datos de triángulos (para reconstrucción)
+├── result.png              # Imagen final renderizada (resolución de entrenamiento)
+├── result_train_res.png    # Alias explícito de la resolución de entrenamiento
+├── result_high_res.png     # Reconstrucción en la resolución original
+├── shapes.json             # Datos estructurados de las formas
+├── triangles.json          # Legacy, solo en modo triangle
 ├── fitness_evolution.png   # Gráfico de evolución del fitness
 ├── gen_00100.png          # Imágenes intermedias (cada save_interval)
 ├── gen_00200.png
@@ -333,20 +355,21 @@ output/
 | Archivo | Descripción |
 |---------|-------------|
 | `result.png` | Imagen final con la mejor aproximación encontrada |
-| `triangles.json` | Datos estructurados de cada triángulo (posición, color, orden) |
+| `shapes.json` | Datos estructurados de cada forma (triángulo o elipse) |
+| `triangles.json` | Export legacy mantenido para corridas en modo triangle |
 | `fitness_evolution.png` | Gráfico mostrando la evolución del fitness por generación |
 | `gen_XXXXX.png` | Capturas intermedias del progreso |
 
 ### Reconstruir imagen desde JSON
 
-Puedes reconstruir la imagen a cualquier resolución usando los triángulos exportados:
+Puedes reconstruir la imagen a cualquier resolución usando las formas exportadas:
 
 ```bash
 # Reconstruir a tamaño original
-uv run reconstruct.py output/triangles.json -o reconstruida.png -W 256 -H 256
+uv run reconstruct.py output/shapes.json -o reconstruida.png -W 256 -H 256
 
 # Reconstruir a mayor resolución (escala 2x)
-uv run reconstruct.py output/triangles.json -o reconstruida_hd.png -W 256 -H 256 --scale 2
+uv run reconstruct.py output/shapes.json -o reconstruida_hd.png -W 256 -H 256 --scale 2
 ```
 
 ---
@@ -367,7 +390,7 @@ uv run visualize.py output/mi_experimento
 El visualizador muestra:
 
 - **Panel central**: Imagen del mejor individuo de la generación actual
-- **Panel lateral**: Métricas (generación, fitness, número de triángulos)
+- **Panel lateral**: Métricas (generación, fitness, número de genes y tipo de forma)
 - **Gráfico inferior**: Evolución del fitness a lo largo de las generaciones
 - **Controles**: Slider y botones para navegar entre generaciones
 
@@ -442,7 +465,7 @@ tp2/
 │   │   └── mutation.py     # Operadores de mutación
 │   ├── fitness/            # Evaluación de fitness
 │   │   └── mse.py          # Cálculo de fitness a partir de MSE
-│   ├── rendering/          # Renderizado de triángulos
+│   ├── rendering/          # Renderizado de triángulos y elipses
 │   │   └── canvas.py       # Generación de imágenes con Pillow
 │   └── utils/              # Utilidades generales
 │       ├── config.py       # Configuración YAML + CLI

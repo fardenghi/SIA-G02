@@ -8,7 +8,9 @@ image:
 
 # Parámetros del genotipo
 genotype:
-  # Cantidad de triángulos por individuo
+  # Familia de formas por individuo: triangle | ellipse
+  shape_type: triangle
+  # Cantidad de genes por individuo (triángulos o elipses según shape_type)
   num_triangles: 50
   # Rango de valores para el canal alfa (0.0 - 1.0)
   alpha_min: 0.1
@@ -19,7 +21,7 @@ genetic:
   # Tamaño de la población
   population_size: 100
   # Número máximo de generaciones
-  max_generations: 10000
+  max_generations: 1000
   # Umbral de fitness para parada temprana. Depende del método de fitness:
   #   linear             → 1 - MSE/65025  ∈ [0,1]  ej: 0.92 ≈ error promedio ~67/canal
   #   rmse               → 1 - sqrt(MSE)/255 ∈ [0,1]
@@ -89,15 +91,15 @@ crossover:
 
 # Mutación
 mutation:
-  # Método: "single_gene"        → muta exactamente 1 triángulo
-  #         "limited_multigen"   → muta entre 1 y max_genes triángulos
-  #         "uniform_multigen"   → cada triángulo muta independientemente con gene_probability
-  #         "complete"           → muta todos los triángulos
-  #         "error_map_guided"   → sesga la mutación hacia triángulos en zonas con mayor error
+  # Método: "single_gene"        → muta exactamente 1 gen
+  #         "limited_multigen"   → muta entre 1 y max_genes genes
+  #         "uniform_multigen"   → cada gen muta independientemente con gene_probability
+  #         "complete"           → muta todos los genes
+  #         "error_map_guided"   → sesga la mutación hacia genes en zonas con mayor error
   method: "uniform_multigen"
   # Probabilidad de mutar un individuo (Pm) — usado por single_gene, limited_multigen, complete
   probability: 0.3
-  # Probabilidad de mutar cada gen (triángulo) — usado por uniform_multigen
+  # Probabilidad de mutar cada gen — usado por uniform_multigen
   gene_probability: 0.1
   # Máximo de genes a mutar — usado por limited_multigen
   max_genes: 3
@@ -154,13 +156,15 @@ output:
   save_interval: 100
   # Mostrar progreso en consola cada N generaciones
   log_interval: 10
-  # Exportar datos de triángulos (JSON)
+  # Exportar datos geométricos a JSON.
+  # Siempre genera shapes.json y, en modo triangle, también triangles.json legacy.
   export_triangles: true
   # Generar gráfico de evolución del fitness
   plot_fitness: true
   # Exportar métricas por generación a CSV (pandas) — útil para comparar corridas
   export_metrics_csv: true
-  # Exportar enumeración de triángulos a CSV (una fila por triángulo)
+  # Exportar enumeración geométrica a CSV.
+  # Siempre genera shapes.csv y, en modo triangle, también triangles.csv legacy.
   export_triangles_csv: false
 
 # Backend de renderizado

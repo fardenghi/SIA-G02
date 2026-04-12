@@ -11,11 +11,16 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 from src.genetic.individual import Individual
-from src.rendering.canvas import Canvas
+from src.rendering import create_renderer
 
 
 def save_result_image(
-    individual: Individual, width: int, height: int, path: str | Path
+    individual: Individual,
+    width: int,
+    height: int,
+    path: str | Path,
+    shape_type: str | None = None,
+    backend: str = "cpu",
 ):
     """
     Guarda la imagen renderizada del individuo.
@@ -26,8 +31,21 @@ def save_result_image(
         height: Alto de la imagen.
         path: Ruta de salida.
     """
-    canvas = Canvas(width=width, height=height)
+    canvas = create_renderer(
+        width=width,
+        height=height,
+        backend=backend,
+        shape_type=shape_type or individual.shape_type,
+    )
     canvas.save(individual, str(path))
+
+
+def export_shapes_json(individual: Individual, path: str | Path):
+    """Exporta un individuo a un archivo JSON genérico de shapes."""
+    data = individual.to_dict()
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def export_triangles_json(individual: Individual, path: str | Path):
@@ -38,10 +56,15 @@ def export_triangles_json(individual: Individual, path: str | Path):
         individual: Individuo con los triángulos.
         path: Ruta del archivo JSON.
     """
-    data = individual.to_dict()
+    export_shapes_json(individual, path)
 
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+
+def load_shapes_json(path: str | Path) -> Individual:
+    """Carga un individuo desde un archivo JSON genérico."""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return Individual.from_dict(data)
 
 
 def load_triangles_json(path: str | Path) -> Individual:
@@ -54,10 +77,7 @@ def load_triangles_json(path: str | Path) -> Individual:
     Returns:
         Individuo reconstruido.
     """
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    return Individual.from_dict(data)
+    return load_shapes_json(path)
 
 
 def save_fitness_plot(history: List[Dict[str, Any]], path: str | Path):
@@ -116,7 +136,19 @@ def save_metrics_csv(history: List[Dict[str, Any]], path: str | Path):
     pd.DataFrame(history).to_csv(path, index=False)
 
 
-def export_triangles_csv(individual: "Individual", path: str | Path, run_id: str | None = None):
+def export_shapes_csv(
+    individual: "Individual", path: str | Path, run_id: str | None = None
+):
+    """Exporta las formas del individuo como CSV."""
+    from src.utils.metrics import MetricsTracker
+
+    df = MetricsTracker.shapes_dataframe(individual, run_id=run_id)
+    df.to_csv(path, index=False)
+
+
+def export_triangles_csv(
+    individual: "Individual", path: str | Path, run_id: str | None = None
+):
     """
     Exporta los triángulos del individuo como CSV (una fila por triángulo).
 
@@ -127,13 +159,10 @@ def export_triangles_csv(individual: "Individual", path: str | Path, run_id: str
         path: Ruta del archivo CSV.
         run_id: Identificador de corrida opcional.
     """
-    from src.utils.metrics import MetricsTracker
-
-    df = MetricsTracker.triangles_dataframe(individual, run_id=run_id)
-    df.to_csv(path, index=False)
+    export_shapes_csv(individual, path, run_id=run_id)
 
 
-def print_summary(result, output_dir: Path):
+def print_summary(result, output_dir: Path, shape_type: str | None = None):
     """
     Imprime un resumen de los resultados.
 
@@ -147,7 +176,11 @@ def print_summary(result, output_dir: Path):
     print(f"Generaciones ejecutadas: {result.generations}")
     print(f"Tiempo de ejecución: {result.elapsed_time:.2f} segundos")
     print(f"Fitness final: {result.best_fitness:.6f}")
-    print(f"Triángulos: {len(result.best_individual)}")
+    current_shape = shape_type or getattr(
+        result.best_individual, "shape_type", "triangle"
+    )
+    label = "Triángulos" if current_shape == "triangle" else "Elipses"
+    print(f"{label}: {len(result.best_individual)}")
 
     if result.stopped_early:
         print("Estado: Parada temprana (umbral alcanzado)")
@@ -157,7 +190,11 @@ def print_summary(result, output_dir: Path):
     print()
     print("Archivos generados:")
     print(f"  - Imagen: {output_dir / 'result.png'}")
-    print(f"  - Triángulos: {output_dir / 'triangles.json'}")
+    print(f"  - Imagen train-res: {output_dir / 'result_train_res.png'}")
+    print(f"  - Imagen high-res: {output_dir / 'result_high_res.png'}")
+    print(f"  - Shapes: {output_dir / 'shapes.json'}")
+    if current_shape == "triangle":
+        print(f"  - Triángulos legacy: {output_dir / 'triangles.json'}")
     print(f"  - Gráfico: {output_dir / 'fitness_evolution.png'}")
     print("=" * 50)
 
@@ -184,6 +221,8 @@ def create_animation_frames(history_dir: Path, output_path: Path, fps: int = 10)
 
     # Agregar la imagen final
     result_path = history_dir / "result.png"
+    if not result_path.exists():
+        result_path = history_dir / "result_train_res.png"
     if result_path.exists():
         # Agregar varios frames del resultado final
         final_img = Image.open(result_path)

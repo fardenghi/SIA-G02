@@ -51,6 +51,7 @@ class Population:
         num_triangles: int,
         alpha_min: float = 0.1,
         alpha_max: float = 0.8,
+        shape_type: str = "triangle",
     ) -> Population:
         """
         Genera una población aleatoria.
@@ -66,7 +67,10 @@ class Population:
         """
         individuals = [
             Individual.random(
-                num_triangles=num_triangles, alpha_min=alpha_min, alpha_max=alpha_max
+                num_triangles=num_triangles,
+                alpha_min=alpha_min,
+                alpha_max=alpha_max,
+                shape_type=shape_type,
             )
             for _ in range(size)
         ]

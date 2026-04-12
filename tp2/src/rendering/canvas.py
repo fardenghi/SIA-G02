@@ -1,8 +1,8 @@
 """
-Renderizado de triángulos sobre lienzo.
+Renderizado de triangulos sobre lienzo.
 
-Generación de imágenes a partir de listas de triángulos usando Pillow.
-Los triángulos se renderizan con transparencia (alpha blending) sobre
+Generacion de imagenes a partir de listas de triangulos usando Pillow.
+Los triangulos se renderizan con transparencia (alpha blending) sobre
 un lienzo blanco.
 """
 
@@ -112,7 +112,7 @@ class Canvas:
         vy = [v[1] for v in abs_vertices]
         x0 = max(0, min(vx) - 1)
         y0 = max(0, min(vy) - 1)
-        x1 = min(self.width,  max(vx) + 2)
+        x1 = min(self.width, max(vx) + 2)
         y1 = min(self.height, max(vy) + 2)
         bw, bh = x1 - x0, y1 - y0
         if bw <= 0 or bh <= 0:
@@ -133,6 +133,9 @@ class Canvas:
         """
         image = self.render(individual)
         image.save(path)
+
+
+TriangleCanvas = Canvas
 
 
 def load_target_image(path: str) -> Tuple[Image.Image, np.ndarray]:

@@ -2,7 +2,7 @@
 Compresor de Imágenes Evolutivo
 
 Punto de entrada principal del sistema.
-Aproxima una imagen objetivo usando triángulos traslúcidos mediante
+Aproxima una imagen objetivo usando formas traslúcidas mediante
 algoritmos genéticos.
 """
 
@@ -16,10 +16,11 @@ from PIL import Image
 
 from src.utils.config import Config, load_config
 from src.genetic.engine import create_engine
-from src.rendering.canvas import Canvas, resize_image
-from src.rendering.gpu_canvas import GPUCanvas, MODERNGL_AVAILABLE
+from src.rendering import create_renderer, resize_image
 from src.utils.export import (
     save_result_image,
+    export_shapes_json,
+    export_shapes_csv,
     export_triangles_json,
     export_triangles_csv,
     save_fitness_plot,
@@ -37,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description="Compresor de Imágenes Evolutivo - "
-        "Aproxima imágenes usando triángulos traslúcidos",
+        "Aproxima imágenes usando triángulos o elipses traslúcidas",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -47,7 +48,15 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--triangles", "-t", type=int, default=None, help="Cantidad de triángulos"
+        "--triangles", "-t", type=int, default=None, help="Cantidad de genes"
+    )
+
+    parser.add_argument(
+        "--shape",
+        type=str,
+        choices=["triangle", "ellipse"],
+        default=None,
+        help="Familia de formas del individuo",
     )
 
     # Argumentos opcionales
@@ -235,10 +244,12 @@ def setup_callbacks(
         quiet: Si es True, menos output.
         tracker: Tracker de métricas pandas (opcional).
     """
-    if renderer == "gpu" and MODERNGL_AVAILABLE:
-        canvas = GPUCanvas(width=engine.width, height=engine.height)
-    else:
-        canvas = Canvas(width=engine.width, height=engine.height)
+    canvas = create_renderer(
+        width=engine.width,
+        height=engine.height,
+        backend=renderer,
+        shape_type=config.shape_type,
+    )
     log_interval = config.output.log_interval
     save_interval = config.output.save_interval
     start_time = time.time()
@@ -282,6 +293,7 @@ def main():
     cli_args = {
         "image": args.image,
         "triangles": args.triangles,
+        "shape": args.shape,
         "population": args.population,
         "generations": args.generations,
         "mutation_rate": args.mutation_rate,
@@ -323,7 +335,8 @@ def main():
     if not args.quiet:
         print(f"Tamaño original: {original_size}")
         print(f"Tamaño de trabajo: {target_image.size}")
-        print(f"Triángulos: {config.num_triangles}")
+        print(f"Forma: {config.shape_type}")
+        print(f"Genes: {config.num_triangles}")
         print(f"Población: {config.population_size}")
         print(f"Generaciones máximas: {config.max_generations}")
         print()
@@ -338,6 +351,7 @@ def main():
         "selection": config.selection.method,
         "crossover": config.crossover.method,
         "mutation": config.mutation.method,
+        "shape_type": config.shape_type,
         "triangles": config.num_triangles,
         "population": config.population_size,
         "survival": config.survival.method,
@@ -348,28 +362,28 @@ def main():
 
     # Crear motor evolutivo
     engine = create_engine(
-            target_image=target_image,
-            config=config.to_evolution_config(),
-            selection_method=config.selection.method,
-            tournament_size=config.selection.tournament_size,
-            crossover_method=config.crossover.method,
-            crossover_probability=config.crossover.probability,
-            mutation_params=config.mutation.to_params(),
-            threshold=config.selection.threshold,
-            boltzmann_t0=config.selection.boltzmann_t0,
-            boltzmann_tc=config.selection.boltzmann_tc,
-            boltzmann_k=config.selection.boltzmann_k,
-            survival_method=config.survival.method,
-            survival_selection_method=config.survival.selection_method,
-            offspring_ratio=config.survival.offspring_ratio,
-            fitness_method=config.fitness.method,
-            fitness_scale=config.fitness.exponential_scale,
-            fitness_detail_weight_base=config.fitness.detail_weight_base,
-            fitness_composite_alpha=config.fitness.composite_alpha,
-            fitness_composite_beta=config.fitness.composite_beta,
-            fitness_composite_gamma=config.fitness.composite_gamma,
-            renderer=config.rendering.backend,
-            adaptive_sigma=config.mutation.to_adaptive_sigma(),
+        target_image=target_image,
+        config=config.to_evolution_config(),
+        selection_method=config.selection.method,
+        tournament_size=config.selection.tournament_size,
+        crossover_method=config.crossover.method,
+        crossover_probability=config.crossover.probability,
+        mutation_params=config.mutation.to_params(),
+        threshold=config.selection.threshold,
+        boltzmann_t0=config.selection.boltzmann_t0,
+        boltzmann_tc=config.selection.boltzmann_tc,
+        boltzmann_k=config.selection.boltzmann_k,
+        survival_method=config.survival.method,
+        survival_selection_method=config.survival.selection_method,
+        offspring_ratio=config.survival.offspring_ratio,
+        fitness_method=config.fitness.method,
+        fitness_scale=config.fitness.exponential_scale,
+        fitness_detail_weight_base=config.fitness.detail_weight_base,
+        fitness_composite_alpha=config.fitness.composite_alpha,
+        fitness_composite_beta=config.fitness.composite_beta,
+        fitness_composite_gamma=config.fitness.composite_gamma,
+        renderer=config.rendering.backend,
+        adaptive_sigma=config.mutation.to_adaptive_sigma(),
     )
 
     # Configurar callbacks
@@ -397,14 +411,34 @@ def main():
     # Guardar resultados
     # Guardamos 2 versiones: una en la resolución de entrenamiento y otra en la resolución de la imagen original
     save_result_image(
-        result.best_individual, engine.width, engine.height, output_dir / "result_train_res.png"
+        result.best_individual,
+        engine.width,
+        engine.height,
+        output_dir / "result_train_res.png",
+        shape_type=config.shape_type,
+        backend=config.rendering.backend,
     )
     save_result_image(
-        result.best_individual, original_size[0], original_size[1], output_dir / "result_high_res.png"
+        result.best_individual,
+        original_size[0],
+        original_size[1],
+        output_dir / "result_high_res.png",
+        shape_type=config.shape_type,
+        backend=config.rendering.backend,
+    )
+    save_result_image(
+        result.best_individual,
+        engine.width,
+        engine.height,
+        output_dir / "result.png",
+        shape_type=config.shape_type,
+        backend=config.rendering.backend,
     )
 
     if config.output.export_triangles:
-        export_triangles_json(result.best_individual, output_dir / "triangles.json")
+        export_shapes_json(result.best_individual, output_dir / "shapes.json")
+        if config.shape_type == "triangle":
+            export_triangles_json(result.best_individual, output_dir / "triangles.json")
 
     if config.output.plot_fitness:
         save_fitness_plot(result.history, output_dir / "fitness_evolution.png")
@@ -415,16 +449,24 @@ def main():
             print(f"  - Métricas CSV: {output_dir / 'metrics.csv'}")
 
     if config.output.export_triangles_csv:
-        export_triangles_csv(
+        export_shapes_csv(
             result.best_individual,
-            output_dir / "triangles.csv",
+            output_dir / "shapes.csv",
             run_id=run_id,
         )
+        if config.shape_type == "triangle":
+            export_triangles_csv(
+                result.best_individual,
+                output_dir / "triangles.csv",
+                run_id=run_id,
+            )
         if not args.quiet:
-            print(f"  - Triángulos CSV: {output_dir / 'triangles.csv'}")
+            print(f"  - Shapes CSV: {output_dir / 'shapes.csv'}")
+            if config.shape_type == "triangle":
+                print(f"  - Triángulos CSV: {output_dir / 'triangles.csv'}")
 
     # Imprimir resumen
-    print_summary(result, output_dir)
+    print_summary(result, output_dir, shape_type=config.shape_type)
 
     return 0
 

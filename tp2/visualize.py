@@ -44,7 +44,7 @@ class EvolutionVisualizer:
         # Cargar datos
         self.frames = self._load_frames()
         self.history = self._load_history()
-        self.triangles_data = self._load_triangles()
+        self.shapes_data = self._load_shapes()
         self.target_image = self._load_target()
 
         if not self.frames:
@@ -73,8 +73,13 @@ class EvolutionVisualizer:
                 continue
 
         # Agregar resultado final
-        result_path = self.output_dir / "result.png"
-        if result_path.exists():
+        result_candidates = [
+            self.output_dir / "result.png",
+            self.output_dir / "result_train_res.png",
+            self.output_dir / "result_high_res.png",
+        ]
+        result_path = next((path for path in result_candidates if path.exists()), None)
+        if result_path is not None:
             if frames:
                 # El resultado final corresponde a la última generación
                 last_gen = frames[-1][0] if frames else 0
@@ -113,10 +118,14 @@ class EvolutionVisualizer:
         # Si no hay CSV, intentar reconstruir desde los frames
         return []
 
-    def _load_triangles(self) -> Optional[Dict]:
-        """Carga los datos de triángulos si existen."""
-        json_path = self.output_dir / "triangles.json"
-        if json_path.exists():
+    def _load_shapes(self) -> Optional[Dict]:
+        """Carga los datos de formas si existen."""
+        for json_path in [
+            self.output_dir / "shapes.json",
+            self.output_dir / "triangles.json",
+        ]:
+            if not json_path.exists():
+                continue
             with open(json_path, "r") as f:
                 return json.load(f)
         return None
@@ -177,11 +186,16 @@ class EvolutionVisualizer:
             if "worst_fitness" in metrics:
                 lines.append(f"Peor Fitness: {metrics['worst_fitness']:.6f}")
 
-        if self.triangles_data:
+        if self.shapes_data:
             lines.append("-" * 25)
-            lines.append(
-                f"Triángulos: {self.triangles_data.get('num_triangles', 'N/A')}"
-            )
+            shape_type = self.shapes_data.get("shape_type", "triangle")
+            count = self.shapes_data.get("num_shapes")
+            if count is None:
+                count = self.shapes_data.get(
+                    "num_triangles", self.shapes_data.get("num_ellipses", "N/A")
+                )
+            label = "Triángulos" if shape_type == "triangle" else "Elipses"
+            lines.append(f"{label}: {count}")
 
         lines.append("-" * 25)
         lines.append(f"Frame: {self.current_frame + 1} / {len(self.frames)}")

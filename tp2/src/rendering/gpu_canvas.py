@@ -18,6 +18,7 @@ from PIL import Image, ImageOps
 
 try:
     import moderngl
+
     MODERNGL_AVAILABLE = True
 except ImportError:
     MODERNGL_AVAILABLE = False
@@ -126,8 +127,8 @@ class GPUCanvas:
                 rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
                 for j, (x, y) in enumerate(tri.vertices):
                     row = i * 3 + j
-                    data[row, 0] = x * 2.0 - 1.0   # ndc_x
-                    data[row, 1] = 1.0 - y * 2.0   # ndc_y (flip Y)
+                    data[row, 0] = x * 2.0 - 1.0  # ndc_x
+                    data[row, 1] = 1.0 - y * 2.0  # ndc_y (flip Y)
                     data[row, 2] = rf
                     data[row, 3] = gf
                     data[row, 4] = bf
@@ -155,3 +156,6 @@ class GPUCanvas:
     def save(self, individual: Individual, path: str):
         """Render and save an individual as an image file."""
         self.render(individual).save(path)
+
+
+TriangleGPUCanvas = GPUCanvas

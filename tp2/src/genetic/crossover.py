@@ -7,11 +7,46 @@ generar descendencia.
 
 from __future__ import annotations
 
+import math
 import random
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 
-from src.genetic.individual import Individual, Triangle
+from src.genetic.individual import Ellipse, Individual, ShapeGene, Triangle
+
+
+def _average_angles(angle_a: float, angle_b: float) -> float:
+    return math.atan2(
+        math.sin(angle_a) + math.sin(angle_b), math.cos(angle_a) + math.cos(angle_b)
+    )
+
+
+def _blend_genes(gene_a: ShapeGene, gene_b: ShapeGene) -> ShapeGene:
+    if type(gene_a) is not type(gene_b):
+        raise ValueError("La cruza aritmética requiere genes del mismo tipo")
+
+    r = int((gene_a.color[0] + gene_b.color[0]) / 2)
+    g = int((gene_a.color[1] + gene_b.color[1]) / 2)
+    b = int((gene_a.color[2] + gene_b.color[2]) / 2)
+    a = (gene_a.color[3] + gene_b.color[3]) / 2.0
+
+    if isinstance(gene_a, Triangle):
+        new_vertices = []
+        for j in range(3):
+            vx = (gene_a.vertices[j][0] + gene_b.vertices[j][0]) / 2.0
+            vy = (gene_a.vertices[j][1] + gene_b.vertices[j][1]) / 2.0
+            new_vertices.append((vx, vy))
+        return Triangle(new_vertices, (r, g, b, a))
+
+    if isinstance(gene_a, Ellipse):
+        cx = (gene_a.center[0] + gene_b.center[0]) / 2.0
+        cy = (gene_a.center[1] + gene_b.center[1]) / 2.0
+        rx = (gene_a.radii[0] + gene_b.radii[0]) / 2.0
+        ry = (gene_a.radii[1] + gene_b.radii[1]) / 2.0
+        angle = _average_angles(gene_a.angle, gene_b.angle)
+        return Ellipse(center=(cx, cy), radii=(rx, ry), angle=angle, color=(r, g, b, a))
+
+    raise TypeError(f"Gen no soportado: {type(gene_a)!r}")
 
 
 class CrossoverMethod(ABC):
@@ -85,7 +120,10 @@ class SinglePointCrossover(CrossoverMethod):
         child2_triangles = [t.copy() for t in parent2.triangles[:point]]
         child2_triangles.extend([t.copy() for t in parent1.triangles[point:]])
 
-        return Individual(child1_triangles), Individual(child2_triangles)
+        return (
+            Individual(child1_triangles, shape_type=parent1.shape_type),
+            Individual(child2_triangles, shape_type=parent1.shape_type),
+        )
 
 
 class TwoPointCrossover(CrossoverMethod):
@@ -122,7 +160,10 @@ class TwoPointCrossover(CrossoverMethod):
             + [t.copy() for t in parent2.triangles[point2:]]
         )
 
-        return Individual(child1_triangles), Individual(child2_triangles)
+        return (
+            Individual(child1_triangles, shape_type=parent1.shape_type),
+            Individual(child2_triangles, shape_type=parent1.shape_type),
+        )
 
 
 class UniformCrossover(CrossoverMethod):
@@ -151,7 +192,10 @@ class UniformCrossover(CrossoverMethod):
                 child1_triangles.append(parent2[i].copy())
                 child2_triangles.append(parent1[i].copy())
 
-        return Individual(child1_triangles), Individual(child2_triangles)
+        return (
+            Individual(child1_triangles, shape_type=parent1.shape_type),
+            Individual(child2_triangles, shape_type=parent1.shape_type),
+        )
 
 
 class AnnularCrossover(CrossoverMethod):
@@ -195,98 +239,102 @@ class AnnularCrossover(CrossoverMethod):
             child1_triangles[idx] = parent2.triangles[idx].copy()
             child2_triangles[idx] = parent1.triangles[idx].copy()
 
-        return Individual(child1_triangles), Individual(child2_triangles)
+        return (
+            Individual(child1_triangles, shape_type=parent1.shape_type),
+            Individual(child2_triangles, shape_type=parent1.shape_type),
+        )
 
 
 class SpatialZIndexCrossover(CrossoverMethod):
     """
     Cruza espacial paralela con resolución de conflictos (preserva Z-Index y N).
-    
-    Verifica los centroides y cruza espacialmente la imagen a la mitad. 
-    Resuelve los empates al azar garantizando el mantenimiento estricto 
+
+    Verifica los centroides y cruza espacialmente la imagen a la mitad.
+    Resuelve los empates al azar garantizando el mantenimiento estricto
     del largo del cromosoma.
     """
+
     def _crossover(
         self, parent1: Individual, parent2: Individual
     ) -> Tuple[Individual, Individual]:
         n = len(parent1)
         if n != len(parent2):
             raise ValueError("Los padres deben tener el mismo número de triángulos")
-            
+
         child1_triangles = []
         child2_triangles = []
-        
+
         midpoint = 0.5  # Coordenadas normalizadas [0, 1]
-        
+
         for i in range(n):
             t_A = parent1[i]
             t_B = parent2[i]
-            
+
             # Centroides X
-            cx_A = (t_A.vertices[0][0] + t_A.vertices[1][0] + t_A.vertices[2][0]) / 3.0
-            cx_B = (t_B.vertices[0][0] + t_B.vertices[1][0] + t_B.vertices[2][0]) / 3.0
-            
+            cx_A = t_A.centroid_x()
+            cx_B = t_B.centroid_x()
+
             # Regla Child1: Izquierda de A, Derecha de B
             A1_valid = cx_A < midpoint
             B1_valid = cx_B >= midpoint
-            
+
             if A1_valid and not B1_valid:
                 child1_triangles.append(t_A.copy())
             elif B1_valid and not A1_valid:
                 child1_triangles.append(t_B.copy())
             else:
-                child1_triangles.append(t_A.copy() if random.random() < 0.5 else t_B.copy())
-                
+                child1_triangles.append(
+                    t_A.copy() if random.random() < 0.5 else t_B.copy()
+                )
+
             # Regla Child2: Izquierda de B, Derecha de A (simétrico)
             A2_valid = cx_A >= midpoint
             B2_valid = cx_B < midpoint
-            
+
             if A2_valid and not B2_valid:
                 child2_triangles.append(t_A.copy())
             elif B2_valid and not A2_valid:
                 child2_triangles.append(t_B.copy())
             else:
-                child2_triangles.append(t_A.copy() if random.random() < 0.5 else t_B.copy())
+                child2_triangles.append(
+                    t_A.copy() if random.random() < 0.5 else t_B.copy()
+                )
 
-        return Individual(child1_triangles), Individual(child2_triangles)
+        return (
+            Individual(child1_triangles, shape_type=parent1.shape_type),
+            Individual(child2_triangles, shape_type=parent1.shape_type),
+        )
 
 
 class ArithmeticCrossover(CrossoverMethod):
     """
     Cruza aritmética (Blending Genético).
-    
+
     Promedia los vértices y colores de los triángulos en cada capa Z para
     interpolarlos matemáticamente.
     """
+
     def _crossover(
         self, parent1: Individual, parent2: Individual
     ) -> Tuple[Individual, Individual]:
         n = len(parent1)
         if n != len(parent2):
             raise ValueError("Los padres deben tener el mismo número de triángulos")
-            
+
         child_triangles = []
-        
+
         for i in range(n):
             t_A = parent1[i]
             t_B = parent2[i]
-            
-            new_vertices = []
-            for j in range(3):
-                vx = (t_A.vertices[j][0] + t_B.vertices[j][0]) / 2.0
-                vy = (t_A.vertices[j][1] + t_B.vertices[j][1]) / 2.0
-                new_vertices.append((vx, vy))
-                
-            r = int((t_A.color[0] + t_B.color[0]) / 2)
-            g = int((t_A.color[1] + t_B.color[1]) / 2)
-            b = int((t_A.color[2] + t_B.color[2]) / 2)
-            a = (t_A.color[3] + t_B.color[3]) / 2.0
-            
-            child_triangles.append(Triangle(new_vertices, (r, g, b, a)))
-            
-        return Individual(child_triangles), Individual([t.copy() for t in child_triangles])
 
+            child_triangles.append(_blend_genes(t_A, t_B))
 
+        return (
+            Individual(child_triangles, shape_type=parent1.shape_type),
+            Individual(
+                [t.copy() for t in child_triangles], shape_type=parent1.shape_type
+            ),
+        )
 
 
 def create_crossover_method(method: str, probability: float = 0.8) -> CrossoverMethod:

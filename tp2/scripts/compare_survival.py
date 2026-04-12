@@ -81,7 +81,13 @@ def parse_args():
         "--population", "-p", type=int, default=50, help="Tamaño de población"
     )
     parser.add_argument(
-        "--triangles", "-t", type=int, default=50, help="Triángulos por individuo"
+        "--triangles", "-t", type=int, default=50, help="Genes por individuo"
+    )
+    parser.add_argument(
+        "--shape",
+        choices=["triangle", "ellipse"],
+        default="triangle",
+        help="Familia de formas por corrida",
     )
     parser.add_argument(
         "--max-size", type=int, default=128, help="Tamaño máximo de la imagen"
@@ -289,7 +295,7 @@ def main():
     target_image = resize_image(target_image, max_size=args.max_size)
     print(f"Imagen: {args.image}  ({target_image.size[0]}x{target_image.size[1]}px)")
     print(
-        f"Generaciones: {args.generations} | Población: {args.population} | Triángulos: {args.triangles}"
+        f"Generaciones: {args.generations} | Población: {args.population} | Genes: {args.triangles} | Forma: {args.shape}"
     )
     print(f"Selección padres: {args.selection}")
     print(f"Selección supervivientes: {args.survival_selection}")
@@ -298,6 +304,7 @@ def main():
     config = EvolutionConfig(
         population_size=args.population,
         num_triangles=args.triangles,
+        shape_type=args.shape,
         max_generations=args.generations,
     )
 
