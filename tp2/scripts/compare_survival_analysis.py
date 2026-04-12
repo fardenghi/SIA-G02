@@ -15,6 +15,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -40,46 +41,103 @@ LABELS = {
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Análisis comparativo de estrategias de supervivencia (promedio ± std)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--image", "-i", required=True, help="Imagen objetivo")
-    parser.add_argument("--triangles", "-t", type=int, default=100, help="Triángulos por individuo")
-    parser.add_argument("--generations", "-g", type=int, default=2000, help="Generaciones máximas")
-    parser.add_argument("--population", "-p", type=int, default=100, help="Tamaño de población")
-    parser.add_argument("--runs", "-r", type=int, default=3, help="Corridas por estrategia")
     parser.add_argument(
-        "--fitness", "-f", type=str, default="linear",
-        choices=["linear", "rmse", "inverse_normalized", "exponential",
-                 "inverse_mse", "detail_weighted", "composite", "ssim", "edge_loss"],
+        "--triangles", "-t", type=int, default=100, help="Triángulos por individuo"
+    )
+    parser.add_argument(
+        "--generations", "-g", type=int, default=2000, help="Generaciones máximas"
+    )
+    parser.add_argument(
+        "--population", "-p", type=int, default=100, help="Tamaño de población"
+    )
+    parser.add_argument(
+        "--runs", "-r", type=int, default=3, help="Corridas por estrategia"
+    )
+    parser.add_argument(
+        "--fitness",
+        "-f",
+        type=str,
+        default="linear",
+        choices=[
+            "linear",
+            "rmse",
+            "inverse_normalized",
+            "exponential",
+            "inverse_mse",
+            "detail_weighted",
+            "composite",
+            "ssim",
+            "edge_loss",
+        ],
         help="Función de fitness",
     )
-    parser.add_argument("--max-size", type=int, default=128, help="Tamaño máximo de la imagen")
     parser.add_argument(
-        "--output", "-o", type=str, default="output/survival_analysis",
+        "--max-size", type=int, default=128, help="Tamaño máximo de la imagen"
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="output/survival_analysis",
         help="Directorio de salida",
     )
     # Operadores fijos (modificables por CLI)
-    parser.add_argument("--selection", type=str, default="probabilistic_tournament",
-                        choices=["elite", "tournament", "probabilistic_tournament",
-                                 "roulette", "universal", "boltzmann", "rank"],
-                        help="Método de selección (fijo)")
-    parser.add_argument("--crossover", type=str, default="uniform",
-                        choices=["single_point", "two_point", "uniform", "annular",
-                                 "spatial_zindex", "arithmetic"],
-                        help="Método de cruza (fijo)")
-    parser.add_argument("--mutation", type=str, default="uniform_multigen",
-                        choices=["single_gene", "limited_multigen", "uniform_multigen",
-                                 "complete", "error_map_guided"],
-                        help="Método de mutación (fijo)")
+    parser.add_argument(
+        "--selection",
+        type=str,
+        default="probabilistic_tournament",
+        choices=[
+            "elite",
+            "tournament",
+            "probabilistic_tournament",
+            "roulette",
+            "universal",
+            "boltzmann",
+            "rank",
+        ],
+        help="Método de selección (fijo)",
+    )
+    parser.add_argument(
+        "--crossover",
+        type=str,
+        default="uniform",
+        choices=[
+            "single_point",
+            "two_point",
+            "uniform",
+            "annular",
+            "spatial_zindex",
+            "arithmetic",
+        ],
+        help="Método de cruza (fijo)",
+    )
+    parser.add_argument(
+        "--mutation",
+        type=str,
+        default="uniform_multigen",
+        choices=[
+            "single_gene",
+            "limited_multigen",
+            "uniform_multigen",
+            "complete",
+            "error_map_guided",
+        ],
+        help="Método de mutación (fijo)",
+    )
     return parser.parse_args()
 
 
 # ---------------------------------------------------------------------------
 # Ejecución
 # ---------------------------------------------------------------------------
+
 
 def run_once(
     survival_method: str,
@@ -151,8 +209,14 @@ def run_strategy(
     with ProcessPoolExecutor(max_workers=num_runs) as executor:
         futures = {
             executor.submit(
-                run_once, survival_method, target_image, evo_config,
-                selection_method, crossover_method, mutation_method, fitness_method,
+                run_once,
+                survival_method,
+                target_image,
+                evo_config,
+                selection_method,
+                crossover_method,
+                mutation_method,
+                fitness_method,
             ): i
             for i in range(num_runs)
         }
@@ -160,12 +224,14 @@ def run_strategy(
         for future in as_completed(futures):
             r = future.result()
             run_results.append(r)
-            print(f"    corrida {len(run_results)}/{num_runs} completada  "
-                  f"fitness: {r['best_fitness']:.6f}  tiempo: {r['elapsed_time']:.1f}s")
+            print(
+                f"    corrida {len(run_results)}/{num_runs} completada  "
+                f"fitness: {r['best_fitness']:.6f}  tiempo: {r['elapsed_time']:.1f}s"
+            )
 
-    all_finals    = [r["best_fitness"] for r in run_results]
-    all_times     = [r["elapsed_time"] for r in run_results]
-    all_histories = [r["history"]      for r in run_results]
+    all_finals = [r["best_fitness"] for r in run_results]
+    all_times = [r["elapsed_time"] for r in run_results]
+    all_histories = [r["history"] for r in run_results]
 
     num_gens = len(all_histories[0])
     avg_history = []
@@ -182,6 +248,8 @@ def run_strategy(
         "avg_fitness": float(np.mean(all_finals)),
         "std_fitness": float(np.std(all_finals)),
         "avg_time": float(np.mean(all_times)),
+        "run_fitnesses": all_finals,
+        "run_times": all_times,
         "avg_history": avg_history,
         "std_history": std_history,
         "generations": generations,
@@ -191,6 +259,66 @@ def run_strategy(
 # ---------------------------------------------------------------------------
 # Gráficos
 # ---------------------------------------------------------------------------
+
+
+def save_csv_results(results: list, output_dir: Path):
+    """Exporta CSVs para reconstruir análisis sin re-ejecutar el experimento."""
+    sorted_results = sorted(results, key=lambda r: r["avg_fitness"], reverse=True)
+
+    summary_rows = []
+    evolution_rows = []
+    run_rows = []
+
+    for r in sorted_results:
+        method = r["method"]
+        label = LABELS.get(method, method)
+
+        summary_rows.append(
+            {
+                "method": method,
+                "label": label,
+                "avg_fitness": r["avg_fitness"],
+                "std_fitness": r["std_fitness"],
+                "avg_time": r["avg_time"],
+            }
+        )
+
+        for gen, avg, std in zip(r["generations"], r["avg_history"], r["std_history"]):
+            evolution_rows.append(
+                {
+                    "method": method,
+                    "label": label,
+                    "generation": gen,
+                    "avg_fitness": avg,
+                    "std_fitness": std,
+                }
+            )
+
+        for run_idx, (fitness, elapsed_time) in enumerate(
+            zip(r["run_fitnesses"], r["run_times"]), start=1
+        ):
+            run_rows.append(
+                {
+                    "method": method,
+                    "label": label,
+                    "run": run_idx,
+                    "best_fitness": fitness,
+                    "elapsed_time": elapsed_time,
+                }
+            )
+
+    summary_path = output_dir / "final_fitness_summary.csv"
+    evolution_path = output_dir / "evolution_fitness.csv"
+    runs_path = output_dir / "run_results.csv"
+
+    pd.DataFrame(summary_rows).to_csv(summary_path, index=False)
+    pd.DataFrame(evolution_rows).to_csv(evolution_path, index=False)
+    pd.DataFrame(run_rows).to_csv(runs_path, index=False)
+
+    print(f"  CSV resumen guardado: {summary_path}")
+    print(f"  CSV evolución guardado: {evolution_path}")
+    print(f"  CSV corridas guardado: {runs_path}")
+
 
 def plot_evolution(results: list, output_dir: Path):
     """Curvas promedio ± banda std por generación."""
@@ -230,7 +358,9 @@ def plot_final_fitness(results: list, output_dir: Path):
     colors = plt.cm.tab10.colors[: len(sorted_results)]
 
     fig, ax = plt.subplots(figsize=(9, 4))
-    bars = ax.barh(names, avgs, xerr=stds, color=colors, capsize=5, error_kw={"linewidth": 1.5})
+    bars = ax.barh(
+        names, avgs, xerr=stds, color=colors, capsize=5, error_kw={"linewidth": 1.5}
+    )
 
     for bar, avg, std in zip(bars, avgs, stds):
         ax.text(
@@ -256,13 +386,16 @@ def plot_final_fitness(results: list, output_dir: Path):
 # Resumen
 # ---------------------------------------------------------------------------
 
+
 def print_summary(results: list):
     col_w = 30
     print()
     print("=" * 70)
     print("RESUMEN — ESTRATEGIAS DE SUPERVIVENCIA")
     print("=" * 70)
-    print(f"{'Estrategia':<{col_w}} {'Avg Fitness':>12} {'Std Fitness':>12} {'Avg Tiempo':>12}")
+    print(
+        f"{'Estrategia':<{col_w}} {'Avg Fitness':>12} {'Std Fitness':>12} {'Avg Tiempo':>12}"
+    )
     print("-" * 70)
 
     sorted_results = sorted(results, key=lambda r: r["avg_fitness"], reverse=True)
@@ -279,14 +412,17 @@ def print_summary(results: list):
 
     print("=" * 70)
     best = sorted_results[0]
-    print(f"Ganador: {LABELS.get(best['method'], best['method'])}  "
-          f"(avg fitness {best['avg_fitness']:.6f} ± {best['std_fitness']:.6f})")
+    print(
+        f"Ganador: {LABELS.get(best['method'], best['method'])}  "
+        f"(avg fitness {best['avg_fitness']:.6f} ± {best['std_fitness']:.6f})"
+    )
     print("=" * 70)
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     args = parse_args()
@@ -297,10 +433,14 @@ def main():
     target_image = Image.open(args.image).convert("RGB")
     target_image = resize_image(target_image, max_size=args.max_size)
     print(f"Imagen: {args.image}  ({target_image.size[0]}x{target_image.size[1]}px)")
-    print(f"Generaciones: {args.generations} | Población: {args.population} | "
-          f"Triángulos: {args.triangles} | Corridas: {args.runs}")
-    print(f"Fitness: {args.fitness} | Selección: {args.selection} | "
-          f"Cruza: {args.crossover} | Mutación: {args.mutation}")
+    print(
+        f"Generaciones: {args.generations} | Población: {args.population} | "
+        f"Triángulos: {args.triangles} | Corridas: {args.runs}"
+    )
+    print(
+        f"Fitness: {args.fitness} | Selección: {args.selection} | "
+        f"Cruza: {args.crossover} | Mutación: {args.mutation}"
+    )
     print()
 
     evo_config = EvolutionConfig(
@@ -315,16 +455,24 @@ def main():
         label = LABELS[method]
         print(f"[{idx}/{total}] {label} ({args.runs} corridas)...")
         r = run_strategy(
-            method, target_image, evo_config,
-            args.selection, args.crossover, args.mutation, args.fitness,
+            method,
+            target_image,
+            evo_config,
+            args.selection,
+            args.crossover,
+            args.mutation,
+            args.fitness,
             args.runs,
         )
         results.append(r)
-        print(f"       avg fitness: {r['avg_fitness']:.6f} ± {r['std_fitness']:.6f}  |  "
-              f"avg tiempo: {r['avg_time']:.1f}s")
+        print(
+            f"       avg fitness: {r['avg_fitness']:.6f} ± {r['std_fitness']:.6f}  |  "
+            f"avg tiempo: {r['avg_time']:.1f}s"
+        )
 
     print()
     print("Generando salidas...")
+    save_csv_results(results, output_dir)
     plot_evolution(results, output_dir)
     plot_final_fitness(results, output_dir)
     print_summary(results)

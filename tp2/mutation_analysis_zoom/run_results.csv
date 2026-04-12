@@ -1,0 +1,7 @@
+method,label,run,best_fitness,elapsed_time
+single_gene,Mutación Gen Simple,1,0.9803375252694373,217.88220715522766
+single_gene,Mutación Gen Simple,2,0.9785245387423365,219.84395790100098
+single_gene,Mutación Gen Simple,3,0.9787585032431695,220.4054410457611
+uniform_multigen,Mutación Multigen Uniforme,1,0.9702053955674617,301.6386921405792
+uniform_multigen,Mutación Multigen Uniforme,2,0.9712915111226865,302.77811002731323
+uniform_multigen,Mutación Multigen Uniforme,3,0.972305570024763,304.0336928367615

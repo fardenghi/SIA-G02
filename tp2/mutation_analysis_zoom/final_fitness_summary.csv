@@ -1,0 +1,3 @@
+method,label,avg_fitness,std_fitness,avg_time
+single_gene,Mutación Gen Simple,0.9792068557516478,0.0008051894252312474,219.37720203399658
+uniform_multigen,Mutación Multigen Uniforme,0.9712674922383037,0.0008575608308376827,302.81683166821796
