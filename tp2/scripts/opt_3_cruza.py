@@ -23,7 +23,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.genetic.engine import create_engine, EvolutionConfig
-from src.genetic.individual import Individual, Triangle
+from src.genetic.individual import Individual, Triangle, Ellipse
 from src.genetic.crossover import SpatialZIndexCrossover, SinglePointCrossover
 from src.rendering.canvas import resize_image
 from src.rendering import create_renderer
@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--generations", "-g", type=int, default=2000, help="Generaciones máximas")
     parser.add_argument("--population", "-p", type=int, default=100, help="Tamaño de población")
     parser.add_argument("--max-size", type=int, default=128, help="Tamaño máximo de la imagen base")
+    parser.add_argument("--shape", default="triangle", help="{trianlge, ellipse}")
     parser.add_argument(
         "--output", "-o", type=str, default="output/opt_3_cruza",
         help="Directorio de salida",
@@ -96,15 +97,37 @@ def generate_polarized_triangle(side: str) -> Triangle:
     return Triangle(vertices=vertices, color=color)
 
 
-def demo_spatial_crossover(renderer, output_dir: Path, num_triangles: int = 50):
+def generate_polarized_ellipse(side: str) -> Ellipse:
+    """
+    Genera una elipse aleatoria, obligándola a vivir puramente
+    en la mitad Izquierda (left) o Derecha (right) de la imagen.
+    Asigna color sólido (rojo izquierdo, azul derecho).
+    """
+    import math
+
+    if side == "left":
+        center = (random.uniform(0.05, 0.45), random.uniform(0.05, 0.95))
+        color = (255, 0, 0, 0.6)
+    else:
+        center = (random.uniform(0.55, 0.95), random.uniform(0.05, 0.95))
+        color = (0, 0, 255, 0.6)
+
+    radii = (random.uniform(0.02, 0.15), random.uniform(0.02, 0.15))
+    angle = random.uniform(-math.pi, math.pi)
+    return Ellipse(center=center, radii=radii, angle=angle, color=color)
+
+
+def demo_spatial_crossover(renderer, output_dir: Path, num_triangles: int = 50, shape_type: str = "triangle"):
     print("\n--- PASO 1: DEMO SINTÉTICA DE LA CRUZA ESPACIAL ---")
-    
+
+    gen_fn = generate_polarized_ellipse if shape_type == "ellipse" else generate_polarized_triangle
+
     # 1. Crear Padre A: Todos los genes a la izquierda y Rojos
-    triangles_A = [generate_polarized_triangle("left") for _ in range(num_triangles)]
+    triangles_A = [gen_fn("left") for _ in range(num_triangles)]
     parent_A = Individual(triangles=triangles_A)
-    
+
     # 2. Crear Padre B: Todos los genes a la derecha y Azules
-    triangles_B = [generate_polarized_triangle("right") for _ in range(num_triangles)]
+    triangles_B = [gen_fn("right") for _ in range(num_triangles)]
     parent_B = Individual(triangles=triangles_B)
 
     # Renderizarlos y guardarlos
@@ -156,11 +179,11 @@ def main():
         width=target_image.width,
         height=target_image.height,
         backend=args.backend,
-        shape_type="triangle",
+        shape_type=args.shape,
     )
 
     # 1. Demostración Macroscópica
-    demo_spatial_crossover(renderer, output_dir, args.triangles)
+    demo_spatial_crossover(renderer, output_dir, args.triangles, shape_type=args.shape)
 
     # 2. Ejecución Global de Comparación
     print("--- PASO 2: RENDIMIENTO AG (Single Point vs Spatial) ---")
@@ -174,12 +197,13 @@ def main():
             population_size=args.population,
             num_triangles=args.triangles,
             max_generations=args.generations,
+            shape_type=args.shape,
         )
 
         engine = create_engine(
             target_image=target_image,
             config=evo_config,
-            selection_method="probabilistic_tournament",
+            selection_method="tournament",
             crossover_method=cx,
             mutation_method="uniform_multigen",
             survival_method="additive",
