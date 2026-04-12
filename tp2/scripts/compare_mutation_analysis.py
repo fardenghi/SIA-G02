@@ -7,7 +7,10 @@ gráficos comparativos robustos.
 """
 
 import argparse
+import os
+import random
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -92,6 +95,10 @@ def run_once(
     fitness_method: str,
 ) -> dict:
     """Ejecuta el AG una vez y retorna resultados."""
+    # Semilla única por proceso: evita corridas idénticas en fork de Linux
+    random.seed()
+    np.random.seed(int.from_bytes(os.urandom(4), "big"))
+
     mutation_params = MutationParams(
         mutation_type=MUTATION_TYPE_MAP[mutation_method],
         probability=0.3,
@@ -136,20 +143,26 @@ def run_method(
     fitness_method: str,
     num_runs: int,
 ) -> dict:
-    """Ejecuta el AG num_runs veces y agrega resultados."""
-    all_finals = []
-    all_times = []
-    all_histories = []
+    """Ejecuta el AG num_runs veces en paralelo y agrega resultados."""
+    print(f"    lanzando {num_runs} corridas en paralelo...")
+    with ProcessPoolExecutor(max_workers=num_runs) as executor:
+        futures = {
+            executor.submit(
+                run_once, mutation_method, target_image, evo_config,
+                selection_method, crossover_method, survival_method, fitness_method,
+            ): i
+            for i in range(num_runs)
+        }
+        run_results = []
+        for future in as_completed(futures):
+            r = future.result()
+            run_results.append(r)
+            print(f"    corrida {len(run_results)}/{num_runs} completada  "
+                  f"fitness: {r['best_fitness']:.6f}  tiempo: {r['elapsed_time']:.1f}s")
 
-    for run_idx in range(num_runs):
-        print(f"    corrida {run_idx + 1}/{num_runs}...")
-        r = run_once(
-            mutation_method, target_image, evo_config,
-            selection_method, crossover_method, survival_method, fitness_method,
-        )
-        all_finals.append(r["best_fitness"])
-        all_times.append(r["elapsed_time"])
-        all_histories.append(r["history"])
+    all_finals    = [r["best_fitness"] for r in run_results]
+    all_times     = [r["elapsed_time"] for r in run_results]
+    all_histories = [r["history"]      for r in run_results]
 
     num_gens = len(all_histories[0])
     avg_history = []
