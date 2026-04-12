@@ -14,7 +14,10 @@ final_fitness.png     — barras horizontales con error bars del fitness final
 """
 
 import argparse
+import os
+import random
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -45,6 +48,7 @@ LABELS = {
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Análisis comparativo de estrategias de supervivencia (promedio ± std)",
@@ -56,14 +60,43 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--population", "-p", type=int, default=100, help="Tamaño de población")
     parser.add_argument("--runs", "-r", type=int, default=3, help="Corridas por estrategia")
     parser.add_argument(
-        "--fitness", "-f", type=str, default="linear",
-        choices=["linear", "rmse", "inverse_normalized", "exponential",
-                 "inverse_mse", "detail_weighted", "composite", "ssim", "edge_loss"],
+        "--triangles", "-t", type=int, default=100, help="Triángulos por individuo"
+    )
+    parser.add_argument(
+        "--generations", "-g", type=int, default=2000, help="Generaciones máximas"
+    )
+    parser.add_argument(
+        "--population", "-p", type=int, default=100, help="Tamaño de población"
+    )
+    parser.add_argument(
+        "--runs", "-r", type=int, default=3, help="Corridas por estrategia"
+    )
+    parser.add_argument(
+        "--fitness",
+        "-f",
+        type=str,
+        default="linear",
+        choices=[
+            "linear",
+            "rmse",
+            "inverse_normalized",
+            "exponential",
+            "inverse_mse",
+            "detail_weighted",
+            "composite",
+            "ssim",
+            "edge_loss",
+        ],
         help="Función de fitness",
     )
-    parser.add_argument("--max-size", type=int, default=128, help="Tamaño máximo de la imagen")
     parser.add_argument(
-        "--output", "-o", type=str, default="output/survival_analysis",
+        "--max-size", type=int, default=128, help="Tamaño máximo de la imagen"
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="output/survival_analysis",
         help="Directorio de salida",
     )
     # Operadores fijos (modificables por CLI)
@@ -94,6 +127,7 @@ def parse_args() -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 # Ejecución
 # ---------------------------------------------------------------------------
+
 
 def run_once(
     survival_method: str,
@@ -323,7 +357,9 @@ def print_summary(summary_df: pd.DataFrame) -> None:
     print("=" * 70)
     print("RESUMEN — ESTRATEGIAS DE SUPERVIVENCIA")
     print("=" * 70)
-    print(f"{'Estrategia':<{col_w}} {'Avg Fitness':>12} {'Std Fitness':>12} {'Avg Tiempo':>12}")
+    print(
+        f"{'Estrategia':<{col_w}} {'Avg Fitness':>12} {'Std Fitness':>12} {'Avg Tiempo':>12}"
+    )
     print("-" * 70)
 
     sorted_df = summary_df.sort_values("avg_fitness", ascending=False)
@@ -349,6 +385,7 @@ def print_summary(summary_df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     args = parse_args()
