@@ -39,6 +39,9 @@ class TestCrossoverConfig:
 
         assert config.method == "single_point"
         assert config.probability == 0.8
+        assert config.phased_enabled is False
+        assert config.late_method == "uniform"
+        assert config.switch_ratio == 0.6
 
 
 class TestMutationConfig:
@@ -87,6 +90,31 @@ class TestConfig:
         assert config.selection.method == "roulette"
         assert config.crossover.method == "uniform"
         assert config.crossover.probability == 0.9
+
+    def test_from_dict_with_phased_crossover(self):
+        """Debe parsear configuración de cruza por fases."""
+        data = {
+            "target_path": "/dummy/path.png",
+            "crossover": {
+                "method": "two_point",
+                "probability": 0.85,
+                "phased": {
+                    "enabled": True,
+                    "early_method": "two_point",
+                    "late_method": "uniform",
+                    "switch_ratio": 0.55,
+                },
+            },
+        }
+
+        config = Config.from_dict(data)
+
+        assert config.crossover.method == "two_point"
+        assert config.crossover.probability == 0.85
+        assert config.crossover.phased_enabled is True
+        assert config.crossover.early_method == "two_point"
+        assert config.crossover.late_method == "uniform"
+        assert config.crossover.switch_ratio == 0.55
 
     def test_from_dict_legacy_format(self):
         """Debe soportar formato legacy del YAML."""
@@ -153,12 +181,20 @@ class TestConfig:
     def test_to_evolution_config(self):
         """Debe convertir a EvolutionConfig."""
         config = Config(population_size=80, num_triangles=40, max_generations=3000)
+        config.crossover.phased_enabled = True
+        config.crossover.early_method = "single_point"
+        config.crossover.late_method = "uniform"
+        config.crossover.switch_ratio = 0.4
 
         evo_config = config.to_evolution_config()
 
         assert evo_config.population_size == 80
         assert evo_config.num_triangles == 40
         assert evo_config.max_generations == 3000
+        assert evo_config.phased_crossover_enabled is True
+        assert evo_config.phased_crossover_early_method == "single_point"
+        assert evo_config.phased_crossover_late_method == "uniform"
+        assert evo_config.phased_crossover_switch_ratio == 0.4
 
     def test_validate_missing_image(self):
         """Debe detectar imagen faltante."""
@@ -200,6 +236,16 @@ class TestConfig:
         errors = config.validate()
 
         assert any("fitness.method" in e for e in errors)
+
+    def test_validate_invalid_phased_switch_ratio(self):
+        """Debe detectar switch_ratio fuera de rango en cruza por fases."""
+        config = Config(target_path="/dummy/path.png")
+        config.crossover.phased_enabled = True
+        config.crossover.switch_ratio = 1.5
+
+        errors = config.validate()
+
+        assert any("crossover.switch_ratio" in e for e in errors)
 
 
 class TestLoadConfig:

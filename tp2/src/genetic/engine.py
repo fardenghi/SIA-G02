@@ -55,6 +55,13 @@ class EvolutionConfig:
     stagnation_threshold: float = 0.0005
     max_patience: int = 20
     transition_methods: Optional[List[str]] = None
+    seed_ratio: float = (
+        0.0  # Fracción de la población inicial sembrada por grilla [0.0, 1.0]
+    )
+    phased_crossover_enabled: bool = False
+    phased_crossover_early_method: str = "single_point"
+    phased_crossover_late_method: str = "uniform"
+    phased_crossover_switch_ratio: float = 0.6
 
 
 @dataclass
@@ -140,6 +147,10 @@ class GeneticEngine:
         self.base_crossover = (
             crossover_method  # Guardar el operador configurado en YAML
         )
+        self._crossover_cache: dict[str, CrossoverMethod] = {
+            type(crossover_method).__name__: crossover_method,
+        }
+        self._phased_active_method_name: Optional[str] = None
 
         from src.genetic.selection import TournamentSelection
 
@@ -154,6 +165,25 @@ class GeneticEngine:
         self.offspring_ratio = offspring_ratio
 
         self.base_fitness_method = fitness_method
+
+        self._phased_crossover_enabled = bool(self.config.phased_crossover_enabled)
+        self._phased_crossover_early_method = self.config.phased_crossover_early_method
+        self._phased_crossover_late_method = self.config.phased_crossover_late_method
+        self._phased_crossover_switch_ratio = max(
+            0.0, min(1.0, self.config.phased_crossover_switch_ratio)
+        )
+
+        if self._phased_crossover_enabled:
+            self._crossover_cache = {
+                self._phased_crossover_early_method: create_crossover_method(
+                    self._phased_crossover_early_method,
+                    probability=self.base_crossover.probability,
+                ),
+                self._phased_crossover_late_method: create_crossover_method(
+                    self._phased_crossover_late_method,
+                    probability=self.base_crossover.probability,
+                ),
+            }
 
         self.cv_methods: List[str] = []
         if self.config.transition_methods:
@@ -212,18 +242,112 @@ class GeneticEngine:
 
     def initialize_population(self) -> Population:
         """
-        Inicializa una población aleatoria.
+        Inicializa la población, opcionalmente sembrando una fracción con individuos
+        pre-calculados por Grilla de Color Promedio ("Grid Seeding").
+
+        La fracción configurada en `seed_ratio` de la población se inicializa con triángulos
+        que cubren una grilla regular de la imagen objetivo, con el color promedio de cada celda.
+        El resto se inicializa de forma aleatoria para garantizar diversidad genética.
 
         Returns:
             Nueva población.
         """
-        self.population = Population.random(
-            size=self.config.population_size,
-            num_triangles=self.config.num_triangles,
-            alpha_min=self.config.alpha_min,
-            alpha_max=self.config.alpha_max,
-            shape_type=self.config.shape_type,
-        )
+        import numpy as np
+        from src.genetic.individual import Individual, Triangle
+
+        pop_size = self.config.population_size
+        n_triangles = self.config.num_triangles
+
+        # Cuántos individuos sembrados (redondeamos hacia abajo)
+        n_seeded = int(pop_size * max(0.0, min(1.0, self.config.seed_ratio)))
+        n_random = pop_size - n_seeded
+
+        individuals = []
+
+        # --- Siembra por Grilla ---
+        if n_seeded > 0:
+            target = self.evaluator.target  # ndarray (H, W, 3) uint8
+            H, W = target.shape[:2]
+
+            # Calcular dimensiones de la grilla: ~sqrt de triángulos/2 para tener pares de triángulos
+            # Cada celda se cubre con 2 triángulos (triángulo superior-izquierdo + inferior-derecho)
+            n_cells = n_triangles // 2
+            grid_cols = max(1, int(np.ceil(np.sqrt(n_cells * W / H))))
+            grid_rows = max(1, int(np.ceil(n_cells / grid_cols)))
+
+            # Ajustar para no exceder la cantidad de triángulos
+            actual_cells = min(grid_rows * grid_cols, n_cells)
+            grid_cols = max(1, int(np.ceil(np.sqrt(actual_cells * W / H))))
+            grid_rows = max(1, int(np.ceil(actual_cells / grid_cols)))
+
+            cell_w = 1.0 / grid_cols
+            cell_h = 1.0 / grid_rows
+
+            grid_triangles = []
+            for row in range(grid_rows):
+                for col in range(grid_cols):
+                    if len(grid_triangles) >= n_triangles:
+                        break
+
+                    # Esquinas normalizadas de la celda
+                    x0, y0 = col * cell_w, row * cell_h
+                    x1, y1 = x0 + cell_w, y0 + cell_h
+
+                    # Color promedio de la celda (operación vectorial NumPy)
+                    px0 = int(x0 * W)
+                    px1 = int(x1 * W)
+                    py0 = int(y0 * H)
+                    py1 = int(y1 * H)
+                    patch = target[py0:py1, px0:px1]  # (h, w, 3)
+                    if patch.size == 0:
+                        avg_color = (128, 128, 128)
+                    else:
+                        avg_color = tuple(int(c) for c in patch.mean(axis=(0, 1))[:3])
+
+                    alpha = (self.config.alpha_min + self.config.alpha_max) / 2.0
+
+                    # Triángulo superior-izquierdo de la celda
+                    tri_a = Triangle(
+                        vertices=[(x0, y0), (x1, y0), (x0, y1)],
+                        color=(*avg_color, alpha),
+                    )
+                    # Triángulo inferior-derecho de la celda
+                    tri_b = Triangle(
+                        vertices=[(x1, y0), (x1, y1), (x0, y1)],
+                        color=(*avg_color, alpha),
+                    )
+
+                    grid_triangles.append(tri_a)
+                    if len(grid_triangles) < n_triangles:
+                        grid_triangles.append(tri_b)
+
+            # Rellenar con triángulos aleatorios si la grilla no alcanza a cubrir todos
+            while len(grid_triangles) < n_triangles:
+                from src.genetic.individual import Triangle
+
+                grid_triangles.append(
+                    Triangle.random(
+                        alpha_min=self.config.alpha_min, alpha_max=self.config.alpha_max
+                    )
+                )
+
+            for _ in range(n_seeded):
+                individuals.append(
+                    Individual(triangles=[t.copy() for t in grid_triangles])
+                )
+
+        # --- Individuos aleatorios (restantes) para diversidad genética ---
+        for _ in range(n_random):
+            individuals.append(
+                Individual.random(
+                    num_triangles=n_triangles,
+                    alpha_min=self.config.alpha_min,
+                    alpha_max=self.config.alpha_max,
+                )
+            )
+
+        self.population = Population(individuals=individuals,
+                                     shape_type=self.config.shape_type)
         return self.population
 
     def evaluate_population(self, population: Population):
@@ -247,6 +371,9 @@ class GeneticEngine:
         """
         pop_size = len(population)
         elite_count = min(self.config.elite_count, pop_size)
+
+        # Crossover por fase: temprano (single/two point) -> tardío (uniform)
+        self._apply_phased_crossover(population.generation)
 
         # Elitismo: copiar los mejores individuos antes de cualquier operación
         if elite_count > 0:
@@ -362,6 +489,8 @@ class GeneticEngine:
 
     def _apply_crossover_profile(self, fitness_method: str) -> None:
         """Cambia dinámicamente el método de cruza según la fase."""
+        if self._phased_crossover_enabled:
+            return
         from src.genetic.crossover import create_crossover_method
 
         if fitness_method in {"ssim", "detail_weighted"}:
@@ -370,6 +499,22 @@ class GeneticEngine:
             )
         else:
             self.crossover = self.base_crossover
+
+    def _apply_phased_crossover(self, generation: int) -> None:
+        """Selecciona método de cruza según avance global de generaciones."""
+        if not self._phased_crossover_enabled:
+            return
+
+        progress = generation / max(1, self.config.max_generations)
+        method_name = (
+            self._phased_crossover_early_method
+            if progress < self._phased_crossover_switch_ratio
+            else self._phased_crossover_late_method
+        )
+
+        if self._phased_active_method_name != method_name:
+            self.crossover = self._crossover_cache[method_name]
+            self._phased_active_method_name = method_name
 
     def _apply_selection_profile(self, fitness_method: str) -> None:
         """Torneo Dinámico: Ajusta la Presión Selectiva acoplando el tamaño del torneo."""
@@ -399,6 +544,7 @@ class GeneticEngine:
 
         # Acoplar el perfil de mutación y cruza inicial a la fase de fitness correspondiente
         self.mutator.apply_profile(self.base_fitness_method)
+        self._apply_phased_crossover(0)
         self._apply_crossover_profile(self.base_fitness_method)
         self._apply_selection_profile(self.base_fitness_method)
 
@@ -447,6 +593,7 @@ class GeneticEngine:
                     self.evaluator.set_method(next_method)
                     self.active_fitness_method = next_method
                     self.mutator.apply_profile(next_method)
+                    self._apply_phased_crossover(gen)
                     self._apply_crossover_profile(next_method)
                     self._apply_selection_profile(next_method)
                     patience_counter = 0
