@@ -4,6 +4,13 @@ Análisis comparativo de estrategias de supervivencia.
 Ejecuta el AG múltiples veces con cada estrategia de supervivencia (additive
 y exclusive), agrega los resultados con promedio ± desviación estándar y
 genera gráficos comparativos robustos.
+
+Salidas
+-------
+survival_raw.csv      — una fila por (strategy, run, generation)
+survival_summary.csv  — promedio ± std de fitness final por estrategia
+evolution_fitness.png — curvas promedio ± banda std por generación
+final_fitness.png     — barras horizontales con error bars del fitness final
 """
 
 import argparse
@@ -12,6 +19,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -42,7 +50,7 @@ def parse_args() -> argparse.Namespace:
         description="Análisis comparativo de estrategias de supervivencia (promedio ± std)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--image", "-i", required=True, help="Imagen objetivo")
+    parser.add_argument("--image", "-i", help="Imagen objetivo")
     parser.add_argument("--triangles", "-t", type=int, default=100, help="Triángulos por individuo")
     parser.add_argument("--generations", "-g", type=int, default=2000, help="Generaciones máximas")
     parser.add_argument("--population", "-p", type=int, default=100, help="Tamaño de población")
@@ -71,6 +79,15 @@ def parse_args() -> argparse.Namespace:
                         choices=["single_gene", "limited_multigen", "uniform_multigen",
                                  "complete", "error_map_guided"],
                         help="Método de mutación (fijo)")
+    parser.add_argument(
+        "--backend", type=str, default="gpu", choices=["cpu", "gpu"],
+        help="Backend de renderizado",
+    )
+    parser.add_argument(
+        "--from-csv", action="store_true",
+        help="Saltar la ejecución del AG y generar los gráficos desde los CSV existentes "
+             "en el directorio de salida (survival_raw.csv y survival_summary.csv).",
+    )
     return parser.parse_args()
 
 
@@ -86,8 +103,9 @@ def run_once(
     crossover_method: str,
     mutation_method: str,
     fitness_method: str,
+    renderer: str = "gpu",
 ) -> dict:
-    """Ejecuta el AG una vez y retorna resultados."""
+    """Ejecuta el AG una vez y retorna resultados incluyendo la curva completa."""
     mutation_type_map = {
         "single_gene": MutationType.SINGLE_GENE,
         "limited_multigen": MutationType.LIMITED_MULTIGEN,
@@ -120,79 +138,127 @@ def run_once(
         survival_selection_method="elite",
         offspring_ratio=1.0,
         fitness_method=fitness_method,
+        renderer=renderer,
     )
     result = engine.run()
+
+    curve = np.array([h["best_fitness"] for h in result.history], dtype=np.float64)
+    generations = np.array([h["generation"] for h in result.history], dtype=np.int64)
+
     return {
         "best_fitness": result.best_fitness,
-        "history": result.history,
         "elapsed_time": result.elapsed_time,
-    }
-
-
-def run_strategy(
-    survival_method: str,
-    target_image: Image.Image,
-    evo_config: EvolutionConfig,
-    selection_method: str,
-    crossover_method: str,
-    mutation_method: str,
-    fitness_method: str,
-    num_runs: int,
-) -> dict:
-    """Ejecuta el AG num_runs veces y agrega resultados."""
-    all_finals = []
-    all_times = []
-    all_histories = []
-
-    for run_idx in range(num_runs):
-        print(f"    corrida {run_idx + 1}/{num_runs}...")
-        r = run_once(
-            survival_method, target_image, evo_config,
-            selection_method, crossover_method, mutation_method, fitness_method,
-        )
-        all_finals.append(r["best_fitness"])
-        all_times.append(r["elapsed_time"])
-        all_histories.append(r["history"])
-
-    num_gens = len(all_histories[0])
-    avg_history = []
-    std_history = []
-    for gen_idx in range(num_gens):
-        vals = [h[gen_idx]["best_fitness"] for h in all_histories]
-        avg_history.append(np.mean(vals))
-        std_history.append(np.std(vals))
-
-    generations = [h["generation"] for h in all_histories[0]]
-
-    return {
-        "method": survival_method,
-        "avg_fitness": float(np.mean(all_finals)),
-        "std_fitness": float(np.std(all_finals)),
-        "avg_time": float(np.mean(all_times)),
-        "avg_history": avg_history,
-        "std_history": std_history,
+        "curve": curve,
         "generations": generations,
     }
 
 
+def run_all(
+    target_image: Image.Image,
+    evo_config: EvolutionConfig,
+    args: argparse.Namespace,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Corre todas las estrategias × corridas y devuelve:
+      raw_df     — una fila por (strategy, run, generation)
+      summary_df — una fila por (strategy) con promedio ± std del fitness final
+    """
+    raw_records: list[dict] = []
+    final_records: list[dict] = []
+
+    total = len(SURVIVAL_METHODS)
+    for idx, method in enumerate(SURVIVAL_METHODS, 1):
+        label = LABELS[method]
+        print(f"[{idx}/{total}] {label} ({args.runs} corridas)...")
+        run_finals = []
+        run_times = []
+
+        for run_idx in range(args.runs):
+            print(f"    corrida {run_idx + 1}/{args.runs}...")
+            r = run_once(
+                method, target_image, evo_config,
+                args.selection, args.crossover, args.mutation, args.fitness,
+                args.backend,
+            )
+            run_finals.append(r["best_fitness"])
+            run_times.append(r["elapsed_time"])
+
+            # Filas del CSV raw: una por generación
+            for gen, fit in zip(r["generations"], r["curve"]):
+                raw_records.append({
+                    "strategy": method,
+                    "label": label,
+                    "run": run_idx,
+                    "generation": int(gen),
+                    "best_fitness": float(fit),
+                })
+
+            # Fila de resumen final por corrida (útil para boxplots futuros)
+            final_records.append({
+                "strategy": method,
+                "label": label,
+                "run": run_idx,
+                "best_fitness": float(r["best_fitness"]),
+                "elapsed_time_s": float(r["elapsed_time"]),
+            })
+
+        avg_f = float(np.mean(run_finals))
+        std_f = float(np.std(run_finals))
+        print(f"       avg fitness: {avg_f:.6f} ± {std_f:.6f}  |  "
+              f"avg tiempo: {np.mean(run_times):.1f}s")
+
+    raw_df = pd.DataFrame.from_records(raw_records)
+    finals_df = pd.DataFrame.from_records(final_records)
+
+    summary_df = finals_df.groupby(["strategy", "label"], as_index=False).agg(
+        runs=("best_fitness", "size"),
+        avg_fitness=("best_fitness", "mean"),
+        std_fitness=("best_fitness", "std"),
+        avg_time_s=("elapsed_time_s", "mean"),
+        std_time_s=("elapsed_time_s", "std"),
+    )
+
+    return raw_df, summary_df
+
+
 # ---------------------------------------------------------------------------
-# Gráficos
+# Persistencia CSV
 # ---------------------------------------------------------------------------
 
-def plot_evolution(results: list, output_dir: Path):
-    """Curvas promedio ± banda std por generación."""
+def save_csvs(raw_df: pd.DataFrame, summary_df: pd.DataFrame, output_dir: Path) -> None:
+    raw_path = output_dir / "survival_raw.csv"
+    summary_path = output_dir / "survival_summary.csv"
+
+    raw_df.to_csv(raw_path, index=False)
+    summary_df.to_csv(summary_path, index=False)
+
+    print(f"  CSV raw guardado:     {raw_path}")
+    print(f"  CSV summary guardado: {summary_path}")
+
+
+# ---------------------------------------------------------------------------
+# Gráficos (desde DataFrames)
+# ---------------------------------------------------------------------------
+
+def plot_evolution(raw_df: pd.DataFrame, output_dir: Path) -> None:
+    """Curvas promedio ± banda std por generación, leídas del CSV raw."""
     fig, ax = plt.subplots(figsize=(12, 6))
     colors = plt.cm.tab10.colors
 
-    for i, r in enumerate(results):
-        gens = r["generations"]
-        avg = np.array(r["avg_history"])
-        std = np.array(r["std_history"])
+    for i, method in enumerate(SURVIVAL_METHODS):
+        subset = raw_df[raw_df["strategy"] == method]
+        label = LABELS.get(method, method)
         color = colors[i % len(colors)]
-        label = LABELS.get(r["method"], r["method"])
 
-        ax.plot(gens, avg, label=label, linewidth=1.8, color=color)
-        ax.fill_between(gens, avg - std, avg + std, alpha=0.15, color=color)
+        # Promedio y std por generación (sobre las múltiples corridas)
+        grouped = subset.groupby("generation")["best_fitness"]
+        avg = grouped.mean()
+        std = grouped.std().fillna(0)
+        gens = avg.index.to_numpy()
+
+        ax.plot(gens, avg.values, label=label, linewidth=1.8, color=color)
+        ax.fill_between(gens, avg.values - std.values, avg.values + std.values,
+                        alpha=0.15, color=color)
 
     ax.set_xlabel("Generación")
     ax.set_ylabel("Fitness (promedio ± std)")
@@ -207,17 +273,18 @@ def plot_evolution(results: list, output_dir: Path):
     print(f"  Gráfico evolución guardado: {path}")
 
 
-def plot_final_fitness(results: list, output_dir: Path):
-    """Barras horizontales con error bars del fitness final."""
-    sorted_results = sorted(results, key=lambda r: r["avg_fitness"], reverse=True)
+def plot_final_fitness(summary_df: pd.DataFrame, output_dir: Path) -> None:
+    """Barras horizontales con error bars del fitness final, leídas del CSV summary."""
+    sorted_df = summary_df.sort_values("avg_fitness", ascending=False)
 
-    names = [LABELS.get(r["method"], r["method"]) for r in sorted_results]
-    avgs = [r["avg_fitness"] for r in sorted_results]
-    stds = [r["std_fitness"] for r in sorted_results]
-    colors = plt.cm.tab10.colors[: len(sorted_results)]
+    names = [LABELS.get(r, r) for r in sorted_df["strategy"]]
+    avgs = sorted_df["avg_fitness"].to_numpy()
+    stds = sorted_df["std_fitness"].fillna(0).to_numpy()
+    colors = list(plt.cm.tab10.colors[: len(sorted_df)])
 
     fig, ax = plt.subplots(figsize=(9, 4))
-    bars = ax.barh(names, avgs, xerr=stds, color=colors, capsize=5, error_kw={"linewidth": 1.5})
+    bars = ax.barh(names, avgs, xerr=stds, color=colors, capsize=5,
+                   error_kw={"linewidth": 1.5})
 
     for bar, avg, std in zip(bars, avgs, stds):
         ax.text(
@@ -227,6 +294,13 @@ def plot_final_fitness(results: list, output_dir: Path):
             va="center",
             fontsize=10,
         )
+
+    # Zoom automático: suprime el cero y centra en el rango relevante
+    margin = max((avgs.max() - avgs.min()) * 0.5, 0.005)
+    label_space = (avgs.max() - avgs.min() + 2 * margin) * 0.25  # espacio para etiquetas
+    x_min = max(0.0, avgs.min() - stds.max() - margin)
+    x_max = avgs.max() + stds.max() + margin + label_space
+    ax.set_xlim(x_min, x_max)
 
     ax.set_xlabel("Fitness final (promedio ± std)")
     ax.set_title("Fitness Final por Estrategia de Supervivencia")
@@ -240,10 +314,10 @@ def plot_final_fitness(results: list, output_dir: Path):
 
 
 # ---------------------------------------------------------------------------
-# Resumen
+# Resumen consola
 # ---------------------------------------------------------------------------
 
-def print_summary(results: list):
+def print_summary(summary_df: pd.DataFrame) -> None:
     col_w = 30
     print()
     print("=" * 70)
@@ -252,21 +326,22 @@ def print_summary(results: list):
     print(f"{'Estrategia':<{col_w}} {'Avg Fitness':>12} {'Std Fitness':>12} {'Avg Tiempo':>12}")
     print("-" * 70)
 
-    sorted_results = sorted(results, key=lambda r: r["avg_fitness"], reverse=True)
+    sorted_df = summary_df.sort_values("avg_fitness", ascending=False)
     medals = ["1°", "2°"]
-    for i, r in enumerate(sorted_results):
+    for i, (_, row) in enumerate(sorted_df.iterrows()):
         medal = medals[i] if i < len(medals) else "  "
-        label = LABELS.get(r["method"], r["method"])
+        label = LABELS.get(row["strategy"], row["strategy"])
         print(
             f"{medal} {label:<{col_w - 3}} "
-            f"{r['avg_fitness']:>12.6f} "
-            f"{r['std_fitness']:>12.6f} "
-            f"{r['avg_time']:>11.2f}s"
+            f"{row['avg_fitness']:>12.6f} "
+            f"{row['std_fitness']:>12.6f} "
+            f"{row['avg_time_s']:>11.2f}s"
         )
 
     print("=" * 70)
-    best = sorted_results[0]
-    print(f"Ganador: {LABELS.get(best['method'], best['method'])}  "
+    best = sorted_df.iloc[0]
+    best_label = LABELS.get(best["strategy"], best["strategy"])
+    print(f"Ganador: {best_label}  "
           f"(avg fitness {best['avg_fitness']:.6f} ± {best['std_fitness']:.6f})")
     print("=" * 70)
 
@@ -281,13 +356,32 @@ def main():
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # --- Modo: regenerar gráficos desde CSVs existentes ---
+    if args.from_csv:
+        raw_path = output_dir / "survival_raw.csv"
+        summary_path = output_dir / "survival_summary.csv"
+        if not raw_path.exists() or not summary_path.exists():
+            print(f"ERROR: No se encontraron los CSV en '{output_dir}'.")
+            print(f"  Esperados: {raw_path.name}, {summary_path.name}")
+            return 1
+        print(f"Leyendo datos desde CSV en: {output_dir}/")
+        raw_df = pd.read_csv(raw_path)
+        summary_df = pd.read_csv(summary_path)
+        print("Generando gráficos...")
+        plot_evolution(raw_df, output_dir)
+        plot_final_fitness(summary_df, output_dir)
+        print_summary(summary_df)
+        print(f"\nGráficos guardados en: {output_dir}/")
+        return 0
+
+    # --- Modo normal: correr el AG ---
     target_image = Image.open(args.image).convert("RGB")
     target_image = resize_image(target_image, max_size=args.max_size)
     print(f"Imagen: {args.image}  ({target_image.size[0]}x{target_image.size[1]}px)")
     print(f"Generaciones: {args.generations} | Población: {args.population} | "
           f"Triángulos: {args.triangles} | Corridas: {args.runs}")
     print(f"Fitness: {args.fitness} | Selección: {args.selection} | "
-          f"Cruza: {args.crossover} | Mutación: {args.mutation}")
+          f"Cruza: {args.crossover} | Mutación: {args.mutation} | Backend: {args.backend}")
     print()
 
     evo_config = EvolutionConfig(
@@ -296,25 +390,14 @@ def main():
         max_generations=args.generations,
     )
 
-    results = []
-    total = len(SURVIVAL_METHODS)
-    for idx, method in enumerate(SURVIVAL_METHODS, 1):
-        label = LABELS[method]
-        print(f"[{idx}/{total}] {label} ({args.runs} corridas)...")
-        r = run_strategy(
-            method, target_image, evo_config,
-            args.selection, args.crossover, args.mutation, args.fitness,
-            args.runs,
-        )
-        results.append(r)
-        print(f"       avg fitness: {r['avg_fitness']:.6f} ± {r['std_fitness']:.6f}  |  "
-              f"avg tiempo: {r['avg_time']:.1f}s")
+    raw_df, summary_df = run_all(target_image, evo_config, args)
 
     print()
-    print("Generando salidas...")
-    plot_evolution(results, output_dir)
-    plot_final_fitness(results, output_dir)
-    print_summary(results)
+    print("Guardando datos y generando gráficos...")
+    save_csvs(raw_df, summary_df, output_dir)
+    plot_evolution(raw_df, output_dir)
+    plot_final_fitness(summary_df, output_dir)
+    print_summary(summary_df)
     print(f"\nTodo guardado en: {output_dir}/")
 
 

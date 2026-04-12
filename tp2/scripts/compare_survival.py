@@ -118,6 +118,10 @@ def parse_args():
         default=None,
         help="Configuraciones a comparar (por defecto todas)",
     )
+    parser.add_argument(
+        "--backend", type=str, default="gpu", choices=["cpu", "gpu"],
+        help="Backend de renderizado",
+    )
     return parser.parse_args()
 
 
@@ -135,6 +139,7 @@ def run_config(
     evo_config: EvolutionConfig,
     selection: str,
     survival_selection: str,
+    renderer: str = "gpu",
 ) -> dict:
     """Corre una configuración de supervivencia y devuelve los resultados."""
     engine = create_engine(
@@ -152,6 +157,7 @@ def run_config(
         survival_method=cfg["method"],
         survival_selection_method=survival_selection,
         offspring_ratio=cfg["offspring_ratio"],
+        renderer=renderer,
     )
 
     result = engine.run()
@@ -295,7 +301,7 @@ def main():
     target_image = resize_image(target_image, max_size=args.max_size)
     print(f"Imagen: {args.image}  ({target_image.size[0]}x{target_image.size[1]}px)")
     print(
-        f"Generaciones: {args.generations} | Población: {args.population} | Genes: {args.triangles} | Forma: {args.shape}"
+        f"Generaciones: {args.generations} | Población: {args.population} | Genes: {args.triangles} | Forma: {args.shape} | Backend: {args.backend}"
     )
     print(f"Selección padres: {args.selection}")
     print(f"Selección supervivientes: {args.survival_selection}")
@@ -324,7 +330,8 @@ def main():
     for idx, cfg in enumerate(configs_to_run, 1):
         print(f"[{idx}/{total}] {cfg['label']}...")
         r = run_config(
-            cfg, target_image, config, args.selection, args.survival_selection
+            cfg, target_image, config, args.selection, args.survival_selection,
+            args.backend,
         )
         results.append(r)
         print(

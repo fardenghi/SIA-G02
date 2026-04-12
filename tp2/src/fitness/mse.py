@@ -406,11 +406,15 @@ class FitnessEvaluator:
         self.composite_beta = composite_beta
         self.composite_gamma = composite_gamma
 
-        self.canvas = create_renderer(
-            width=width,
-            height=height,
-            backend=renderer,
-            shape_type=shape_type,
+        self.canvas = (
+            renderer
+            if isinstance(renderer, object) and hasattr(renderer, "render")
+            else create_renderer(
+                width=width,
+                height=height,
+                backend=renderer,
+                shape_type=shape_type,
+            )
         )
         self.method = method
         self.exponential_scale = exponential_scale

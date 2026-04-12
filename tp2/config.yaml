@@ -36,6 +36,7 @@ genetic:
   # null = deshabilitado. Puede ser un string o una lista de strings.
   transition_methods:
     - "detail_weighted"
+    - "edge_loss"
     - "ssim"
   # Umbral mínimo de mejora esperado entre generaciones para no considerarlo estancamiento
   stagnation_threshold: 0.00005
