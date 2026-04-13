@@ -151,7 +151,7 @@ def build_engine(
         survival_method="exclusive",
         survival_selection_method="elite",
         offspring_ratio=1.0,
-        fitness_method="inverse_normalized",
+        fitness_method="linear",
         renderer=args.renderer,
     )
 
