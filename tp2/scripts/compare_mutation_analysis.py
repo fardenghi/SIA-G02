@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.genetic.engine import create_engine, EvolutionConfig
 from src.genetic.mutation import MutationParams, MutationType
 from src.rendering.canvas import resize_image
+from src.utils.export import save_result_image
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +186,7 @@ def run_once(
         "best_fitness": result.best_fitness,
         "history": result.history,
         "elapsed_time": result.elapsed_time,
+        "best_individual": result.best_individual,
     }
 
 
@@ -216,12 +218,15 @@ def run_method(
         }
         run_results = []
         for future in as_completed(futures):
+            run_idx = futures[future] + 1
             r = future.result()
-            run_results.append(r)
+            run_results.append({"run": run_idx, **r})
             print(
                 f"    corrida {len(run_results)}/{num_runs} completada  "
                 f"fitness: {r['best_fitness']:.6f}  tiempo: {r['elapsed_time']:.1f}s"
             )
+
+    run_results.sort(key=lambda x: x["run"])
 
     all_finals = [r["best_fitness"] for r in run_results]
     all_times = [r["elapsed_time"] for r in run_results]
@@ -244,6 +249,15 @@ def run_method(
         "avg_time": float(np.mean(all_times)),
         "run_fitnesses": all_finals,
         "run_times": all_times,
+        "run_details": [
+            {
+                "run": r["run"],
+                "best_fitness": r["best_fitness"],
+                "elapsed_time": r["elapsed_time"],
+                "best_individual": r["best_individual"],
+            }
+            for r in run_results
+        ],
         "avg_history": avg_history,
         "std_history": std_history,
         "generations": generations,
@@ -288,16 +302,14 @@ def save_csv_results(results: list, output_dir: Path):
                 }
             )
 
-        for run_idx, (fitness, elapsed_time) in enumerate(
-            zip(r["run_fitnesses"], r["run_times"]), start=1
-        ):
+        for run in r["run_details"]:
             run_rows.append(
                 {
                     "method": method,
                     "label": label,
-                    "run": run_idx,
-                    "best_fitness": fitness,
-                    "elapsed_time": elapsed_time,
+                    "run": run["run"],
+                    "best_fitness": run["best_fitness"],
+                    "elapsed_time": run["elapsed_time"],
                 }
             )
 
@@ -406,6 +418,26 @@ def plot_final_fitness(results: list, output_dir: Path):
     print(f"  Gráfico fitness final guardado: {path}")
 
 
+def save_generated_images(results: list, output_dir: Path, width: int, height: int):
+    """Guarda imágenes finales por corrida y la mejor de cada método."""
+    images_dir = output_dir / "generated_images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    for r in results:
+        method = r["method"]
+        method_dir = images_dir / method
+        method_dir.mkdir(parents=True, exist_ok=True)
+
+        for run in r["run_details"]:
+            run_path = method_dir / f"run_{run['run']:02d}.png"
+            save_result_image(run["best_individual"], width, height, run_path)
+
+        best_run = max(r["run_details"], key=lambda x: x["best_fitness"])
+        best_path = method_dir / "best.png"
+        save_result_image(best_run["best_individual"], width, height, best_path)
+        print(f"  Imágenes guardadas para {method}: {method_dir}")
+
+
 # ---------------------------------------------------------------------------
 # Resumen
 # ---------------------------------------------------------------------------
@@ -500,6 +532,9 @@ def main():
     save_csv_results(results, output_dir)
     plot_evolution(results, output_dir)
     plot_final_fitness(results, output_dir)
+    save_generated_images(
+        results, output_dir, target_image.size[0], target_image.size[1]
+    )
     print_summary(results)
     print(f"\nTodo guardado en: {output_dir}/")
 

@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.genetic.engine import create_engine, EvolutionConfig
 from src.genetic.mutation import MutationParams, MutationType
 from src.rendering.canvas import resize_image
+from src.utils.export import save_result_image
 
 
 # ---------------------------------------------------------------------------
@@ -277,7 +278,8 @@ def save_csvs(raw_df: pd.DataFrame, summary_df: pd.DataFrame, output_dir: Path) 
 def plot_evolution(raw_df: pd.DataFrame, output_dir: Path) -> None:
     """Curvas promedio ± banda std por generación, leídas del CSV raw."""
     fig, ax = plt.subplots(figsize=(12, 6))
-    colors = plt.cm.tab10.colors
+    cmap = plt.get_cmap("tab10")
+    colors = [cmap(i) for i in range(10)]
 
     for i, method in enumerate(SURVIVAL_METHODS):
         subset = raw_df[raw_df["strategy"] == method]
@@ -345,6 +347,26 @@ def plot_final_fitness(summary_df: pd.DataFrame, output_dir: Path) -> None:
     plt.savefig(path, dpi=150)
     plt.close()
     print(f"  Gráfico fitness final guardado: {path}")
+
+
+def save_generated_images(results: list, output_dir: Path, width: int, height: int):
+    """Guarda imágenes finales por corrida y la mejor de cada estrategia."""
+    images_dir = output_dir / "generated_images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    for r in results:
+        method = r["method"]
+        method_dir = images_dir / method
+        method_dir.mkdir(parents=True, exist_ok=True)
+
+        for run in r["run_details"]:
+            run_path = method_dir / f"run_{run['run']:02d}.png"
+            save_result_image(run["best_individual"], width, height, run_path)
+
+        best_run = max(r["run_details"], key=lambda x: x["best_fitness"])
+        best_path = method_dir / "best.png"
+        save_result_image(best_run["best_individual"], width, height, best_path)
+        print(f"  Imágenes guardadas para {method}: {method_dir}")
 
 
 # ---------------------------------------------------------------------------

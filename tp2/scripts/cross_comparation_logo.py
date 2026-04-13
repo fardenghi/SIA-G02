@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.genetic.engine import EvolutionConfig, create_engine
 from src.genetic.mutation import create_mutation_params
 from src.rendering.canvas import resize_image
+from src.utils.export import save_result_image
 
 
 @dataclass(frozen=True)
@@ -69,8 +70,8 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--image", type=str, default="input/logo.jpg")
-    parser.add_argument("--runs", type=int, default=10, help="Runs per strategy")
-    parser.add_argument("--generations", "-g", type=int, default=600)
+    parser.add_argument("--runs", type=int, default=5, help="Runs per strategy")
+    parser.add_argument("--generations", "-g", type=int, default=1000)
     parser.add_argument("--population", "-p", type=int, default=100)
     parser.add_argument("--triangles", "-t", type=int, default=100)
     parser.add_argument("--max-size", type=int, default=128)
@@ -195,6 +196,7 @@ def _run_task(task: ExperimentTask, run_cfg: dict) -> dict:
         "generations_executed": result.generations,
         "fitness_method": "inverse_normalized",
         "curve": curve,
+        "best_individual": result.best_individual,
     }
 
 
@@ -209,7 +211,7 @@ def _resolve_workers(args: argparse.Namespace) -> int:
 
 def run_all_experiments(
     args: argparse.Namespace,
-) -> tuple[pd.DataFrame, dict[str, list[np.ndarray]]]:
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, list[np.ndarray]], list[dict]]:
     image_path = Path(args.image)
     if not image_path.exists():
         raise FileNotFoundError(
@@ -245,6 +247,8 @@ def run_all_experiments(
 
     histories: dict[str, list[np.ndarray]] = {}
     records: list[dict] = []
+    process_records: list[dict] = []
+    image_results: list[dict] = []
     total = len(tasks)
 
     if args.parallel:
@@ -265,7 +269,33 @@ def run_all_experiments(
                     f"[{done:03d}/{total}] run={task.run_idx + 1:02d}/{args.runs} strategy={task.strategy_key}"
                 )
                 histories.setdefault(res["strategy"], []).append(res["curve"])
-                records.append({k: v for k, v in res.items() if k != "curve"})
+                records.append(
+                    {
+                        k: v
+                        for k, v in res.items()
+                        if k not in {"curve", "best_individual"}
+                    }
+                )
+                image_results.append(
+                    {
+                        "run": res["run"],
+                        "strategy": res["strategy"],
+                        "best_fitness": res["best_fitness"],
+                        "best_individual": res["best_individual"],
+                    }
+                )
+                process_records.extend(
+                    {
+                        "run": res["run"],
+                        "seed": res["seed"],
+                        "strategy": res["strategy"],
+                        "generation": generation,
+                        "best_fitness": float(best_fitness),
+                        "error": 1.0 - float(best_fitness),
+                        "fitness_method": "inverse_normalized",
+                    }
+                    for generation, best_fitness in enumerate(res["curve"])
+                )
     else:
         print("Parallel mode disabled; running sequentially")
         for idx, task in enumerate(tasks, start=1):
@@ -274,11 +304,36 @@ def run_all_experiments(
             )
             res = _run_task(task, run_cfg)
             histories.setdefault(res["strategy"], []).append(res["curve"])
-            records.append({k: v for k, v in res.items() if k != "curve"})
+            records.append(
+                {k: v for k, v in res.items() if k not in {"curve", "best_individual"}}
+            )
+            image_results.append(
+                {
+                    "run": res["run"],
+                    "strategy": res["strategy"],
+                    "best_fitness": res["best_fitness"],
+                    "best_individual": res["best_individual"],
+                }
+            )
+            process_records.extend(
+                {
+                    "run": res["run"],
+                    "seed": res["seed"],
+                    "strategy": res["strategy"],
+                    "generation": generation,
+                    "best_fitness": float(best_fitness),
+                    "error": 1.0 - float(best_fitness),
+                    "fitness_method": "inverse_normalized",
+                }
+                for generation, best_fitness in enumerate(res["curve"])
+            )
 
     df = pd.DataFrame.from_records(records)
     df = df.sort_values(by=["run", "strategy"]).reset_index(drop=True)
-    return df, histories
+    process_df = pd.DataFrame.from_records(process_records)
+    process_df = process_df.sort_values(by=["run", "strategy", "generation"])
+    process_df = process_df.reset_index(drop=True)
+    return df, process_df, histories, image_results
 
 
 def plot_final_fitness_boxplot(df: pd.DataFrame, out_dir: Path) -> None:
@@ -387,6 +442,64 @@ def save_tables(df: pd.DataFrame, out_dir: Path) -> None:
     )
 
 
+def save_process_csv(process_df: pd.DataFrame, out_dir: Path) -> None:
+    process_path = out_dir / "cross_logo_process.csv"
+    process_df.to_csv(process_path, index=False)
+    print(f"Process metrics saved: {process_path}")
+
+
+def save_generated_images(
+    image_results: list[dict], args: argparse.Namespace, out_dir: Path
+) -> None:
+    if not image_results:
+        return
+
+    width, height = _load_image_cached(args.image, args.max_size).size
+    images_dir = out_dir / "generated_images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    for strategy in STRATEGIES:
+        strategy_results = [r for r in image_results if r["strategy"] == strategy.key]
+        if not strategy_results:
+            continue
+
+        strategy_dir = images_dir / strategy.key
+        strategy_dir.mkdir(parents=True, exist_ok=True)
+
+        for run_result in sorted(strategy_results, key=lambda x: int(x["run"])):
+            run_number = int(run_result["run"]) + 1
+            run_path = strategy_dir / f"run_{run_number:02d}.png"
+            save_result_image(
+                run_result["best_individual"],
+                width,
+                height,
+                run_path,
+                backend=args.renderer,
+            )
+
+        best_run = max(strategy_results, key=lambda x: float(x["best_fitness"]))
+        best_path = strategy_dir / "best.png"
+        save_result_image(
+            best_run["best_individual"],
+            width,
+            height,
+            best_path,
+            backend=args.renderer,
+        )
+
+    overall_best = max(image_results, key=lambda x: float(x["best_fitness"]))
+    overall_path = images_dir / "best_overall.png"
+    save_result_image(
+        overall_best["best_individual"],
+        width,
+        height,
+        overall_path,
+        backend=args.renderer,
+    )
+    print(f"Generated images saved: {images_dir}")
+    print(f"Best overall image:     {overall_path}")
+
+
 def main() -> int:
     args = parse_args()
     out_dir = Path(args.output)
@@ -407,17 +520,21 @@ def main() -> int:
     print("Fitness method fixed to: inverse_normalized")
     print()
 
-    df, histories = run_all_experiments(args)
+    df, process_df, histories, image_results = run_all_experiments(args)
 
     save_tables(df, out_dir)
+    save_process_csv(process_df, out_dir)
     plot_final_fitness_boxplot(df, out_dir)
     plot_mean_curves(histories, args, out_dir)
     plot_win_rate_bar(df, out_dir)
+    save_generated_images(image_results, args, out_dir)
 
     print("Plots saved:")
     print(f"- {out_dir / 'final_fitness_boxplot.png'}")
     print(f"- {out_dir / 'fitness_curves_mean_std.png'}")
     print(f"- {out_dir / 'win_rate_bar.png'}")
+    print(f"Process CSV: {out_dir / 'cross_logo_process.csv'}")
+    print(f"Images dir:  {out_dir / 'generated_images'}")
     print("Done.")
     return 0
 
