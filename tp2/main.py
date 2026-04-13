@@ -223,6 +223,28 @@ def parse_args() -> argparse.Namespace:
         "--quiet", "-q", action="store_true", help="Modo silencioso (menos output)"
     )
 
+    # Modelo de islas (IMGA)
+    parser.add_argument(
+        "--islands",
+        type=int,
+        default=None,
+        help="Cantidad de islas (K). >1 activa el modelo de islas.",
+    )
+
+    parser.add_argument(
+        "--migration-size",
+        type=int,
+        default=None,
+        help="Tamaño de migración (M): cada isla envía M mejores + M peores al vecino.",
+    )
+
+    parser.add_argument(
+        "--migration-interval",
+        type=int,
+        default=None,
+        help="Intervalo de migración (T): migrar cada T generaciones.",
+    )
+
     return parser.parse_args()
 
 
@@ -310,6 +332,9 @@ def main():
         "fitness_method": args.fitness,
         "fitness_scale": args.fitness_scale,
         "renderer": args.renderer,
+        "islands": args.islands,
+        "migration_size": args.migration_size,
+        "migration_interval": args.migration_interval,
     }
     # Filtrar None
     cli_args = {k: v for k, v in cli_args.items() if v is not None}
@@ -339,6 +364,12 @@ def main():
         print(f"Genes: {config.num_triangles}")
         print(f"Población: {config.population_size}")
         print(f"Generaciones máximas: {config.max_generations}")
+        if config.island.enabled:
+            ic = config.island
+            print(f"Islas: {ic.num_islands} ({ic.topology})")
+            print(f"Migración: M={ic.migration_size}, T={ic.migration_interval}")
+            print(f"Modo: {'paralelo' if ic.parallel else 'secuencial'}")
+            print(f"Población total: {config.population_size * ic.num_islands}")
         print()
 
     # Crear directorio de salida
@@ -358,33 +389,42 @@ def main():
         "fitness_method": config.fitness.method,
         "max_generations": config.max_generations,
     }
+    if config.island.enabled:
+        config_meta["islands"] = config.island.num_islands
+        config_meta["migration_size"] = config.island.migration_size
+        config_meta["migration_interval"] = config.island.migration_interval
     tracker = MetricsTracker(run_id=run_id, config_meta=config_meta)
 
     # Crear motor evolutivo
-    engine = create_engine(
-        target_image=target_image,
-        config=config.to_evolution_config(),
-        selection_method=config.selection.method,
-        tournament_size=config.selection.tournament_size,
-        crossover_method=config.crossover.method,
-        crossover_probability=config.crossover.probability,
-        mutation_params=config.mutation.to_params(),
-        threshold=config.selection.threshold,
-        boltzmann_t0=config.selection.boltzmann_t0,
-        boltzmann_tc=config.selection.boltzmann_tc,
-        boltzmann_k=config.selection.boltzmann_k,
-        survival_method=config.survival.method,
-        survival_selection_method=config.survival.selection_method,
-        offspring_ratio=config.survival.offspring_ratio,
-        fitness_method=config.fitness.method,
-        fitness_scale=config.fitness.exponential_scale,
-        fitness_detail_weight_base=config.fitness.detail_weight_base,
-        fitness_composite_alpha=config.fitness.composite_alpha,
-        fitness_composite_beta=config.fitness.composite_beta,
-        fitness_composite_gamma=config.fitness.composite_gamma,
-        renderer=config.rendering.backend,
-        adaptive_sigma=config.mutation.to_adaptive_sigma(),
-    )
+    if config.island.enabled:
+        from src.genetic.island import IslandEngine
+
+        engine = IslandEngine(target_image=target_image, config=config)
+    else:
+        engine = create_engine(
+            target_image=target_image,
+            config=config.to_evolution_config(),
+            selection_method=config.selection.method,
+            tournament_size=config.selection.tournament_size,
+            crossover_method=config.crossover.method,
+            crossover_probability=config.crossover.probability,
+            mutation_params=config.mutation.to_params(),
+            threshold=config.selection.threshold,
+            boltzmann_t0=config.selection.boltzmann_t0,
+            boltzmann_tc=config.selection.boltzmann_tc,
+            boltzmann_k=config.selection.boltzmann_k,
+            survival_method=config.survival.method,
+            survival_selection_method=config.survival.selection_method,
+            offspring_ratio=config.survival.offspring_ratio,
+            fitness_method=config.fitness.method,
+            fitness_scale=config.fitness.exponential_scale,
+            fitness_detail_weight_base=config.fitness.detail_weight_base,
+            fitness_composite_alpha=config.fitness.composite_alpha,
+            fitness_composite_beta=config.fitness.composite_beta,
+            fitness_composite_gamma=config.fitness.composite_gamma,
+            renderer=config.rendering.backend,
+            adaptive_sigma=config.mutation.to_adaptive_sigma(),
+        )
 
     # Configurar callbacks
     setup_callbacks(
@@ -397,7 +437,8 @@ def main():
     )
 
     # Pre-visualización de la Generación 0 (impacto del Grid Seeding)
-    if config.seed_ratio > 0.0:
+    # Skip en modo islas (IslandEngine maneja su propia inicialización)
+    if config.seed_ratio > 0.0 and not config.island.enabled:
         engine.initialize_population()
         engine.evaluate_population(engine.population)
         seed_preview_path = output_dir / "seed_preview_gen0.png"

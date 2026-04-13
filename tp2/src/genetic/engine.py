@@ -65,6 +65,26 @@ class EvolutionConfig:
 
 
 @dataclass
+class StepResult:
+    """
+    Resultado de un paso (una generación) del algoritmo.
+
+    Attributes:
+        generation: Número de generación ejecutada.
+        best_fitness: Mejor fitness global hasta ahora.
+        stats: Estadísticas de la población en esta generación.
+        improved: Si el mejor global mejoró en esta generación.
+        stopped_early: Si se alcanzó el umbral de fitness.
+    """
+
+    generation: int
+    best_fitness: float
+    stats: dict
+    improved: bool
+    stopped_early: bool
+
+
+@dataclass
 class EvolutionResult:
     """
     Resultado de la evolución.
@@ -533,17 +553,16 @@ class GeneticEngine:
                 # Presión Baja para exploración (default del yaml)
                 self.selection.tournament_size = self.base_tournament_size
 
-    def run(self) -> EvolutionResult:
+    def initialize_and_evaluate(self):
         """
-        Ejecuta el algoritmo genético completo.
+        Inicializa la población y evalúa, preparando el estado interno
+        para ejecutar step() generación a generación.
 
-        Returns:
-            Resultado de la evolución.
+        Debe llamarse una vez antes del primer step().
+        run() lo llama automáticamente.
         """
-        start_time = time.time()
         self.history = []
 
-        # Inicializar población
         if self.population is None:
             self.initialize_population()
 
@@ -556,92 +575,137 @@ class GeneticEngine:
         # Evaluar población inicial
         self.evaluate_population(self.population)
 
-        best_ever = self.population.best.copy()
-        best_fitness_ever = best_ever.fitness
-        stopped_early = False
+        self._best_ever = self.population.best.copy()
+        self._best_fitness_ever = self._best_ever.fitness
+        self._patience_counter = 0
 
         # Registrar estadísticas iniciales
         stats = self.population.get_statistics()
         self.history.append(stats)
         self._notify_generation(0, self.population, stats)
 
-        patience_counter = 0
+    @property
+    def best_ever(self) -> Individual:
+        """Mejor individuo encontrado hasta ahora."""
+        return self._best_ever
 
-        # Bucle evolutivo principal
-        for gen in range(1, self.config.max_generations + 1):
-            previous_gen_best_fitness = self.population.best.fitness
+    @property
+    def best_fitness_ever(self) -> float:
+        """Mejor fitness encontrado hasta ahora."""
+        return self._best_fitness_ever
 
-            # Evolucionar
-            self.population = self.evolve_generation(self.population)
+    def step(self) -> StepResult:
+        """
+        Ejecuta exactamente una generación de evolución.
 
-            # --- Curriculum Learning (Dinámico y Genérico) ---
-            if self.cv_methods and len(self.cv_methods) > 1:
-                current_gen_best_fitness = self.population.best.fitness
-                improvement = current_gen_best_fitness - previous_gen_best_fitness
+        Incluye curriculum learning, mutación adaptativa, hall of fame, etc.
+        Debe llamarse initialize_and_evaluate() antes del primer step().
 
-                if improvement < self.config.stagnation_threshold:
-                    patience_counter += 1
-                else:
-                    patience_counter = 0
+        Returns:
+            StepResult con información de la generación.
+        """
+        gen = self.population.generation + 1
+        previous_gen_best_fitness = self.population.best.fitness
 
-                # --- El Gatillo de Transición (Hot Restart) ---
-                if patience_counter >= self.config.max_patience:
-                    self.cv_idx = (self.cv_idx + 1) % len(self.cv_methods)
-                    next_method = self.cv_methods[self.cv_idx]
+        # Evolucionar
+        self.population = self.evolve_generation(self.population)
 
-                    print(
-                        f"\n[Engine] Estancamiento detectado en gen {gen}: Cambiando métrica de fitness a '{next_method}'."
-                    )
-                    print(
-                        "[Engine] Realizando 'Hot Restart': invalidando y reconectando la población base y genotipo Élite al vuelo..."
-                    )
-                    self.evaluator.set_method(next_method)
-                    self.active_fitness_method = next_method
-                    self.mutator.apply_profile(next_method)
-                    self._apply_phased_crossover(gen)
-                    self._apply_crossover_profile(next_method)
-                    self._apply_selection_profile(next_method)
-                    patience_counter = 0
+        # --- Curriculum Learning (Dinámico y Genérico) ---
+        if self.cv_methods and len(self.cv_methods) > 1:
+            current_gen_best_fitness = self.population.best.fitness
+            improvement = current_gen_best_fitness - previous_gen_best_fitness
 
-                    # Reinicio en Caliente (Hot Restart)
-                    for ind in self.population.individuals:
-                        ind.fitness = None
+            if improvement < self.config.stagnation_threshold:
+                self._patience_counter += 1
+            else:
+                self._patience_counter = 0
 
-                    self.evaluate_population(self.population)
+            # --- El Gatillo de Transici��n (Hot Restart) ---
+            if self._patience_counter >= self.config.max_patience:
+                self.cv_idx = (self.cv_idx + 1) % len(self.cv_methods)
+                next_method = self.cv_methods[self.cv_idx]
 
-                    best_ever.fitness = None
-                    best_fitness_ever = self.evaluator.evaluate(best_ever)
+                print(
+                    f"\n[Engine] Estancamiento detectado en gen {gen}: Cambiando métrica de fitness a '{next_method}'."
+                )
+                print(
+                    "[Engine] Realizando 'Hot Restart': invalidando y reconectando la población base y genotipo Élite al vuelo..."
+                )
+                self.evaluator.set_method(next_method)
+                self.active_fitness_method = next_method
+                self.mutator.apply_profile(next_method)
+                self._apply_phased_crossover(gen)
+                self._apply_crossover_profile(next_method)
+                self._apply_selection_profile(next_method)
+                self._patience_counter = 0
 
-            # Actualizar mejor global y Salón de la Fama
-            current_best = self.population.best
+                # Reinicio en Caliente (Hot Restart)
+                for ind in self.population.individuals:
+                    ind.fitness = None
 
-            # Actualizamos el Salón de la Fama con el rey local actual
-            self.hall_of_fame[self.active_fitness_method] = current_best.copy()
+                self.evaluate_population(self.population)
 
-            if current_best.fitness > best_fitness_ever:
-                best_ever = current_best.copy()
-                best_fitness_ever = best_ever.fitness
-                self._notify_improvement(gen, best_ever, best_fitness_ever)
+                self._best_ever.fitness = None
+                self._best_fitness_ever = self.evaluator.evaluate(self._best_ever)
 
-            # Actualizar sigma adaptativo con el mejor fitness de esta generación
-            self.mutator.update(best_fitness_ever)
+        # Actualizar mejor global y Salón de la Fama
+        current_best = self.population.best
 
-            # Registrar estadísticas
-            stats = self.population.get_statistics()
-            self.history.append(stats)
-            self._notify_generation(gen, self.population, stats)
+        # Actualizamos el Salón de la Fama con el rey local actual
+        self.hall_of_fame[self.active_fitness_method] = current_best.copy()
 
-            # Verificar criterio de parada
-            if self.config.fitness_threshold is not None:
-                if best_fitness_ever >= self.config.fitness_threshold:
-                    stopped_early = True
-                    break
+        improved = False
+        if current_best.fitness > self._best_fitness_ever:
+            self._best_ever = current_best.copy()
+            self._best_fitness_ever = self._best_ever.fitness
+            self._notify_improvement(gen, self._best_ever, self._best_fitness_ever)
+            improved = True
+
+        # Actualizar sigma adaptativo con el mejor fitness de esta generación
+        self.mutator.update(self._best_fitness_ever)
+
+        # Registrar estadísticas
+        stats = self.population.get_statistics()
+        self.history.append(stats)
+        self._notify_generation(gen, self.population, stats)
+
+        # Verificar criterio de parada
+        stopped_early = False
+        if self.config.fitness_threshold is not None:
+            if self._best_fitness_ever >= self.config.fitness_threshold:
+                stopped_early = True
+
+        return StepResult(
+            generation=gen,
+            best_fitness=self._best_fitness_ever,
+            stats=stats,
+            improved=improved,
+            stopped_early=stopped_early,
+        )
+
+    def run(self) -> EvolutionResult:
+        """
+        Ejecuta el algoritmo genético completo.
+
+        Returns:
+            Resultado de la evolución.
+        """
+        start_time = time.time()
+
+        self.initialize_and_evaluate()
+
+        stopped_early = False
+        for _gen in range(1, self.config.max_generations + 1):
+            result = self.step()
+            if result.stopped_early:
+                stopped_early = True
+                break
 
         elapsed_time = time.time() - start_time
 
         return EvolutionResult(
-            best_individual=best_ever,
-            best_fitness=best_fitness_ever,
+            best_individual=self._best_ever,
+            best_fitness=self._best_fitness_ever,
             generations=self.population.generation,
             elapsed_time=elapsed_time,
             history=self.history,

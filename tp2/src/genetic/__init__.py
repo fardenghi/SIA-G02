@@ -30,8 +30,10 @@ from src.genetic.engine import (
     GeneticEngine,
     EvolutionConfig,
     EvolutionResult,
+    StepResult,
     create_engine,
 )
+from src.genetic.island import IslandEngine
 
 __all__ = [
     # Estructuras de datos
@@ -63,5 +65,8 @@ __all__ = [
     "GeneticEngine",
     "EvolutionConfig",
     "EvolutionResult",
+    "StepResult",
     "create_engine",
+    # Islas
+    "IslandEngine",
 ]

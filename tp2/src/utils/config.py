@@ -152,6 +152,18 @@ class SurvivalConfig:
 
 
 @dataclass
+class IslandConfig:
+    """Configuración del modelo de islas (IMGA)."""
+
+    enabled: bool = False
+    num_islands: int = 4  # K: cantidad de islas
+    migration_size: int = 5  # M: mejores M + peores M migran
+    migration_interval: int = 10  # T: migrar cada T generaciones
+    topology: str = "ring"  # topología de migración
+    parallel: bool = True  # True = multiprocessing, False = secuencial
+
+
+@dataclass
 class RenderingConfig:
     """Backend de renderizado: 'cpu' (Pillow) o 'gpu' (moderngl/OpenGL)."""
 
@@ -196,6 +208,9 @@ class Config:
 
     # Salida
     output: OutputConfig = field(default_factory=OutputConfig)
+
+    # Islas (IMGA)
+    island: IslandConfig = field(default_factory=IslandConfig)
 
     # Renderizado
     rendering: RenderingConfig = field(default_factory=RenderingConfig)
@@ -244,7 +259,7 @@ class Config:
         survival_data = data.pop("survival", {})
         output_data = data.pop("output", {})
         rendering_data = data.pop("rendering", {})
-        data.pop("island", {})  # ignorar sección legacy de islas si existe
+        island_data = data.pop("island", {})
 
         # Extraer de secciones legacy si existen
         if "fitness_threshold" not in data and "error_threshold" in data:
@@ -331,6 +346,7 @@ class Config:
             if survival_data
             else SurvivalConfig(),
             output=OutputConfig(**output_data) if output_data else OutputConfig(),
+            island=IslandConfig(**island_data) if island_data else IslandConfig(),
             rendering=RenderingConfig(**rendering_data)
             if rendering_data
             else RenderingConfig(),
@@ -431,6 +447,16 @@ class Config:
         if kwargs.get("renderer"):
             new_config.rendering.backend = kwargs["renderer"]
 
+        if kwargs.get("islands") is not None:
+            new_config.island.num_islands = kwargs["islands"]
+            new_config.island.enabled = kwargs["islands"] > 1
+
+        if kwargs.get("migration_size") is not None:
+            new_config.island.migration_size = kwargs["migration_size"]
+
+        if kwargs.get("migration_interval") is not None:
+            new_config.island.migration_interval = kwargs["migration_interval"]
+
         return new_config
 
     def validate(self) -> list[str]:
@@ -501,6 +527,21 @@ class Config:
 
             if not 0 <= self.crossover.switch_ratio <= 1:
                 errors.append("crossover.switch_ratio debe estar en [0, 1]")
+
+        # Validación de islas
+        if self.island.enabled:
+            if self.island.num_islands < 2:
+                errors.append("island.num_islands debe ser >= 2 cuando islas están habilitadas")
+            if self.island.migration_size < 1:
+                errors.append("island.migration_size debe ser >= 1")
+            if self.island.migration_interval < 1:
+                errors.append("island.migration_interval debe ser >= 1")
+            if self.island.topology not in {"ring"}:
+                errors.append("island.topology debe ser 'ring'")
+            if self.island.migration_size * 2 >= self.population_size:
+                errors.append(
+                    "island.migration_size * 2 debe ser < population_size"
+                )
 
         return errors
 

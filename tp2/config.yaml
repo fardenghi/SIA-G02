@@ -34,10 +34,7 @@ genetic:
   # Curriculum Learning: Transición Dinámica de Fitness
   # Si el aprendizaje se estanca, transiciona cíclicamente entre estos métodos (ej. base -> "ssim" -> "detail_weighted" -> base)
   # null = deshabilitado. Puede ser un string o una lista de strings.
-  transition_methods:
-    - "detail_weighted"
-    - "edge_loss"
-    - "ssim"
+  transition_methods: null
   # Umbral mínimo de mejora esperado entre generaciones para no considerarlo estancamiento
   stagnation_threshold: 0.00005
   # Cantidad máxima de generaciones consecutivas por debajo del umbral antes de cambiar la métrica
@@ -64,7 +61,7 @@ fitness:
   #   composite          → α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss  [0, 1]
   #                         combina estructura, color y bordes; recomendado para imágenes complejas
   #   ssim               → Índice de Similitud Estructural puro [0, 1] evalúa percepción global
-  method: "inverse_normalized"
+  method: "linear"
   # Escala para método exponencial (menor = curva más pronunciada)
   exponential_scale: 0.1
   # Peso base para regiones lisas en detail_weighted.
@@ -93,8 +90,8 @@ selection:
 
 # Cruza (Crossover)
 crossover:
-  # Método: "single_point", "two_point", "uniform", "annular"
-  method: "single_point"
+  # Método: "single_point", "two_point", "uniform", "annular", "spatial_zindex", "arithmetic"
+  method: "uniform"
   # Probabilidad de cruza
   probability: 0.8
   # Cruza por fases: usa método temprano al inicio y cambia al tardío en switch_ratio * max_generations.
@@ -184,6 +181,23 @@ output:
   # Exportar enumeración geométrica a CSV.
   # Siempre genera shapes.csv y, en modo triangle, también triangles.csv legacy.
   export_triangles_csv: false
+
+# Modelo de Islas (IMGA)
+# Ejecuta K subpoblaciones en paralelo con migración periódica en anillo.
+# Ref: "A Parallel Island Genetic Algorithm for Triangle-based Image Reconstruction"
+island:
+  # true = activar modelo de islas. false = modo single-population clásico.
+  enabled: false
+  # Cantidad de islas (K). Cada una tiene population_size individuos.
+  num_islands: 4
+  # Tamaño de migración (M): cada isla envía M mejores + M peores al vecino.
+  migration_size: 5
+  # Intervalo de migración (T): migrar cada T generaciones.
+  migration_interval: 10
+  # Topología de migración. Por ahora solo "ring".
+  topology: "ring"
+  # true = multiprocessing (un proceso por isla). false = secuencial.
+  parallel: true
 
 # Backend de renderizado
 rendering:
