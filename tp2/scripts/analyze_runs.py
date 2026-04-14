@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-analyze_runs.py — Análisis OFAT completo de las corridas de run_many.sh
+scripts/analyze_runs.py — Analisis OFAT completo de las corridas de run_many.sh
 
 Genera por cada eje de configuración (fitness, selection, crossover, mutation, survival):
   · bar chart   — fitness final promedio por valor, agrupado por imagen
@@ -9,8 +9,8 @@ Genera por cada eje de configuración (fitness, selection, crossover, mutation, 
   · summary.csv / best_per_axis.csv — tablas exportables
 
 Uso:
-  python analyze_runs.py                        # usa output/run_many
-  python analyze_runs.py output/run_many        # explícito
+  python scripts/analyze_runs.py                        # usa output/run_many
+  python scripts/analyze_runs.py output/run_many        # explicito
 """
 
 import sys
@@ -23,7 +23,7 @@ import matplotlib.ticker as mtick
 
 # ── Configuración ─────────────────────────────────────────────────────────────
 BASE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("output/run_many")
-OUT  = BASE / "_analysis"
+OUT = BASE / "_analysis"
 OUT.mkdir(parents=True, exist_ok=True)
 
 AXES = ["fitness", "selection", "crossover", "mutation", "survival"]
@@ -36,9 +36,9 @@ dfs = []
 for f in sorted(BASE.rglob("metrics.csv")):
     parts = f.parts
     try:
-        idx   = list(parts).index(BASE.name)
+        idx = list(parts).index(BASE.name)
         image = parts[idx + 1]
-        axis  = parts[idx + 2]
+        axis = parts[idx + 2]
         value = parts[idx + 3]
     except (ValueError, IndexError):
         continue
@@ -50,7 +50,7 @@ for f in sorted(BASE.rglob("metrics.csv")):
         print(f"  [WARN] No se pudo leer {f}: {e}")
         continue
     tmp["image"] = image
-    tmp["axis"]  = axis
+    tmp["axis"] = axis
     tmp["value"] = value
     dfs.append(tmp)
 
@@ -68,11 +68,11 @@ final = (
     df[df["generation"] == last_gen]
     .groupby(["image", "axis", "value"])
     .agg(
-        best_fitness   = ("best_fitness",  "max"),
-        avg_fitness    = ("avg_fitness",   "mean"),
-        worst_fitness  = ("worst_fitness", "mean"),
-        total_time_s   = ("time_s",        "max"),
-        generations    = ("generation",    "max"),
+        best_fitness=("best_fitness", "max"),
+        avg_fitness=("avg_fitness", "mean"),
+        worst_fitness=("worst_fitness", "mean"),
+        total_time_s=("time_s", "max"),
+        generations=("generation", "max"),
     )
     .reset_index()
 )
@@ -84,9 +84,9 @@ print(f"Resumen exportado → {summary_path}")
 
 # ── 3. Mejor valor por imagen y eje ──────────────────────────────────────────
 best_idx = final.groupby(["image", "axis"])["best_fitness"].idxmax()
-best = final.loc[best_idx, ["image", "axis", "value", "best_fitness", "total_time_s"]].sort_values(
-    ["image", "axis"]
-)
+best = final.loc[
+    best_idx, ["image", "axis", "value", "best_fitness", "total_time_s"]
+].sort_values(["image", "axis"])
 print("=== Mejor valor por imagen y eje ===")
 print(best.to_string(index=False))
 best.to_csv(OUT / "best_per_axis.csv", index=False)
@@ -108,16 +108,23 @@ for axis in AXES:
         heights = []
         for img in images:
             row = sub[(sub["image"] == img) & (sub["value"] == val)]
-            heights.append(float(row["best_fitness"].values[0]) if not row.empty else 0.0)
+            heights.append(
+                float(row["best_fitness"].values[0]) if not row.empty else 0.0
+            )
         offset = i * width - 0.4 + width / 2
-        bars = ax.bar(x + offset, heights, width, label=val, color=PALETTE[i % len(PALETTE)])
+        bars = ax.bar(
+            x + offset, heights, width, label=val, color=PALETTE[i % len(PALETTE)]
+        )
         for bar, h in zip(bars, heights):
             if h > 0:
                 ax.text(
                     bar.get_x() + bar.get_width() / 2,
                     h + 0.005,
                     f"{h:.3f}",
-                    ha="center", va="bottom", fontsize=6.5, rotation=90,
+                    ha="center",
+                    va="bottom",
+                    fontsize=6.5,
+                    rotation=90,
                 )
 
     ax.set_xticks(x)
@@ -145,7 +152,8 @@ for axis in AXES:
     nrows = (len(images) + ncols - 1) // ncols
 
     fig, axes_grid = plt.subplots(
-        nrows, ncols,
+        nrows,
+        ncols,
         figsize=(7 * ncols, 4 * nrows),
         squeeze=False,
     )
@@ -157,8 +165,10 @@ for axis in AXES:
             data = sub[mask].sort_values("generation")
             if not data.empty:
                 ax.plot(
-                    data["generation"], data["best_fitness"],
-                    label=val, linewidth=1.4,
+                    data["generation"],
+                    data["best_fitness"],
+                    label=val,
+                    linewidth=1.4,
                     color=PALETTE[i % len(PALETTE)],
                 )
         ax.set_title(image, fontsize=11)
@@ -182,12 +192,16 @@ for axis in AXES:
 for image in images:
     rows = []
     for axis in AXES:
-        sub = final[(final["image"] == image) & (final["axis"] == axis)].sort_values("value")
+        sub = final[(final["image"] == image) & (final["axis"] == axis)].sort_values(
+            "value"
+        )
         for _, r in sub.iterrows():
-            rows.append({
-                "label":        f"{axis} / {r['value']}",
-                "best_fitness": r["best_fitness"],
-            })
+            rows.append(
+                {
+                    "label": f"{axis} / {r['value']}",
+                    "best_fitness": r["best_fitness"],
+                }
+            )
     if not rows:
         continue
 
@@ -201,8 +215,15 @@ for image in images:
     ax.set_yticks(range(n))
     ax.set_yticklabels(heat_df["label"], fontsize=8)
     for i, v in enumerate(heat_df["best_fitness"]):
-        ax.text(0, i, f"{v:.4f}", ha="center", va="center", fontsize=8.5,
-                color="black" if v > 0.4 else "white")
+        ax.text(
+            0,
+            i,
+            f"{v:.4f}",
+            ha="center",
+            va="center",
+            fontsize=8.5,
+            color="black" if v > 0.4 else "white",
+        )
     plt.colorbar(im, ax=ax, fraction=0.08, pad=0.02)
     ax.set_title(f"Fitness final — {image}", fontsize=11)
     fig.tight_layout()

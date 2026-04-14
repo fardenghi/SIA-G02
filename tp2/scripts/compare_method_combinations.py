@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--config", "-c", type=str,
-        default=str(Path(__file__).parent / "compare_method_combinations_config.yaml"),
+        default=str(Path(__file__).parent / "config/compare_method_combinations_config.yaml"),
         help="Archivo YAML con las dos combinaciones de operadores",
     )
     parser.add_argument(

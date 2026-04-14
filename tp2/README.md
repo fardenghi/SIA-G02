@@ -166,8 +166,8 @@ En `output/` se generan (segun configuracion):
 Reconstruye una imagen desde `shapes.json`/`triangles.json`:
 
 ```bash
-uv run reconstruct.py output/shapes.json -o reconstruida.png -W 256 -H 256
-uv run reconstruct.py output/shapes.json -o reconstruida_hd.png -W 256 -H 256 --scale 2
+uv run scripts/reconstruct.py output/shapes.json -o reconstruida.png -W 256 -H 256
+uv run scripts/reconstruct.py output/shapes.json -o reconstruida_hd.png -W 256 -H 256 --scale 2
 ```
 
 Opciones principales:
@@ -183,7 +183,7 @@ Opciones principales:
 Uso:
 
 ```bash
-uv run visualize.py output/mi_experimento
+uv run scripts/visualize.py output/mi_experimento
 ```
 
 Controles:
@@ -195,10 +195,10 @@ Controles:
 Exportaciones:
 
 ```bash
-uv run visualize.py output/mi_experimento --export-gif evolucion.gif --fps 2
-uv run visualize.py output/mi_experimento --export-video evolucion.mp4 --fps 5
-uv run visualize.py output/mi_experimento --summary resumen.png
-uv run visualize.py output/mi_experimento --no-interactive
+uv run scripts/visualize.py output/mi_experimento --export-gif evolucion.gif --fps 2
+uv run scripts/visualize.py output/mi_experimento --export-video evolucion.mp4 --fps 5
+uv run scripts/visualize.py output/mi_experimento --summary resumen.png
+uv run scripts/visualize.py output/mi_experimento --no-interactive
 ```
 
 Notas:
@@ -214,15 +214,39 @@ uv run --dev pytest tests/test_engine.py -v
 uv run --dev pytest tests/ --cov=src --cov-report=html
 ```
 
+## Scripts auxiliares
+
+Automatizacion de barridos y analisis:
+
+```bash
+./scripts/run_many.sh
+./scripts/collect_results.sh
+uv run scripts/analyze_runs.py output/run_many
+uv run scripts/experiment_configs.py
+uv run scripts/reconstruct.py output/shapes.json -o reconstruida.png
+uv run scripts/visualize.py output/mi_experimento
+```
+
+Notas:
+
+- `scripts/run_many.sh` invoca `scripts/analyze_runs.py` al finalizar.
+- Los scripts auxiliares viven en `scripts/` para mantener la raiz enfocada en entrypoints.
+
 ## Estructura del proyecto
 
 ```text
 tp2/
 ├── main.py
-├── reconstruct.py
-├── visualize.py
 ├── config.yaml
 ├── pyproject.toml
+├── scripts/
+│   ├── analyze_runs.py
+│   ├── run_many.sh
+│   ├── collect_results.sh
+│   ├── experiment_configs.py
+│   ├── reconstruct.py
+│   ├── visualize.py
+│   └── ...
 ├── src/
 │   ├── fitness/
 │   │   └── mse.py

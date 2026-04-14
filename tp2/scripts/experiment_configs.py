@@ -1,7 +1,8 @@
-"""
-Experiment script: tests all key parameter combinations and reports best config per image type.
+"""scripts/experiment_configs.py
+
+Experiment script: tests key parameter combinations and reports best config per image type.
 Short runs (N_GENS generations) for fast comparison.
-Results saved to output/experiments/
+Results saved to output/experiments/.
 """
 
 import subprocess
@@ -21,9 +22,9 @@ INPUT_DIR = Path("input")
 
 # Representative images (simple, medium, complex)
 IMAGES = {
-    "bangladesh": "input/bangladesh.png",   # Very simple: green bg + red circle
-    "argentina": "input/argentina.png",      # Medium: stripes + sun
-    "chile": "input/chile.png",              # Medium-complex: flag with star
+    "bangladesh": "input/bangladesh.png",  # Very simple: green bg + red circle
+    "argentina": "input/argentina.png",  # Medium: stripes + sun
+    "chile": "input/chile.png",  # Medium-complex: flag with star
 }
 
 # Base (default) config — we vary one dimension at a time
@@ -40,12 +41,25 @@ BASE = {
 
 EXPERIMENTS = [
     # Phase 1: Selection
-    [{"selection": m} for m in ["elite", "tournament", "probabilistic_tournament",
-                                  "roulette", "universal", "boltzmann", "rank"]],
+    [
+        {"selection": m}
+        for m in [
+            "elite",
+            "tournament",
+            "probabilistic_tournament",
+            "roulette",
+            "universal",
+            "boltzmann",
+            "rank",
+        ]
+    ],
     # Phase 2: Crossover
     [{"crossover": m} for m in ["single_point", "two_point", "uniform", "annular"]],
     # Phase 3: Mutation
-    [{"mutation": m} for m in ["single_gene", "limited_multigen", "uniform_multigen", "complete"]],
+    [
+        {"mutation": m}
+        for m in ["single_gene", "limited_multigen", "uniform_multigen", "complete"]
+    ],
     # Phase 4: Survival
     [{"survival": m} for m in ["additive", "exclusive"]],
     # Phase 5: Fitness function
@@ -60,19 +74,34 @@ def run_single(image_path: str, config: dict, run_label: str) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        "uv", "run", "python3", "main.py",
-        "--image", image_path,
-        "--generations", str(N_GENS),
-        "--population", str(POPULATION),
-        "--triangles", str(TRIANGLES),
-        "--output", str(out_dir),
-        "--selection", config["selection"],
-        "--crossover", config["crossover"],
-        "--mutation", config["mutation"],
-        "--survival", config["survival"],
-        "--fitness", config["fitness"],
-        "--save-interval", "0",
-        "--max-size", "128",
+        "uv",
+        "run",
+        "python3",
+        "main.py",
+        "--image",
+        image_path,
+        "--generations",
+        str(N_GENS),
+        "--population",
+        str(POPULATION),
+        "--triangles",
+        str(TRIANGLES),
+        "--output",
+        str(out_dir),
+        "--selection",
+        config["selection"],
+        "--crossover",
+        config["crossover"],
+        "--mutation",
+        config["mutation"],
+        "--survival",
+        config["survival"],
+        "--fitness",
+        config["fitness"],
+        "--save-interval",
+        "0",
+        "--max-size",
+        "128",
         "--quiet",
     ]
 
@@ -119,15 +148,15 @@ def run_experiments():
 
     for phase_idx, phase_variants in enumerate(EXPERIMENTS):
         phase_name = phase_names[phase_idx]
-        print(f"\n{'='*60}")
-        print(f"PHASE {phase_idx+1}: {phase_name.upper()}")
-        print(f"{'='*60}")
+        print(f"\n{'=' * 60}")
+        print(f"PHASE {phase_idx + 1}: {phase_name.upper()}")
+        print(f"{'=' * 60}")
 
         for variant in phase_variants:
             # Build full config: BASE + override
             config = {**BASE, **variant}
             variant_val = list(variant.values())[0]
-            run_label = f"p{phase_idx+1}_{phase_name}_{variant_val}"
+            run_label = f"p{phase_idx + 1}_{phase_name}_{variant_val}"
 
             for img_name, img_path in IMAGES.items():
                 print(f"  [{img_name}] {variant_val} ...", end=" ", flush=True)
@@ -138,16 +167,28 @@ def run_experiments():
                     print(f"fitness={bf:.5f} ({result['elapsed_s']}s)")
                 except subprocess.TimeoutExpired:
                     print("TIMEOUT")
-                    all_results.append({
-                        "image": img_name, "run_label": run_label, **config,
-                        "best_fitness": None, "elapsed_s": 300, "returncode": -1
-                    })
+                    all_results.append(
+                        {
+                            "image": img_name,
+                            "run_label": run_label,
+                            **config,
+                            "best_fitness": None,
+                            "elapsed_s": 300,
+                            "returncode": -1,
+                        }
+                    )
                 except Exception as e:
                     print(f"ERROR: {e}")
-                    all_results.append({
-                        "image": img_name, "run_label": run_label, **config,
-                        "best_fitness": None, "elapsed_s": 0, "returncode": -2
-                    })
+                    all_results.append(
+                        {
+                            "image": img_name,
+                            "run_label": run_label,
+                            **config,
+                            "best_fitness": None,
+                            "elapsed_s": 0,
+                            "returncode": -2,
+                        }
+                    )
 
     # Save all results
     results_path = BASE_DIR / "results.csv"
@@ -175,9 +216,9 @@ def analyze_results(results: list):
         "fitness": "fitness",
     }
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("ANALYSIS: Best config per dimension and image type")
-    print("="*60)
+    print("=" * 60)
 
     for dim in dim_to_phase:
         print(f"\n--- {dim.upper()} ---")
@@ -205,13 +246,15 @@ def analyze_results(results: list):
                 by_dim[dim][r[dim]].append(r["best_fitness"])
 
     for dim in dim_to_phase:
-        avg_scores = {m: sum(v)/len(v) for m, v in by_dim[dim].items()}
+        avg_scores = {m: sum(v) / len(v) for m, v in by_dim[dim].items()}
         best = max(avg_scores, key=avg_scores.get)
         print(f"  {dim:12s}: {best}  (avg={avg_scores[best]:.5f})")
 
 
 if __name__ == "__main__":
-    print(f"Starting experiments: {N_GENS} gens, pop={POPULATION}, triangles={TRIANGLES}")
+    print(
+        f"Starting experiments: {N_GENS} gens, pop={POPULATION}, triangles={TRIANGLES}"
+    )
     print(f"Images: {list(IMAGES.keys())}")
     print(f"Total runs: ~{sum(len(p) for p in EXPERIMENTS) * len(IMAGES)}")
     t_start = time.time()
@@ -220,4 +263,4 @@ if __name__ == "__main__":
     analyze_results(results)
 
     total_time = time.time() - t_start
-    print(f"\nTotal time: {total_time/60:.1f} min")
+    print(f"\nTotal time: {total_time / 60:.1f} min")

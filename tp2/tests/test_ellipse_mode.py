@@ -16,7 +16,7 @@ from src.rendering.ellipse_canvas import EllipseCanvas
 from src.rendering.factory import create_renderer
 from src.rendering.gpu_ellipse_canvas import EllipseGPUCanvas, MODERNGL_AVAILABLE
 from src.utils.export import export_shapes_json, load_shapes_json
-from visualize import EvolutionVisualizer
+from scripts.visualize import EvolutionVisualizer
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -113,7 +113,7 @@ class TestEllipseModeIO:
         subprocess.run(
             [
                 sys.executable,
-                "reconstruct.py",
+                "scripts/reconstruct.py",
                 str(shapes_path),
                 "--output",
                 str(output_path),

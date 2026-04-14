@@ -5,8 +5,8 @@ Permite explorar paso a paso la secuencia de generaciones,
 mostrando el individuo renderizado y métricas relevantes.
 
 Uso:
-    python visualize.py output/mi_experimento
-    python visualize.py output/mi_experimento --export-gif evolucion.gif
+    python scripts/visualize.py output/mi_experimento
+    python scripts/visualize.py output/mi_experimento --export-gif evolucion.gif
 """
 
 import argparse
@@ -21,6 +21,10 @@ from matplotlib.widgets import Slider, Button
 from matplotlib.animation import FuncAnimation, PillowWriter
 import numpy as np
 from PIL import Image
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 class EvolutionVisualizer:
@@ -558,9 +562,9 @@ Controles del visualizador interactivo:
   End        Ir al final
 
 Ejemplos:
-  python visualize.py output/mi_experimento
-  python visualize.py output/mi_experimento --export-gif evolucion.gif
-  python visualize.py output/mi_experimento --summary resumen.png
+  python scripts/visualize.py output/mi_experimento
+  python scripts/visualize.py output/mi_experimento --export-gif evolucion.gif
+  python scripts/visualize.py output/mi_experimento --summary resumen.png
         """,
     )
 
