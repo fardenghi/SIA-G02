@@ -1,3 +1,0 @@
-[search]
-algorithm = "iddfs"
-board = "boards/sokoban/level_10.txt"

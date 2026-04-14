@@ -1,4 +1,0 @@
-[search]
-algorithm = "astar"
-board = "boards/sokoban/level_10.txt"
-heuristic = ["hungarian"]
