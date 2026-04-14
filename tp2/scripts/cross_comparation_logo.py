@@ -4,7 +4,7 @@ Crossover comparison for a single logo image.
 Compares fixed crossover methods against the hybrid phased scheme
 (early two-point -> late uniform) across multiple runs.
 
-Fitness method is fixed to inverse_normalized.
+Fitness method is fixed to linear.
 """
 
 from __future__ import annotations
@@ -127,6 +127,7 @@ def build_engine(
         phased_crossover_early_method=strategy.early_method,
         phased_crossover_late_method=strategy.late_method,
         phased_crossover_switch_ratio=args.switch_ratio,
+        hall_of_fame_enabled=False,
     )
 
     mutation_params = create_mutation_params(
@@ -194,7 +195,7 @@ def _run_task(task: ExperimentTask, run_cfg: dict) -> dict:
         "error": 1.0 - result.best_fitness,
         "elapsed_time_s": result.elapsed_time,
         "generations_executed": result.generations,
-        "fitness_method": "inverse_normalized",
+        "fitness_method": "linear",
         "curve": curve,
         "best_individual": result.best_individual,
     }
@@ -292,7 +293,7 @@ def run_all_experiments(
                         "generation": generation,
                         "best_fitness": float(best_fitness),
                         "error": 1.0 - float(best_fitness),
-                        "fitness_method": "inverse_normalized",
+                        "fitness_method": "linear",
                     }
                     for generation, best_fitness in enumerate(res["curve"])
                 )
@@ -323,7 +324,7 @@ def run_all_experiments(
                     "generation": generation,
                     "best_fitness": float(best_fitness),
                     "error": 1.0 - float(best_fitness),
-                    "fitness_method": "inverse_normalized",
+                    "fitness_method": "linear",
                 }
                 for generation, best_fitness in enumerate(res["curve"])
             )
@@ -517,7 +518,7 @@ def main() -> int:
         f"method={args.mutation_method}, p={args.mutation_probability}, gp={args.gene_probability}, "
         f"max_genes={args.max_genes}"
     )
-    print("Fitness method fixed to: inverse_normalized")
+    print("Fitness method fixed to: linear")
     print()
 
     df, process_df, histories, image_results = run_all_experiments(args)

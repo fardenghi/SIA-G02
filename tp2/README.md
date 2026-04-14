@@ -1,482 +1,249 @@
-# Compresor de Imágenes Evolutivo
+# Compresor de Imagenes Evolutivo
 
-> Aproximación visual de imágenes mediante algoritmos genéticos y formas traslúcidas.
+> Aproximacion visual de imagenes con Algoritmos Geneticos (AG) usando formas traslucidas sobre fondo blanco.
 
-Sistema que utiliza un motor de **Algoritmos Genéticos (AG)** para reconstruir una imagen objetivo usando una cantidad fija de formas semitransparentes superpuestas sobre un lienzo blanco. Actualmente soporta corridas homogéneas compuestas por **triángulos** o por **elipses rotadas**.
+Este proyecto corresponde al TP2 de SIA (ITBA). El motor evoluciona individuos compuestos por una cantidad fija de formas (`triangle` o `ellipse`) para aproximar una imagen objetivo.
 
----
+## Cumplimiento de la consigna
 
-## Tabla de Contenidos
+- Seleccion implementada: `elite`, `roulette`, `universal`, `boltzmann`, `tournament`, `probabilistic_tournament`, `rank` (`ranking` como alias).
+- Supervivencia implementada: `additive` y `exclusive`.
+- Cruzas obligatorias implementadas: `single_point`, `two_point`, `uniform`, `annular` (ademas incluye `spatial_zindex` y `arithmetic` via YAML).
+- Mutaciones implementadas: `single_gene`, `limited_multigen`, `uniform_multigen`, `complete`, `error_map_guided`.
+- Exporta resultados visuales y metricas por generacion (`metrics.csv`) con pandas.
 
-- [Funcionamiento del Algoritmo](#funcionamiento-el-enfoque-genético)
-- [Arquitectura](#arquitectura-del-algoritmo)
-- [Instalación](#instalación)
-- [Inicio Rápido](#inicio-rápido)
-- [Configuración de Parámetros](#configuración-de-parámetros)
-- [Ejemplos de Uso](#ejemplos-de-uso)
-- [Salidas del Sistema](#salidas-del-sistema)
-- [Visualizador Interactivo](#visualizador-interactivo)
-- [Testing](#testing)
-- [Estructura del Proyecto](#estructura-del-proyecto)
+## Instalacion
 
----
-
-## Funcionamiento: El Enfoque Genético
-
-El sistema evoluciona una población de soluciones candidatas (individuos), donde cada individuo representa una posible aproximación a la imagen objetivo. A través de generaciones sucesivas, los individuos mejor adaptados son seleccionados, combinados y mutados hasta converger hacia una solución óptima.
-
-### Flujo Evolutivo
-
-1. **Inicialización**: Se genera una población aleatoria de individuos.
-2. **Evaluación**: Se calcula el fitness de cada individuo comparándolo con la imagen objetivo.
-3. **Selección**: Se eligen los individuos más aptos (ej. selección por torneo).
-4. **Cruza (Crossover)**: Se combinan pares de individuos para producir descendencia.
-5. **Mutación**: Se aplican alteraciones aleatorias sutiles a los nuevos individuos.
-6. **Reemplazo**: La nueva generación reemplaza a la anterior.
-7. **Criterio de parada**: Se repite el ciclo hasta alcanzar el número máximo de generaciones o un umbral de fitness objetivo.
-
----
-
-## Arquitectura del Algoritmo
-
-### Genotipo (Cromosoma)
-
-Cada individuo está representado por una **lista ordenada de N genes geométricos**. El orden determina el Z-index (profundidad de renderizado).
-
-Una corrida utiliza una sola familia de formas por individuo: `triangle` o `ellipse`.
-
-Para `triangle`, cada gen se define por:
-
-| Atributo       | Descripción                                      |
-|----------------|--------------------------------------------------|
-| Vértice 1      | Coordenadas (x₁, y₁) normalizadas [0, 1]         |
-| Vértice 2      | Coordenadas (x₂, y₂) normalizadas [0, 1]         |
-| Vértice 3      | Coordenadas (x₃, y₃) normalizadas [0, 1]         |
-| Color          | Valor RGBA (R, G, B en [0-255], A en [0-1])      |
-
-Para `ellipse`, cada gen se define por:
-
-| Atributo       | Descripción                                      |
-|----------------|--------------------------------------------------|
-| Centro         | Coordenadas (cx, cy) normalizadas [0, 1]         |
-| Radios         | (rx, ry) normalizados                            |
-| Rotación       | Ángulo en radianes                               |
-| Color          | Valor RGBA (R, G, B en [0-255], A en [0-1])      |
-
-### Función de Fitness
-
-El sistema usa el **Error Cuadrático Medio (MSE)** como señal de error base y luego lo transforma a fitness:
-
-```
-MSE = (1 / n) × Σ (pixel_original - pixel_renderizado)²
-Fitness = 1 / (1 + MSE)
-```
-
-Donde `n` es el número total de píxeles. Con esta formulación, **mayor fitness = mejor individuo**. Existen múltiples métodos de evaluación (como `linear`, `rmse`, `exponential`, `detail_weighted`) y métricas perceptuales avanzadas (`composite` combinando variables morfológicas o `ssim` evaluando la similitud estructural pura).
-
-### Operadores Genéticos
-
-| Operador | Métodos Disponibles | Descripción |
-|----------|---------------------|-------------|
-| **Selección** | `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank` | Elige individuos para reproducción |
-| **Cruza** | `single_point`, `two_point`, `uniform`, `annular` | Combina genes de dos padres |
-| **Mutación** | `single_gene`, `limited_multigen`, `uniform_multigen`, `complete`, `error_map_guided` | Altera atributos de los genes geométricos. Incluye mutación guiada por mapa de error y control de deltas adaptativo. |
-
----
-
-## Optimizaciones y Rendimiento
-
-El algoritmo implementa diferentes técnicas para mejorar la convergencia visual, la eficiencia y reducir los tiempos de ejecución:
-
-1. **Mutación Guiada por Mapa de Error (`error_map_guided`)**: En vez de alterar parámetros de forma estocástica pura, se favorece la mutación intencionada de aquellos genes ubicados en las zonas funcionales específicas que más difieren de la imagen objetivo original.
-2. **Mutación con Sigma Adaptativo (`adaptive_sigma_enabled`)**: Las magnitudes de mutación (ej. variaciones de color y saltos en la posición) se ajustan dinámicamente. Crecen si se encadenan mejoras constantes en el fitness de la población (exploración a grandes escalas), y decrecen si se percibe un estancamiento (facilita un refinamiento local y detallista o *fine-tuning*).
-3. **Fitness Ponderado por Detalle (`detail_weighted`)**: Para aquellas metas compuestas mayormente de fondos homogéneos con elementos intrincados chicos, los métodos tradicionales desperdician genes alisando el fondo. Como alternativa, este método da menor peso al MSE del fondo y escala los castigos en áreas puntillosas con bordes, promoviendo el trazo de figuras más ricas en detalle.
-4. **Parada Temprana (`fitness_threshold`)**: Permite la interrupción temprana del proceso evolutivo, si este verifica que se ha alcanzado el umbral de calidad propuesto por el usuario antes de completar `max_generations`, ahorrando una importante carga computacional.
-5. **Aceleración Renderizada en GPU (` backend: gpu`)**: Evaluando constantemente candidatos el procesamiento del superpuesto traslúcido resulta muy punitivo para el núcleo de CPU base (donde ejecuta en defecto `Pillow`). Seleccionando el *backend* de renderizado por GPU acelerado invoca subrutinas de la tarjeta gráfica a través de OpenGL (`moderngl`), proveyendo mejor soporte frente a crecimientos exponenciales de `population_size` o `num_triangles`. Para activarlo requiera su dependencia extra en la etapa de instalación.
-6. **Curriculum Learning (Transición Dinámica de Fitness)**: Permite ejecutar tu evaluación bajo dos regímenes. Si se lo configura de modo no-Nulo, el algoritmo inicia la optimización con la función rápida normal en búsqueda de siluetas clave y, cuando detecta un evento de agotamiento (`stagnation_threshold`), gatilla un reinicio algorítmico traspasando la brújula evolutiva hacia una función secundaria detallista (e.j. refinamiento de texturas mediante `transition_methods`). Se acompaña de un reinicio en caliente (Hot Restart) interno que reescala históricos de élites al vuelo eliminando saltos matemáticos bruscos.
-
----
-
-## Instalación
-
-### Requisitos previos
+Requisitos:
 
 - Python 3.10+
-- uv
+- `uv`
 
-### Pasos de instalación
+Instalacion base:
 
 ```bash
-# Clonar el repositorio
 git clone <URL_DEL_REPOSITORIO>
 cd tp2
-
-# Sincronizar dependencias (runtime + desarrollo)
 uv sync --dev
+```
 
-# (Opcional) Instalar soporte acelerado de procesamiento de texturas en GPU
+Instalacion con soporte GPU (opcional):
+
+```bash
 uv sync --dev --extra gpu
 ```
 
-### Verificar instalación
+Verificacion rapida:
 
 ```bash
-# Ejecutar tests para verificar que todo funciona
 uv run --dev pytest tests/ -v
 ```
 
----
+## Inicio rapido
 
-## Inicio Rápido
-
-### Ejecución básica
+Ejecucion minima:
 
 ```bash
-# Ejecutar con parámetros mínimos
 uv run main.py --image input/mi_imagen.png --triangles 50
+```
 
-# Ejecutar en modo elipses
+Modo elipses:
+
+```bash
 uv run main.py --image input/mi_imagen.png --triangles 50 --shape ellipse
 ```
 
-### Ejemplo completo
+Ejemplo completo:
 
 ```bash
 uv run main.py \
-    --image input/foto.png \
-    --triangles 100 \
-    --shape triangle \
-    --population 50 \
-    --generations 5000 \
-    --output output/mi_experimento
+  --image input/foto.png \
+  --triangles 100 \
+  --shape triangle \
+  --population 50 \
+  --generations 5000 \
+  --selection tournament \
+  --crossover uniform \
+  --mutation uniform_multigen \
+  --output output/mi_experimento
 ```
 
-El sistema mostrará el progreso en consola:
+## Interfaz de linea de comandos (main.py)
 
-```
-Cargando imagen: input/foto.png
-Tamaño original: (512, 512)
-Tamaño de trabajo: (256, 256)
-Forma: triangle
-Genes: 100
-Población: 50
-Generaciones máximas: 5000
+Los argumentos de CLI pisan los valores de `config.yaml`.
 
-Iniciando evolución...
---------------------------------------------------
-Gen     0 | Best:   0.000061 | Avg:   0.000048
-  >> Mejora en gen 1:   0.000079
-  >> Mejora en gen 5:   0.000101
-Gen    10 | Best:   0.000114 | Avg:   0.000098
-...
-```
+Argumentos principales:
 
----
+- `--image`, `-i`: imagen objetivo (requerido).
+- `--triangles`, `-t`: cantidad de genes.
+- `--shape`: `triangle` | `ellipse`.
+- `--population`, `-p`: tamano de poblacion.
+- `--generations`, `-g`: generaciones maximas.
+- `--output`, `-o`: directorio de salida.
 
-## Configuración de Parámetros
+Operadores geneticos:
 
-Los parámetros se pueden configurar de **dos formas**:
+- `--selection`: `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank`, `ranking`.
+- `--crossover`: `single_point`, `two_point`, `uniform`, `annular`.
+- `--mutation`: `single_gene`, `limited_multigen`, `uniform_multigen`, `complete`, `error_map_guided`.
+- `--mutation-rate`, `-m`: probabilidad de mutar individuo.
+- `--guided-ratio`: fraccion guiada para `error_map_guided`.
+- `--field-probability`: probabilidad de mutar cada valor interno del gen.
 
-1. **Argumentos de línea de comandos (CLI)** - tienen prioridad
-2. **Archivo de configuración YAML** - valores por defecto
+Supervivencia y fitness:
 
-### Opción 1: Argumentos de Línea de Comandos
+- `--survival`: `additive` | `exclusive`.
+- `--offspring-ratio`: K = N * ratio.
+- `--elite-count`: cantidad de elites clonados sin modificar.
+- `--fitness`: `linear`, `rmse`, `inverse_normalized`, `exponential`, `inverse_mse`, `detail_weighted`, `composite`.
+- `--fitness-scale`: escala para `exponential`.
+
+Renderizado, salida e islas:
+
+- `--renderer`: `cpu` | `gpu`.
+- `--save-interval`: guarda `gen_XXXXX.png` cada N generaciones.
+- `--max-size`: reescala imagen de entrada si excede este tamano.
+- `--quiet`, `-q`: menos logs.
+- `--islands`: cantidad de islas (si >1 activa IMGA).
+- `--migration-size`: tamano de migracion.
+- `--migration-interval`: intervalo de migracion.
+
+Ayuda completa:
 
 ```bash
-uv run main.py --image <ruta> [opciones]
+uv run main.py --help
 ```
 
-#### Parámetros principales
+## Configuracion YAML
 
-| Opción | Alias | Descripción | Default |
-|--------|-------|-------------|---------|
-| `--image` | `-i` | **Ruta a la imagen objetivo** (requerido) | - |
-| `--triangles` | `-t` | Cantidad de genes por individuo | 50 |
-| `--shape` | - | Familia de formas: `triangle`, `ellipse` | `triangle` |
-| `--population` | `-p` | Tamaño de la población | 100 |
-| `--generations` | `-g` | Número máximo de generaciones | 5000 |
+Archivo por defecto: `config.yaml`.
 
-#### Parámetros de operadores genéticos
+El proyecto incluye, entre otras, estas secciones:
 
-| Opción | Descripción | Valores | Default |
-|--------|-------------|---------|---------|
-| `--selection` | Método de selección | `elite`, `tournament`, `probabilistic_tournament`, `roulette`, `universal`, `boltzmann`, `rank`, `ranking` | `tournament` |
-| `--crossover` | Método de cruza | `single_point`, `two_point`, `uniform`, `annular` | `single_point` |
-| `--mutation-rate` | Probabilidad de mutación | 0.0 - 1.0 | 0.3 |
+- `image`: ruta de imagen objetivo.
+- `genotype`: `shape_type`, `num_triangles`, `alpha_min`, `alpha_max`.
+- `genetic`: poblacion, generaciones, parada temprana, curriculum learning (`transition_methods`), `seed_ratio`.
+- `fitness`: metodo y parametros (`exponential_scale`, `detail_weight_base`, pesos de `composite`).
+- `selection`: metodo y parametros de torneo/boltzmann.
+- `crossover`: metodo, probabilidad y modo por fases (`phased`).
+- `mutation`: metodo, probabilidades, deltas y sigma adaptativo.
+- `survival`: metodo (`additive`/`exclusive`), seleccion de sobrevivientes, `offspring_ratio`, `elite_count`.
+- `output`: guardado de imagenes, JSON, CSV y grafico.
+- `island`: modelo IMGA (anillo, migracion, paralelo).
+- `rendering`: backend (`cpu` o `gpu`).
 
-#### Parámetros de salida
+Notas:
 
-| Opción | Alias | Descripción | Default |
-|--------|-------|-------------|---------|
-| `--output` | `-o` | Directorio de salida | `output/` |
-| `--save-interval` | - | Guardar imagen cada N generaciones | 100 |
-| `--max-size` | - | Redimensionar imagen si excede este tamaño | 256 |
-| `--quiet` | `-q` | Modo silencioso (menos output) | False |
+- `fitness.method` soporta tambien `ssim` y `edge_loss` via YAML.
+- `crossover.method` soporta tambien `spatial_zindex` y `arithmetic` via YAML.
+- Si `rendering.backend: gpu` y no esta `moderngl`, el sistema hace fallback a CPU con warning.
 
-#### Parámetros de configuración
+## Modelo del individuo y fitness
 
-| Opción | Alias | Descripción | Default |
-|--------|-------|-------------|---------|
-| `--config` | `-c` | Archivo de configuración YAML | `config.yaml` |
+- Un individuo es una lista ordenada de genes geometricos (el orden define Z-index).
+- Cada corrida usa una sola familia de formas por individuo: `triangle` o `ellipse`.
+- Triangulo: 3 vertices normalizados + color RGBA.
+- Elipse: centro, radios, angulo y color RGBA.
+- El fitness maximiza similitud entre imagen renderizada y objetivo. El metodo por defecto es `linear` (`1 - NMSE`).
 
-### Opción 2: Archivo de Configuración YAML
+## Salidas generadas
 
-Edita el archivo `config.yaml` para establecer valores por defecto:
+En `output/` se generan (segun configuracion):
 
-```yaml
-# Imagen
-image:
-  target_path: null
+- `result.png`: mejor individuo en resolucion de entrenamiento.
+- `result_train_res.png`: alias explicito de entrenamiento.
+- `result_high_res.png`: render del mejor individuo en resolucion original.
+- `gen_XXXXX.png`: snapshots intermedios (si `save_interval > 0`).
+- `seed_preview_gen0.png`: preview de generacion 0 (si `seed_ratio > 0` y no islas).
+- `shapes.json`: export estructurado de formas.
+- `triangles.json`: export legacy (solo `triangle`).
+- `fitness_evolution.png`: grafico de fitness.
+- `metrics.csv`: metricas por generacion.
+- `shapes.csv` y `triangles.csv` (solo si `output.export_triangles_csv: true`; `triangles.csv` solo en modo `triangle`).
 
-# Parámetros del genotipo
-genotype:
-  shape_type: triangle
-  num_triangles: 50
-  alpha_min: 0.1
-  alpha_max: 0.8
+## Script de reconstruccion
 
-# Algoritmo genético
-genetic:
-  population_size: 100
-  max_generations: 5000
-  fitness_threshold: null  # null = sin parada temprana
-  transition_methods:      # O null para desactivar Curriculum Learning
-    - "ssim"
-    - "detail_weighted"
-  stagnation_threshold: 0.0005
-  max_patience: 20
-
-# Selección
-selection:
-  method: "tournament"    # elite, tournament, probabilistic_tournament, roulette, universal, boltzmann, rank (alias ranking)
-  tournament_size: 3       # solo para tournament
-  threshold: 0.75          # solo para probabilistic_tournament
-  boltzmann_t0: 100.0      # solo para boltzmann
-  boltzmann_tc: 1.0        # solo para boltzmann
-  boltzmann_k: 0.005       # solo para boltzmann
-
-# Cruza (Crossover)
-crossover:
-  method: "single_point"  # single_point, two_point, uniform
-  probability: 0.8        # probabilidad de cruza
-
-# Mutación
-mutation:
-  probability: 0.3        # probabilidad de mutar individuo
-  gene_probability: 0.1   # probabilidad de mutar cada gen
-  position_delta: 0.1     # magnitud de perturbación en posición
-  color_delta: 30         # magnitud de perturbación en color (0-255)
-  alpha_delta: 0.1        # magnitud de perturbación en alfa
-
-# Salida y visualización
-output:
-  directory: "output"
-  save_interval: 100      # 0 = solo guardar al final
-  log_interval: 10        # mostrar progreso cada N generaciones
-  export_triangles: true  # exportar shapes.json y, en triangle, triangles.json legacy
-  plot_fitness: true      # generar gráfico de evolución
-
-# Backend de renderizado
-rendering:
-  backend: "cpu"          # "cpu" (Pillow, fallback) o "gpu" (moderngl)
-```
-
-Los argumentos CLI **sobreescriben** los valores del archivo YAML.
-
----
-
-## Ejemplos de Uso
-
-### Ejemplo 1: Ejecución rápida para pruebas
+Reconstruye una imagen desde `shapes.json`/`triangles.json`:
 
 ```bash
-uv run main.py -i input/logo.png -t 30 -g 500 -p 30
-```
-
-### Ejemplo 2: Alta calidad (más genes y generaciones)
-
-```bash
-uv run main.py \
-    --image input/retrato.jpg \
-    --triangles 200 \
-    --shape ellipse \
-    --generations 10000 \
-    --population 100 \
-    --save-interval 500 \
-    --output output/retrato_hq
-```
-
-### Ejemplo 3: Experimentar con operadores
-
-```bash
-# Usar selección por ruleta y cruza uniforme
-uv run main.py \
-    -i input/paisaje.png \
-    -t 100 \
-    --selection roulette \
-    --crossover uniform \
-    --mutation-rate 0.5
-```
-
-### Ejemplo 4: Modo silencioso (para scripts)
-
-```bash
-uv run main.py -i input/imagen.png -t 50 -g 1000 --quiet
-```
-
-### Ejemplo 5: Usar configuración personalizada
-
-```bash
-# Primero edita mi_config.yaml con tus parámetros
-uv run main.py -i input/imagen.png --config mi_config.yaml
-```
-
----
-
-## Salidas del Sistema
-
-Después de ejecutar el algoritmo, se generan los siguientes archivos en el directorio de salida:
-
-```
-output/
-├── result.png              # Imagen final renderizada (resolución de entrenamiento)
-├── result_train_res.png    # Alias explícito de la resolución de entrenamiento
-├── result_high_res.png     # Reconstrucción en la resolución original
-├── shapes.json             # Datos estructurados de las formas
-├── triangles.json          # Legacy, solo en modo triangle
-├── fitness_evolution.png   # Gráfico de evolución del fitness
-├── gen_00100.png          # Imágenes intermedias (cada save_interval)
-├── gen_00200.png
-└── ...
-```
-
-### Descripción de archivos
-
-| Archivo | Descripción |
-|---------|-------------|
-| `result.png` | Imagen final con la mejor aproximación encontrada |
-| `shapes.json` | Datos estructurados de cada forma (triángulo o elipse) |
-| `triangles.json` | Export legacy mantenido para corridas en modo triangle |
-| `fitness_evolution.png` | Gráfico mostrando la evolución del fitness por generación |
-| `gen_XXXXX.png` | Capturas intermedias del progreso |
-
-### Reconstruir imagen desde JSON
-
-Puedes reconstruir la imagen a cualquier resolución usando las formas exportadas:
-
-```bash
-# Reconstruir a tamaño original
 uv run reconstruct.py output/shapes.json -o reconstruida.png -W 256 -H 256
-
-# Reconstruir a mayor resolución (escala 2x)
 uv run reconstruct.py output/shapes.json -o reconstruida_hd.png -W 256 -H 256 --scale 2
 ```
 
----
+Opciones principales:
 
-## Visualizador Interactivo
+- `--output`, `-o`
+- `--width`, `-W`
+- `--height`, `-H`
+- `--scale`, `-s`
+- `--renderer {cpu,gpu}`
 
-El sistema incluye un visualizador gráfico interactivo para explorar la evolución del algoritmo paso a paso.
+## Visualizador interactivo
 
-### Uso básico
+Uso:
 
 ```bash
-# Visualizar resultados de un experimento
 uv run visualize.py output/mi_experimento
 ```
 
-### Interfaz gráfica
+Controles:
 
-El visualizador muestra:
+- `←` / `→`: generacion anterior/siguiente.
+- `Espacio`: play/pause.
+- `Home` / `End`: inicio/fin.
 
-- **Panel central**: Imagen del mejor individuo de la generación actual
-- **Panel lateral**: Métricas (generación, fitness, número de genes y tipo de forma)
-- **Gráfico inferior**: Evolución del fitness a lo largo de las generaciones
-- **Controles**: Slider y botones para navegar entre generaciones
-
-### Controles de teclado
-
-| Tecla | Acción |
-|-------|--------|
-| `←` / `→` | Generación anterior / siguiente |
-| `Espacio` | Play / Pause animación automática |
-| `Home` | Ir a la primera generación |
-| `End` | Ir a la última generación |
-
-### Opciones de exportación
+Exportaciones:
 
 ```bash
-# Exportar como GIF animado
-uv run visualize.py output/mi_experimento --export-gif evolucion.gif
-
-# Exportar como video MP4 (requiere ffmpeg)
-uv run visualize.py output/mi_experimento --export-video evolucion.mp4
-
-# Generar imagen resumen con todos los pasos
+uv run visualize.py output/mi_experimento --export-gif evolucion.gif --fps 2
+uv run visualize.py output/mi_experimento --export-video evolucion.mp4 --fps 5
 uv run visualize.py output/mi_experimento --summary resumen.png
+uv run visualize.py output/mi_experimento --no-interactive
 ```
 
-### Parámetros del visualizador
+Notas:
 
-| Opción | Descripción | Default |
-|--------|-------------|---------|
-| `--export-gif` | Exportar animación como GIF | - |
-| `--export-video` | Exportar animación como MP4 | - |
-| `--summary` | Generar imagen resumen | - |
-| `--fps` | Frames por segundo (GIF/video) | 10 |
-| `--interval` | Intervalo de animación (ms) | 500 |
-
----
+- `--export-video` requiere `opencv-python`.
+- `--fps` default en el visualizador: `2`.
 
 ## Testing
 
 ```bash
-# Ejecutar todos los tests
 uv run --dev pytest tests/ -v
-
-# Ejecutar tests de un módulo específico
 uv run --dev pytest tests/test_engine.py -v
-
-# Ejecutar tests con cobertura
 uv run --dev pytest tests/ --cov=src --cov-report=html
 ```
 
----
+## Estructura del proyecto
 
-## Estructura del Proyecto
-
-```
+```text
 tp2/
-├── main.py                 # Punto de entrada principal (CLI)
-├── reconstruct.py          # Script de reconstrucción desde JSON
-├── visualize.py            # Visualizador gráfico interactivo
-├── config.yaml             # Configuración por defecto
-├── pyproject.toml          # Dependencias y metadata del proyecto
-├── uv.lock                 # Lockfile generado por uv
-├── pytest.ini              # Configuración de pytest
-├── README.md
+├── main.py
+├── reconstruct.py
+├── visualize.py
+├── config.yaml
+├── pyproject.toml
 ├── src/
-│   ├── genetic/            # Motor de algoritmos genéticos
-│   │   ├── individual.py   # Triangle + Individual (genotipo)
-│   │   ├── population.py   # Gestión de la población
-│   │   ├── engine.py       # Motor evolutivo principal
-│   │   ├── selection.py    # Métodos de selección
-│   │   ├── crossover.py    # Operadores de cruza
-│   │   └── mutation.py     # Operadores de mutación
-│   ├── fitness/            # Evaluación de fitness
-│   │   └── mse.py          # Cálculo de fitness a partir de MSE
-│   ├── rendering/          # Renderizado de triángulos y elipses
-│   │   └── canvas.py       # Generación de imágenes con Pillow
-│   └── utils/              # Utilidades generales
-│       ├── config.py       # Configuración YAML + CLI
-│       └── export.py       # Exportación de resultados
-├── tests/                  # Tests unitarios (pytest)
-├── input/                  # Imágenes de entrada
-└── output/                 # Resultados generados
+│   ├── fitness/
+│   │   └── mse.py
+│   ├── genetic/
+│   │   ├── engine.py
+│   │   ├── island.py
+│   │   ├── individual.py
+│   │   ├── population.py
+│   │   ├── selection.py
+│   │   ├── crossover.py
+│   │   ├── mutation.py
+│   │   └── survival.py
+│   ├── rendering/
+│   │   ├── canvas.py
+│   │   ├── ellipse_canvas.py
+│   │   ├── gpu_canvas.py
+│   │   ├── gpu_ellipse_canvas.py
+│   │   └── factory.py
+│   └── utils/
+│       ├── config.py
+│       ├── export.py
+│       └── metrics.py
+└── tests/
 ```
-
----
-
-## Licencia
-
-Este proyecto fue desarrollado como parte del Trabajo Práctico N°2 de Sistemas de Inteligencia Artificial.
