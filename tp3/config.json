@@ -1,13 +1,13 @@
 {
   "perceptron": {
-    "type": "lineal",
+    "type": "tanh",
     "learning_rate": 0.01,
-    "max_epochs": 100
+    "max_epochs": 500
   },
   "dataset": {
-    "problem": "y=x",
+    "problem": "y=tanh(x)",
     "n_samples": 50,
-    "noise": 0.5,
+    "noise": 0.1,
     "seed": 42
   },
   "plot": true
