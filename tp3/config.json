@@ -1,0 +1,14 @@
+{
+  "perceptron": {
+    "type": "lineal",
+    "learning_rate": 0.01,
+    "max_epochs": 100
+  },
+  "dataset": {
+    "problem": "y=x",
+    "n_samples": 50,
+    "noise": 0.5,
+    "seed": 42
+  },
+  "plot": true
+}
