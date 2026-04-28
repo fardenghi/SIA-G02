@@ -246,7 +246,7 @@ uv sync          # instala dependencias del entorno virtual
 El `Makefile` en la raíz del proyecto agrupa los comandos más comunes:
 
 ```bash
-make run-ej1     # ejecuta las 7 fases en orden y regenera todos los outputs
+make run-ej1     # ejecuta las fases en orden y regenera todos los outputs
 make clean-ej1   # elimina todos los .json, .npz y .png de experiments/ej1/
 ```
 

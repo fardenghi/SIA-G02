@@ -26,5 +26,9 @@ dist/
 .vscode/
 
 # Local data
+data and documentation/*.csv
 data/*
 !data/.gitkeep
+
+# Experiment outputs
+experiments/ej1/
