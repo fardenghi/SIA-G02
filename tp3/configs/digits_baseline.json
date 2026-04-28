@@ -1,0 +1,16 @@
+{
+  "architecture": [784, 64, 10],
+  "activation": "tanh",
+  "output_activation": "tanh",
+  "loss": "mse",
+  "weight_init": "xavier",
+  "optimizer": "sgd",
+  "lr": 0.01,
+  "epochs": 50,
+  "batch_size": 32,
+  "val_split": 0.2,
+  "patience": null,
+  "seed": 42,
+  "save_model": "models/digits_baseline.npz",
+  "export_metrics": "experiments/digits_baseline.csv"
+}

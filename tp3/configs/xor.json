@@ -1,0 +1,14 @@
+{
+  "architecture": [2, 2, 1],
+  "activation": "tanh",
+  "output_activation": "tanh",
+  "loss": "mse",
+  "weight_init": "xavier",
+  "optimizer": "sgd",
+  "lr": 0.1,
+  "epochs": 5000,
+  "batch_size": 4,
+  "patience": null,
+  "seed": 42,
+  "plot": true
+}
