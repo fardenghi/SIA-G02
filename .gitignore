@@ -213,3 +213,7 @@ __marimo__/
 
 # Results
 tp1/results/*
+
+openspec/*
+.claude/
+
