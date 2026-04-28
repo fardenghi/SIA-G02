@@ -18,9 +18,26 @@ def evaluate(perceptron, X, y):
 def plot_loss_curves(train_loss, val_loss=None, title="Loss vs Epochs",
                      save_path=None):
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(train_loss, label="Train MSE", color="steelblue")
-    if val_loss:
-        ax.plot(val_loss, label="Val MSE", color="tomato", linestyle="--")
+    
+    train_loss = np.array(train_loss)
+    if train_loss.ndim == 2:
+        epochs = np.arange(train_loss.shape[1])
+        train_mean = train_loss.mean(axis=0)
+        train_std = train_loss.std(axis=0)
+        ax.plot(epochs, train_mean, label="Train MSE (media)", color="steelblue")
+        ax.fill_between(epochs, train_mean - train_std, train_mean + train_std, color="steelblue", alpha=0.2)
+        
+        if val_loss is not None:
+            val_loss = np.array(val_loss)
+            val_mean = val_loss.mean(axis=0)
+            val_std = val_loss.std(axis=0)
+            ax.plot(epochs, val_mean, label="Val MSE (media)", color="tomato", linestyle="--")
+            ax.fill_between(epochs, val_mean - val_std, val_mean + val_std, color="tomato", alpha=0.2)
+    else:
+        ax.plot(train_loss, label="Train MSE", color="steelblue")
+        if val_loss is not None:
+            ax.plot(val_loss, label="Val MSE", color="tomato", linestyle="--")
+            
     ax.set_xlabel("Época")
     ax.set_ylabel("MSE")
     ax.set_title(title)

@@ -63,3 +63,21 @@ def train_val_split(X, y, labels=None, val_ratio=0.2, seed=42):
             X[val_idx],   y[val_idx],   labels[val_idx],
         )
     return X[train_idx], y[train_idx], X[val_idx], y[val_idx]
+
+
+def k_fold_split(X, y, labels, k=5, seed=42):
+    """Yields (X_tr, y_tr, l_tr, X_v, y_v, l_v, val_idx) for each fold."""
+    rng = np.random.default_rng(seed)
+    n = len(X)
+    idx = rng.permutation(n)
+    
+    folds_idx = np.array_split(idx, k)
+    
+    for i in range(k):
+        val_idx = folds_idx[i]
+        train_idx = np.concatenate([folds_idx[j] for j in range(k) if j != i])
+        yield (
+            X[train_idx], y[train_idx], labels[train_idx],
+            X[val_idx],   y[val_idx],   labels[val_idx],
+            val_idx
+        )

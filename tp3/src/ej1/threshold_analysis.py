@@ -10,8 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.ej1.data import load_fraud_dataset, normalize_features, train_val_split
-from src.ej1.training import FraudTrainer
+from src.ej1.data import load_fraud_dataset
 
 _OUT_DIR  = "experiments/ej1"
 _PLOTS_DIR = f"{_OUT_DIR}/plots"
@@ -38,24 +37,19 @@ def _threshold_metrics(preds, labels, thresholds):
 
 
 def run():
-    # ── 1. Datos (mismo split que Fase 6) ────────────────────────────────────
-    X, y, labels, _ = load_fraud_dataset()
-    X_tr, y_tr, l_tr, X_v, y_v, l_v = train_val_split(
-        X, y, labels,
-        val_ratio=_CFG["val_ratio"],
-        seed=_CFG["seed"],
-    )
-    mean = np.array(_CFG["norm_mean"])
-    std  = np.array(_CFG["norm_std"])
-    X_v_n, _, _ = normalize_features(X_v, mean=mean, std=std)
+    # ── 1. Cargar Predicciones OOF ───────────────────────────────────────────
+    oof_path = Path(_OUT_DIR) / "oof_predictions.npz"
+    if not oof_path.exists():
+        print(f"Error: No se encontró {oof_path}. Ejecute la Fase 6 primero.")
+        return
+        
+    data = np.load(oof_path)
+    preds = data["preds"]
+    l_v = data["labels"]
 
-    # ── 2. Predicciones ──────────────────────────────────────────────────────
-    trainer = FraudTrainer.load(_OUT_DIR, "generalization")
-    preds = np.array([trainer.perceptron.predict(x) for x in X_v_n])
-
-    print("ANÁLISIS DE PREDICCIONES — VAL SET")
+    print("ANÁLISIS DE PREDICCIONES — OUT-OF-FOLD (Dataset completo)")
     print("-" * 45)
-    print(f"  Muestras val:         {len(preds)}")
+    print(f"  Muestras totales:     {len(preds)}")
     print(f"  Fraudes reales:       {l_v.sum()} ({l_v.mean()*100:.1f}%)")
     print(f"  Pred media:           {preds.mean():.4f}")
     print(f"  Pred std:             {preds.std():.4f}")

@@ -99,8 +99,13 @@ def _plot_target_distribution(df):
                 color=["steelblue", "tomato"])
     axes[1].set_title("Distribución de flagged_fraud")
     axes[1].set_ylabel("Cantidad de transacciones")
+    
+    # Expand y-axis limit to make room for text labels
+    max_count = counts.max()
+    axes[1].set_ylim(0, max_count * 1.15)
+    
     for i, v in enumerate(counts.values):
-        axes[1].text(i, v + 20, f"{v}\n({v/len(df)*100:.1f}%)", ha="center")
+        axes[1].text(i, v + (max_count * 0.02), f"{v}\n({v/len(df)*100:.1f}%)", ha="center")
 
     plt.tight_layout()
     _save("target_distribution.png")

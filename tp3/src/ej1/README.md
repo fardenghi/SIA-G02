@@ -174,11 +174,12 @@ La activación sigmoid captura las relaciones no lineales entre las features y l
 ### Configuración
 
 ```
-Split:          80% train (6 000) / 20% val (1 500) — random, seed=42
-Normalización:  stats computadas solo sobre train (sin data leakage)
+Validación:     K-Fold Cross-Validation (K=5)
+Normalización:  stats computadas solo sobre el train de cada fold (sin data leakage).
+Modelo final:   entrenado con el 100% de los datos luego de la validación.
 ```
 
-### Resultados
+### Resultados (Promedio K-Fold)
 
 | Split | MSE | MAE | RMSE |
 |-------|-----|-----|------|
@@ -188,9 +189,9 @@ Normalización:  stats computadas solo sobre train (sin data leakage)
 
 ### Análisis
 
-- **Overfitting:** No — el gap val-train del 6.2% en MSE está muy por debajo del umbral de alarma (10%).
-- **Underfitting:** No — el MSE de train (0.0109) es bajo para este problema.
-- El modelo generaliza bien a datos no vistos con una degradación mínima de rendimiento.
+- **Overfitting:** No — el gap val-train promedio del 6.2% en MSE está muy por debajo del umbral de alarma (10%).
+- **Underfitting:** No — el MSE de train promedio (0.0109) es bajo para este problema.
+- El modelo generaliza bien a datos no vistos con una degradación mínima de rendimiento entre particiones.
 
 ---
 
@@ -200,7 +201,7 @@ Normalización:  stats computadas solo sobre train (sin data leakage)
 **Plots:** `experiments/ej1/plots/threshold_metrics.png`, `precision_recall_curve.png`
 **Resultados:** `experiments/ej1/threshold_results.json`
 
-Las predicciones continuas del modelo se binariza aplicando un umbral θ: si `p̂ ≥ θ` se clasifica como fraude. Se evalúa sobre el val set usando `flagged_fraud` como ground truth.
+Las predicciones continuas generadas mediante el proceso **Out-Of-Fold (OOF)** en la Fase 6 se binarizan aplicando un umbral θ: si `p̂ ≥ θ` se clasifica como fraude. Se evalúa sobre el **100% del dataset** (ya que cada predicción fue hecha por un fold que no vió esos datos) usando `flagged_fraud` como ground truth.
 
 ### Métricas por umbral (selección)
 
@@ -265,7 +266,7 @@ uv run python -m src.ej1.train_nonlinear
 # Fase 5 — Comparación y selección de modelo
 uv run python -m src.ej1.compare_models
 
-# Fase 6 — Estudio de generalización (split 80/20)
+# Fase 6 — Estudio de generalización (K-Fold CV)
 uv run python -m src.ej1.train_generalization
 
 # Fase 7 — Análisis de umbral de detección
@@ -298,7 +299,8 @@ experiments/ej1/
 │   └── precision_recall_curve.png     # curva precision-recall
 ├── linear.npz / linear.json           # modelo lineal (pesos + historial)
 ├── nonlinear.npz / nonlinear.json     # modelo sigmoid
-├── generalization.npz / ...           # modelo con split 80/20
+├── generalization.npz / ...           # modelo entrenado con 100% de datos
+├── oof_predictions.npz                # predicciones out-of-fold completas
 ├── selected_config.json               # config del modelo elegido (Fase 5)
 └── threshold_results.json             # umbral óptimo y métricas finales
 ```
