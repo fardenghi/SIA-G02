@@ -25,9 +25,10 @@ dist/
 .idea/
 .vscode/
 
-# Local data
-data/*
-!data/.gitkeep
+# Generated outputs
+outputs/
+models/
+experiments/*.csv
 
-# Experiment outputs
+# Legacy generated outputs
 experiments/ej1/

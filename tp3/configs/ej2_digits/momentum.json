@@ -1,0 +1,16 @@
+{
+  "architecture": [784, 64, 10],
+  "activation": "tanh",
+  "output_activation": "tanh",
+  "loss": "mse",
+  "weight_init": "xavier",
+  "optimizer": "momentum",
+  "lr": 0.01,
+  "epochs": 100,
+  "batch_size": 32,
+  "val_split": 0.2,
+  "patience": 15,
+  "seed": 42,
+  "save_model": "outputs/ej2_digits/models/momentum.npz",
+  "export_metrics": "outputs/ej2_digits/metrics/momentum.csv"
+}

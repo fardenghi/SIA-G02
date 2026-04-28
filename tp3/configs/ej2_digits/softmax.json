@@ -1,0 +1,16 @@
+{
+  "architecture": [784, 64, 10],
+  "activation": "tanh",
+  "output_activation": "softmax",
+  "loss": "cross_entropy",
+  "weight_init": "xavier",
+  "optimizer": "adam",
+  "lr": 0.001,
+  "epochs": 50,
+  "batch_size": 32,
+  "val_split": 0.2,
+  "patience": null,
+  "seed": 42,
+  "save_model": "outputs/ej2_digits/models/softmax.npz",
+  "export_metrics": "outputs/ej2_digits/metrics/softmax.csv"
+}
