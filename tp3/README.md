@@ -29,6 +29,66 @@ tp3/
 └── main.py                 # Ejercicio 1 — SimplePerceptron (sin cambios)
 ```
 
+## Ejercicio 1 — Detector de Fraude (Perceptrón Simple)
+
+### Objetivo
+
+Entrenar un `TinyModel` (perceptrón simple) que replique el comportamiento del `BigModel` para predecir la probabilidad de fraude (`big_model_fraud_probability`) en transacciones online. El dataset contiene 7 500 transacciones reales con 9 features numéricas.
+
+### Estructura del módulo
+
+```
+src/ej1/
+├── data.py        # carga, normalización z-score y split train/val
+└── explore.py     # script EDA ejecutable (Fase 1)
+```
+
+Los resultados y plots se guardan en `experiments/ej1/`.
+
+### Cómo ejecutar el EDA
+
+```bash
+uv run python -m src.ej1.explore
+```
+
+### Hallazgos del dataset (Fase 1)
+
+| Feature                       | Correlación con target | Observaciones              |
+|-------------------------------|------------------------|----------------------------|
+| `account_age_days`            | −0.585                 | feature más informativa    |
+| `quantity_purchased`          | +0.563                 |                            |
+| `amount_usd`                  | +0.557                 | 2.1% outliers (|z| > 3)    |
+| `session_duration_seconds`    | −0.514                 |                            |
+| `days_since_last_purchase`    | −0.404                 |                            |
+| `items_viewed_before_purchase`| +0.334                 |                            |
+| `device_screen_resolution`    | +0.025                 | correlación casi nula      |
+| `time_since_last_login_s`     | +0.002                 | correlación casi nula      |
+| `timestamp`                   | +0.001                 | **descartado** (no predictivo) |
+
+- Sin valores faltantes → no se elimina ninguna fila (D1 N/A).
+- Tasa de fraude binaria (`flagged_fraud`): 11.6% (dataset desbalanceado para clasificación).
+- Target continuo (`big_model_fraud_probability`): distribución [0, 1], media 0.42.
+
+### Decisiones de diseño
+
+| ID | Decisión                        | Elección                     | Justificación                                                  |
+|----|---------------------------------|------------------------------|----------------------------------------------------------------|
+| D1 | Valores faltantes               | Eliminar filas               | No hay faltantes; política defensiva para nuevos datos         |
+| D2 | Learning rate inicial           | **0.01**                     | Balance entre estabilidad y velocidad de convergencia          |
+| D3 | Épocas máximas                  | **100–200**                  | Suficientes para observar convergencia; ajustar si hay plateau |
+| D4 | Activación no lineal            | **sigmoid**                  | Target en [0,1]; sigmoid es el mapeo natural                   |
+| D5 | Proporción train/val            | **80/20**                    | Estándar para datasets medianos (7 500 muestras)               |
+| D6 | Estrategia de split             | **Random shuffle**           | Target continuo → split aleatorio simple y suficiente          |
+| D7 | Métrica para umbral de detección| **F1-score** (Fase 7)        | Balance precision-recall; curva completa disponible al cliente |
+
+### Preprocesamiento aplicado
+
+- **Normalización:** z-score sobre las 8 features (excluye `timestamp`).
+- **Outliers:** conservados — representan transacciones reales; la normalización modera su influencia.
+- **Features de baja correlación** (`device_screen_resolution`, `time_since_last_login_s`): incluidas; el modelo asignará pesos cercanos a cero si no aportan.
+
+---
+
 ## MLP
 
 ### Cómo correr cada script
