@@ -20,7 +20,7 @@ El objetivo es entrenar un **TinyModel** (perceptrón simple) que replique el co
 
 - **Input:** 8 features numéricas por transacción
 - **Target:** `big_model_fraud_probability` ∈ [0, 1] — probabilidad continua asignada por el BigModel
-- **Ground truth binario:** `flagged_fraud` ∈ {0, 1} — usado para evaluar el umbral de detección en la Fase 7
+- **Ground truth binario:** `flagged_fraud` ∈ {0, 1} — usado para evaluar el umbral de detección
 
 ---
 
@@ -155,7 +155,7 @@ La sigmoid reduce el MSE en un **61.5%** con idénticos hiperparámetros. Ambos 
 
 - **Underfitting:** No — ambos modelos bajan consistentemente hasta convergencia.
 - **Saturación:** No — sigmoid sigue mejorando frente al lineal durante todo el entrenamiento.
-- **Overfitting:** No aplica en este estudio (sin split); se evalúa en Fase 6.
+- **Overfitting:** No aplica en este estudio (sin split)
 
 ### Decisión
 
@@ -241,10 +241,19 @@ Todos los comandos se ejecutan desde la raíz del proyecto (`tp3/`).
 uv sync          # instala dependencias del entorno virtual
 ```
 
+### Ejecución completa (recomendado)
+
+El `Makefile` en la raíz del proyecto agrupa los comandos más comunes:
+
+```bash
+make run-ej1     # ejecuta las 7 fases en orden y regenera todos los outputs
+make clean-ej1   # elimina todos los .json, .npz y .png de experiments/ej1/
+```
+
 ### Ejecución fase por fase
 
 ```bash
-# Fase 1 — Exploración del dataset (genera plots en experiments/ej1/plots/)
+# Fase 1 — Exploración del dataset
 uv run python -m src.ej1.explore
 
 # Fase 3 — Entrenar perceptrón lineal
@@ -263,14 +272,13 @@ uv run python -m src.ej1.train_generalization
 uv run python -m src.ej1.threshold_analysis
 ```
 
+> Las fases 3–7 dependen de los outputs de las anteriores; ejecutarlas en orden o usar `make run-ej1`.
+
 ### Tests
 
 ```bash
-# Tests específicos del Ej1
-uv run pytest tests/test_ej1_data.py tests/test_ej1_training.py -v
-
-# Suite completa
-uv run pytest
+uv run pytest tests/test_ej1_data.py tests/test_ej1_training.py -v   # Ej1
+uv run pytest                                                          # suite completa
 ```
 
 ### Outputs generados
@@ -278,23 +286,23 @@ uv run pytest
 ```
 experiments/ej1/
 ├── plots/
-│   ├── target_distribution.png        # Fase 1
-│   ├── correlation_matrix.png         # Fase 1
-│   ├── feature_boxplots.png           # Fase 1
-│   ├── linear_loss.png                # Fase 3
-│   ├── linear_vs_nonlinear_loss.png   # Fase 4
-│   ├── phase5_comparison.png          # Fase 5
-│   ├── generalization_loss.png        # Fase 6
-│   ├── generalization_pred_dist.png   # Fase 6
-│   ├── threshold_metrics.png          # Fase 7
-│   └── precision_recall_curve.png     # Fase 7
-├── linear.npz / linear.json           # Modelo Fase 3
-├── nonlinear.npz / nonlinear.json     # Modelo Fase 4
-├── generalization.npz / ...           # Modelo Fase 6
-├── selected_config.json               # Config del modelo elegido
-└── threshold_results.json             # Umbral óptimo y métricas
+│   ├── target_distribution.png        # distribución del target
+│   ├── correlation_matrix.png         # matriz de correlación
+│   ├── feature_boxplots.png           # boxplots de features
+│   ├── linear_loss.png                # loss del modelo lineal
+│   ├── linear_vs_nonlinear_loss.png   # comparación de loss
+│   ├── phase5_comparison.png          # comparación de modelos
+│   ├── generalization_loss.png        # train vs val loss
+│   ├── generalization_pred_dist.png   # distribución de predicciones
+│   ├── threshold_metrics.png          # precision, recall y F1 vs umbral
+│   └── precision_recall_curve.png     # curva precision-recall
+├── linear.npz / linear.json           # modelo lineal (pesos + historial)
+├── nonlinear.npz / nonlinear.json     # modelo sigmoid
+├── generalization.npz / ...           # modelo con split 80/20
+├── selected_config.json               # config del modelo elegido (Fase 5)
+└── threshold_results.json             # umbral óptimo y métricas finales
 ```
 
 ### Reproducibilidad
 
-Todos los experimentos usan `seed=42` para el split y la inicialización de pesos. Para cambiar hiperparámetros, modificar `DEFAULT_CONFIG` en `src/ej1/config.py` o editar los bloques `CFG` en cada script de entrenamiento.
+Todos los experimentos usan `seed=42` para el split y la inicialización de pesos. Para cambiar hiperparámetros, modificar `DEFAULT_CONFIG` en `src/ej1/config.py` o los bloques `CFG` en cada script de entrenamiento.
