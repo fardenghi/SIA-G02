@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from src.datasets import load_more_digits, load_digits_test, to_one_hot
+from src.datasets import load_more_digits, load_digits, load_digits_test, to_one_hot
 from src.mlp import MLP
 from src.optimizers import SGD, Momentum, Adam
 from src.utils.metrics import MetricsTracker
@@ -31,7 +31,14 @@ def main():
                    else "configs/more_digits_softmax.json")
     cfg = load_config(config_path)
 
-    X_all, y_all = load_more_digits()
+    X_more, y_more = load_more_digits()
+    if cfg.get("combine_datasets", False):
+        X_dig, y_dig = load_digits()
+        X_all = np.concatenate([X_more, X_dig], axis=0)
+        y_all = np.concatenate([y_more, y_dig], axis=0)
+        print(f"Combined dataset: {X_all.shape[0]} muestras")
+    else:
+        X_all, y_all = X_more, y_more
     N = X_all.shape[0]
     val_split = cfg.get("val_split", 0.2)
     rng = np.random.default_rng(cfg.get("seed", 42))

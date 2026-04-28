@@ -1,0 +1,16 @@
+{
+  "architecture": [784, 64, 10],
+  "activation": "tanh",
+  "output_activation": "tanh",
+  "loss": "mse",
+  "weight_init": "xavier",
+  "optimizer": "sgd",
+  "lr": 0.001,
+  "epochs": 100,
+  "batch_size": 32,
+  "val_split": 0.2,
+  "patience": 15,
+  "seed": 42,
+  "save_model": "models/digits_sgd_lr_low.npz",
+  "export_metrics": "experiments/digits_sgd_lr_low.csv"
+}
