@@ -42,6 +42,25 @@ def plot_predictions_distribution(predictions, targets, title="Distribución de 
     _save_or_show(fig, save_path)
 
 
+def plot_model_comparison(histories, labels, title="Comparación de modelos — Loss vs Epochs",
+                          save_path=None):
+    """Overlay loss curves from multiple models on a single plot.
+
+    histories: list of loss-history lists
+    labels:    list of display names (same length)
+    """
+    colors = ["steelblue", "tomato", "seagreen", "darkorange"]
+    fig, ax = plt.subplots(figsize=(9, 4))
+    for hist, label, color in zip(histories, labels, colors):
+        ax.plot(hist, label=label, color=color)
+    ax.set_xlabel("Época")
+    ax.set_ylabel("MSE")
+    ax.set_title(title)
+    ax.legend()
+    ax.grid(alpha=0.3)
+    _save_or_show(fig, save_path)
+
+
 def print_metrics(label, mse, mae):
     print(f"  {label:<20} MSE={mse:.6f}  MAE={mae:.6f}  RMSE={mse**0.5:.6f}")
 
