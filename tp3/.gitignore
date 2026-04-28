@@ -26,7 +26,6 @@ dist/
 .vscode/
 
 # Local data
-data and documentation/*.csv
 data/*
 !data/.gitkeep
 
