@@ -27,7 +27,7 @@ El objetivo es entrenar un **TinyModel** (perceptrón simple) que replique el co
 ## 2. Fase 1 — Exploración de datos
 
 **Script:** `exercises/ej1_fraud/explore.py`
-**Plots generados:** `outputs/ej1_fraud/plots/target_distribution.png`, `correlation_matrix.png`, `feature_boxplots.png`
+**Plots generados:** `outputs/ej1_fraud/plots/target_distribution.png`, `feature_correlations.png`, `feature_boxplots.png`
 
 ### Dataset
 
@@ -55,10 +55,10 @@ El objetivo es entrenar un **TinyModel** (perceptrón simple) que replique el co
 
 ### Decisiones de preprocesamiento
 
-- `timestamp` eliminado — no es predictivo (correlación ~0).
-- Las 8 features restantes se normalizan con **z-score**.
+- `timestamp` eliminado — no por su correlación, sino por ser una variable monótona creciente que rompe la generalización del modelo lineal en producción.
+- Correlaciones: Calculamos la correlación para establecer una expectativa **teórica**, pero conservamos todas las features estáticas (incluso las cercanas a 0) para que el algoritmo lo valide **empíricamente** empujando los pesos hacia cero.
+- Las 8 features se normalizan con **z-score**.
 - Outliers conservados — representan transacciones reales válidas.
-- `device_screen_resolution` y `time_since_last_login_s` se mantienen; el modelo asignará pesos bajos si no aportan.
 
 ---
 
@@ -288,7 +288,7 @@ uv run pytest                                                          # suite c
 outputs/ej1_fraud/
 ├── plots/
 │   ├── target_distribution.png        # distribución del target
-│   ├── correlation_matrix.png         # matriz de correlación
+│   ├── feature_correlations.png       # correlación de features con el target
 │   ├── feature_boxplots.png           # boxplots de features
 │   ├── linear_loss.png                # loss del modelo lineal
 │   ├── linear_vs_sigmoid_loss.png     # comparación de loss
