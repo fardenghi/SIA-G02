@@ -1,4 +1,4 @@
-"""Fase 7 — Análisis de umbral de detección de fraude.
+"""Análisis de umbral de detección de fraude.
 
 Ejecutar desde la raíz del proyecto:
     uv run python -m exercises.ej1_fraud.threshold_analysis
@@ -109,7 +109,7 @@ def _plot_pr_vs_threshold(thresholds, prec, rec, f1, best_t):
     ax.axvline(best_t, color="gray", linestyle="--", alpha=0.7, label=f"Óptimo ({best_t:.2f})")
     ax.set_xlabel("Umbral de clasificación")
     ax.set_ylabel("Métrica")
-    ax.set_title("Fase 7 — Precision, Recall y F1 vs Umbral")
+    ax.set_title("Precision, Recall y F1 vs Umbral")
     ax.legend()
     ax.grid(alpha=0.3)
     _save(fig, _PLOTS_DIR / "threshold_metrics.png")
@@ -121,7 +121,7 @@ def _plot_pr_curve(prec, rec, best_p, best_r, best_f):
     ax.scatter([best_r], [best_p], color="tomato", zorder=5, s=80, label=f"Óptimo F1={best_f:.3f}")
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
-    ax.set_title("Fase 7 — Curva Precision-Recall")
+    ax.set_title("Curva Precision-Recall")
     ax.legend()
     ax.grid(alpha=0.3)
     _save(fig, _PLOTS_DIR / "precision_recall_curve.png")
