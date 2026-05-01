@@ -20,6 +20,12 @@ def tanh_prime(h, beta=1):
     t = np.tanh(beta * np.asarray(h))
     return beta * (1 - t ** 2)
 
+def relu(h):
+    return np.maximum(0.0, np.asarray(h))
+
+def relu_prime(h):
+    return (np.asarray(h) > 0).astype(float)
+
 def softmax(h):
     h = np.asarray(h)
     e = np.exp(h - h.max(axis=-1, keepdims=True))

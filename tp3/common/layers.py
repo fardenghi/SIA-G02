@@ -15,6 +15,8 @@ class DenseLayer:
             self.W = rng.uniform(-limit, limit, (n_in, n_out))
         elif weight_init == "normal":
             self.W = rng.normal(0.0, np.sqrt(1.0 / n_in), (n_in, n_out))
+        elif weight_init == "he":
+            self.W = rng.normal(0.0, np.sqrt(2.0 / n_in), (n_in, n_out))
         elif weight_init == "uniform_small":
             self.W = rng.uniform(-0.5, 0.5, (n_in, n_out))
         else:

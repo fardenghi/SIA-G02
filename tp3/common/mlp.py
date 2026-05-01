@@ -3,12 +3,13 @@ import time
 
 import numpy as np
 
-from common.activations import softmax, softmax_prime, tanh_act, tanh_prime
+from common.activations import relu, relu_prime, softmax, softmax_prime, tanh_act, tanh_prime
 from common.layers import DenseLayer
 from common.losses import cross_entropy, cross_entropy_softmax_grad, mse, mse_grad
 
 _ACTIVATIONS = {
     "tanh": (tanh_act, tanh_prime),
+    "relu": (relu, relu_prime),
     "softmax": (softmax, softmax_prime),
 }
 

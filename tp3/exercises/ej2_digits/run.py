@@ -7,9 +7,9 @@ import numpy as np
 from common.datasets import load_digits, load_digits_test, to_one_hot
 from common.metrics import MetricsTracker
 from common.mlp import MLP
-from common.optimizers import Adam, Momentum, SGD
+from common.optimizers import Adam, Momentum, RMSProp, SGD
 
-_OPTIMIZERS = {"sgd": SGD, "momentum": Momentum, "adam": Adam}
+_OPTIMIZERS = {"sgd": SGD, "momentum": Momentum, "rmsprop": RMSProp, "adam": Adam}
 
 
 def load_config(path):
