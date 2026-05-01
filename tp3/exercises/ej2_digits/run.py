@@ -41,8 +41,7 @@ def encoding_for(loss):
     return "signed" if loss == "mse" else "zero_one"
 
 
-def main():
-    config_path = sys.argv[1] if len(sys.argv) > 1 else "configs/ej2_digits/baseline.json"
+def run(config_path):
     cfg = load_config(config_path)
 
     X_all, y_all = load_digits()
@@ -128,6 +127,11 @@ def main():
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         tracker.export_csv(path)
         print(f"Metrics saved to {path}")
+
+
+def main():
+    config_path = sys.argv[1] if len(sys.argv) > 1 else "configs/ej2_digits/baseline.json"
+    run(config_path)
 
 
 if __name__ == "__main__":

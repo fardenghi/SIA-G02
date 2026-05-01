@@ -33,6 +33,8 @@ def parse_args():
                         help="Omite las evaluaciones individuales y solo genera los gráficos de comparación.")
     parser.add_argument("--dataset", type=Path, default=_DEFAULT_DATASET,
                         help="Path al dataset para la evaluación.")
+    parser.add_argument("--models", nargs="+", default=None,
+                        help="Nombres de modelos a evaluar (sin .npz). Default: todos los disponibles.")
     return parser.parse_args()
 
 
@@ -151,7 +153,10 @@ def _plot_loss_curves(curves, out_path):
 def main():
     args = parse_args()
 
-    model_names = sorted(p.stem for p in _MODELS_DIR.glob("*.npz"))
+    if args.models:
+        model_names = sorted(args.models)
+    else:
+        model_names = sorted(p.stem for p in _MODELS_DIR.glob("*.npz"))
     if not model_names:
         raise SystemExit(f"No se encontraron modelos en {_MODELS_DIR}")
 
