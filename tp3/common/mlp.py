@@ -111,10 +111,9 @@ class MLP:
     def fit(self, X_train, y_train, X_val=None, y_val=None,
             epochs=100, batch_size=32, optimizer=None,
             patience=None, verbose=True, tracker=None,
-            data_augmentation=False):
+            data_augmentation=False, lr_scheduler=None):
         rng = np.random.default_rng(self.seed)
         N = X_train.shape[0]
-        lr = getattr(optimizer, "lr", 0.0)
 
         best_val_loss = np.inf
         best_weights = None
@@ -153,12 +152,15 @@ class MLP:
                 "loss_val": val_m["loss"],
                 "acc_val": val_m["accuracy"],
                 "time_s": elapsed,
-                "lr": lr,
+                "lr": getattr(optimizer, "lr", 0.0),
             }
             self.history.append(entry)
 
             if tracker is not None:
                 tracker.record(entry)
+
+            if lr_scheduler is not None:
+                lr_scheduler.step(optimizer, train_m["loss"])
 
             if verbose and (epoch == 1 or epoch % max(1, epochs // 10) == 0):
                 msg = (f"Epoch {epoch:>5}/{epochs}  "

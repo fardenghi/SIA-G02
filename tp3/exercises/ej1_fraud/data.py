@@ -3,6 +3,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from common.datasets import k_fold_indices
+
 _ROOT = Path(__file__).resolve().parents[2]
 _DATA_DIR = _ROOT / "data" / "ej1_fraud"
 
@@ -68,17 +70,9 @@ def train_val_split(X, y, labels=None, val_ratio=0.2, seed=42):
 
 def k_fold_split(X, y, labels, k=5, seed=42):
     """Yields (X_tr, y_tr, l_tr, X_v, y_v, l_v, val_idx) for each fold."""
-    rng = np.random.default_rng(seed)
-    n = len(X)
-    idx = rng.permutation(n)
-    
-    folds_idx = np.array_split(idx, k)
-    
-    for i in range(k):
-        val_idx = folds_idx[i]
-        train_idx = np.concatenate([folds_idx[j] for j in range(k) if j != i])
+    for train_idx, val_idx in k_fold_indices(len(X), k=k, seed=seed):
         yield (
             X[train_idx], y[train_idx], labels[train_idx],
             X[val_idx],   y[val_idx],   labels[val_idx],
-            val_idx
+            val_idx,
         )

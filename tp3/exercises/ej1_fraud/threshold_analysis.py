@@ -10,26 +10,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from common.metrics import threshold_sweep
+
 _ROOT = Path(__file__).resolve().parents[2]
 _OUT_DIR = _ROOT / "outputs" / "ej1_fraud"
 _PLOTS_DIR = _OUT_DIR / "plots"
-
-
-def _threshold_metrics(preds, labels, thresholds):
-    """Return arrays of precision, recall, F1 for each threshold."""
-    precision, recall, f1 = [], [], []
-    for t in thresholds:
-        pred_bin = (preds >= t).astype(int)
-        tp = int(((pred_bin == 1) & (labels == 1)).sum())
-        fp = int(((pred_bin == 1) & (labels == 0)).sum())
-        fn = int(((pred_bin == 0) & (labels == 1)).sum())
-        p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
-        precision.append(p)
-        recall.append(r)
-        f1.append(f)
-    return np.array(precision), np.array(recall), np.array(f1)
 
 
 def run():
@@ -56,7 +41,7 @@ def run():
     )
 
     thresholds = np.arange(0.05, 0.96, 0.05)
-    prec, rec, f1 = _threshold_metrics(preds, labels, thresholds)
+    prec, rec, f1 = threshold_sweep(preds, labels, thresholds)
 
     print("\nPRECISION / RECALL / F1 POR UMBRAL")
     print(f"{'Umbral':>8} {'Precision':>10} {'Recall':>8} {'F1':>8}")

@@ -63,3 +63,14 @@ def load_more_digits(path=None):
     if path is None:
         path = MORE_DIGITS_DIR / "more_digits.csv"
     return _load_digit_csv(path)
+
+
+def k_fold_indices(n, k=5, seed=42):
+    """Yields (train_idx, val_idx) arrays for each of the k folds."""
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(n)
+    folds = np.array_split(idx, k)
+    for i in range(k):
+        val_idx = folds[i]
+        train_idx = np.concatenate([folds[j] for j in range(k) if j != i])
+        yield train_idx, val_idx
