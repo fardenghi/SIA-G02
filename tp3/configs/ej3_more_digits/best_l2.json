@@ -6,12 +6,14 @@
   "weight_init": "he",
   "optimizer": "adam",
   "lr": 0.0001,
+  "weight_decay": 0.0001,
   "epochs": 500,
   "batch_size": 64,
   "val_split": 0.15,
   "patience": 80,
+  "min_delta": 0.0005,
   "seed": 42,
   "data_augmentation": true,
-  "save_model": "outputs/ej3_more_digits/models/best.npz",
-  "export_metrics": "outputs/ej3_more_digits/metrics/best.csv"
+  "save_model": "outputs/ej3_more_digits/models/best_l2.npz",
+  "export_metrics": "outputs/ej3_more_digits/metrics/best_l2.csv"
 }

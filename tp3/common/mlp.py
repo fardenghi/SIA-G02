@@ -111,8 +111,9 @@ class MLP:
 
     def fit(self, X_train, y_train, X_val=None, y_val=None,
             epochs=100, batch_size=32, optimizer=None,
-            patience=None, verbose=True, tracker=None,
-            data_augmentation=False, lr_scheduler=None):
+            patience=None, min_delta=0.0, verbose=True, tracker=None,
+            data_augmentation=False, lr_scheduler=None,
+            aug_rotation_deg=0.0, aug_scale_range=None):
         rng = np.random.default_rng(self.seed)
         N = X_train.shape[0]
 
@@ -132,7 +133,11 @@ class MLP:
                 y_batch = y_shuf[start:start + batch_size]
                 
                 if data_augmentation:
-                    X_batch = self._augment_batch(X_batch, rng)
+                    X_batch = self._augment_batch(
+                        X_batch, rng,
+                        rotation_deg=aug_rotation_deg,
+                        scale_range=aug_scale_range,
+                    )
 
                 self.forward(X_batch)
                 grads = self.backward(y_batch)
@@ -174,7 +179,7 @@ class MLP:
                 print(msg)
 
             if patience is not None and X_val is not None:
-                if val_m["loss"] < best_val_loss:
+                if val_m["loss"] < best_val_loss - min_delta:
                     best_val_loss = val_m["loss"]
                     best_weights = [(l.W.copy(), l.b.copy()) for l in self.layers]
                     no_improve = 0
@@ -191,34 +196,72 @@ class MLP:
 
         return self
 
-    def _augment_batch(self, X_batch, rng):
+    def _augment_batch(self, X_batch, rng, rotation_deg=0.0, scale_range=None):
         X_aug = np.empty_like(X_batch)
         for i in range(len(X_batch)):
             img = X_batch[i].reshape(28, 28)
-            
-            # Random shifts (-1, 0, 1) pixels
-            shift_x = rng.integers(-2, 3) # -2 to 2
+
+            if rotation_deg > 0 or scale_range is not None:
+                angle = rng.uniform(-rotation_deg, rotation_deg) * np.pi / 180.0
+                scale = rng.uniform(*scale_range) if scale_range is not None else 1.0
+                img = self._affine(img, angle, scale)
+
+            shift_x = rng.integers(-2, 3)
             shift_y = rng.integers(-2, 3)
-            
-            # Roll and pad horizontally
             if shift_x != 0:
                 img = np.roll(img, shift_x, axis=1)
                 if shift_x > 0: img[:, :shift_x] = 0
                 else: img[:, shift_x:] = 0
-                
-            # Roll and pad vertically
             if shift_y != 0:
                 img = np.roll(img, shift_y, axis=0)
                 if shift_y > 0: img[:shift_y, :] = 0
                 else: img[shift_y:, :] = 0
-                
+
             X_aug[i] = img.flatten()
-            
-        # Add small Gaussian noise to the whole batch at once (much faster)
+
         noise = rng.normal(0, 0.05, X_aug.shape)
         X_aug = np.clip(X_aug + noise, 0, 1)
-        
         return X_aug
+
+    @staticmethod
+    def _affine(img, angle, scale):
+        """Rotate (rad) + uniform scale around image center, bilinear interp."""
+        h, w = img.shape
+        cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+        cos, sin = np.cos(angle), np.sin(angle)
+
+        yy, xx = np.indices(img.shape)
+        dx = xx - cx
+        dy = yy - cy
+        src_x = (cos * dx + sin * dy) / scale + cx
+        src_y = (-sin * dx + cos * dy) / scale + cy
+
+        x0 = np.floor(src_x).astype(int)
+        y0 = np.floor(src_y).astype(int)
+        x1 = x0 + 1
+        y1 = y0 + 1
+
+        valid_x0 = (x0 >= 0) & (x0 < w)
+        valid_x1 = (x1 >= 0) & (x1 < w)
+        valid_y0 = (y0 >= 0) & (y0 < h)
+        valid_y1 = (y1 >= 0) & (y1 < h)
+
+        x0c = np.clip(x0, 0, w - 1)
+        x1c = np.clip(x1, 0, w - 1)
+        y0c = np.clip(y0, 0, h - 1)
+        y1c = np.clip(y1, 0, h - 1)
+
+        Ia = img[y0c, x0c] * valid_y0 * valid_x0
+        Ib = img[y1c, x0c] * valid_y1 * valid_x0
+        Ic = img[y0c, x1c] * valid_y0 * valid_x1
+        Id = img[y1c, x1c] * valid_y1 * valid_x1
+
+        wa = (x1 - src_x) * (y1 - src_y)
+        wb = (x1 - src_x) * (src_y - y0)
+        wc = (src_x - x0) * (y1 - src_y)
+        wd = (src_x - x0) * (src_y - y0)
+
+        return Ia * wa + Ib * wb + Ic * wc + Id * wd
 
     # ------------------------------------------------------------------
     # Persistence

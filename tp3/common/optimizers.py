@@ -8,22 +8,33 @@ class Optimizer(ABC):
         """Update layer.W and layer.b in-place."""
 
 
+def _apply_l2(dW, layer, weight_decay):
+    """L2 / weight decay: adds λ·W to gradient. Biases are not regularized."""
+    if weight_decay > 0:
+        return dW + weight_decay * layer.W
+    return dW
+
+
 class SGD(Optimizer):
-    def __init__(self, lr):
+    def __init__(self, lr, weight_decay=0.0):
         self.lr = lr
+        self.weight_decay = weight_decay
 
     def step(self, layer, dW, db):
+        dW = _apply_l2(dW, layer, self.weight_decay)
         layer.W -= self.lr * dW
         layer.b -= self.lr * db
 
 
 class Momentum(Optimizer):
-    def __init__(self, lr, beta=0.9):
+    def __init__(self, lr, beta=0.9, weight_decay=0.0):
         self.lr = lr
         self.beta = beta
+        self.weight_decay = weight_decay
         self._state = {}
 
     def step(self, layer, dW, db):
+        dW = _apply_l2(dW, layer, self.weight_decay)
         lid = id(layer)
         if lid not in self._state:
             self._state[lid] = {
@@ -38,13 +49,15 @@ class Momentum(Optimizer):
 
 
 class RMSProp(Optimizer):
-    def __init__(self, lr, gamma=0.9, eps=1e-8):
+    def __init__(self, lr, gamma=0.9, eps=1e-8, weight_decay=0.0):
         self.lr = lr
         self.gamma = gamma
         self.eps = eps
+        self.weight_decay = weight_decay
         self._state = {}
 
     def step(self, layer, dW, db):
+        dW = _apply_l2(dW, layer, self.weight_decay)
         lid = id(layer)
         if lid not in self._state:
             self._state[lid] = {
@@ -59,14 +72,16 @@ class RMSProp(Optimizer):
 
 
 class Adam(Optimizer):
-    def __init__(self, lr, beta1=0.9, beta2=0.999, eps=1e-8):
+    def __init__(self, lr, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.0):
         self.lr = lr
         self.beta1 = beta1
         self.beta2 = beta2
         self.eps = eps
+        self.weight_decay = weight_decay
         self._state = {}
 
     def step(self, layer, dW, db):
+        dW = _apply_l2(dW, layer, self.weight_decay)
         lid = id(layer)
         if lid not in self._state:
             self._state[lid] = {
@@ -92,6 +107,34 @@ class Adam(Optimizer):
 
         layer.W -= self.lr * mW_hat / (np.sqrt(vW_hat) + self.eps)
         layer.b -= self.lr * mb_hat / (np.sqrt(vb_hat) + self.eps)
+
+
+class StepDecay:
+    """Multiplies optimizer.lr by decay_rate every step_size epochs."""
+
+    def __init__(self, decay_rate=0.5, step_size=50, lr_min=1e-6):
+        self.decay_rate = decay_rate
+        self.step_size = step_size
+        self.lr_min = lr_min
+        self._epoch = 0
+
+    def step(self, optimizer, epoch_loss):
+        self._epoch += 1
+        if self._epoch % self.step_size == 0:
+            optimizer.lr = max(optimizer.lr * self.decay_rate, self.lr_min)
+        return optimizer.lr
+
+
+class ExponentialDecay:
+    """Multiplies optimizer.lr by decay_rate every epoch."""
+
+    def __init__(self, decay_rate=0.99, lr_min=1e-6):
+        self.decay_rate = decay_rate
+        self.lr_min = lr_min
+
+    def step(self, optimizer, epoch_loss):
+        optimizer.lr = max(optimizer.lr * self.decay_rate, self.lr_min)
+        return optimizer.lr
 
 
 class AdaptiveLR:

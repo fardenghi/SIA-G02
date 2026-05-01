@@ -5,13 +5,19 @@
   "loss": "cross_entropy",
   "weight_init": "he",
   "optimizer": "adam",
-  "lr": 0.0001,
+  "lr": 0.001,
+  "lr_scheduler": {
+    "type": "step_decay",
+    "decay_rate": 0.5,
+    "step_size": 40,
+    "lr_min": 1e-6
+  },
   "epochs": 500,
   "batch_size": 64,
   "val_split": 0.15,
   "patience": 80,
   "seed": 42,
   "data_augmentation": true,
-  "save_model": "outputs/ej3_more_digits/models/best.npz",
-  "export_metrics": "outputs/ej3_more_digits/metrics/best.csv"
+  "save_model": "outputs/ej3_more_digits/models/best_decay.npz",
+  "export_metrics": "outputs/ej3_more_digits/metrics/best_decay.csv"
 }

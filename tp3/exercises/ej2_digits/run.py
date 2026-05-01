@@ -7,9 +7,16 @@ import numpy as np
 from common.datasets import load_digits, load_digits_test, to_one_hot
 from common.metrics import MetricsTracker
 from common.mlp import MLP
-from common.optimizers import Adam, Momentum, RMSProp, SGD
+from common.optimizers import (
+    AdaptiveLR, Adam, ExponentialDecay, Momentum, RMSProp, SGD, StepDecay,
+)
 
 _OPTIMIZERS = {"sgd": SGD, "momentum": Momentum, "rmsprop": RMSProp, "adam": Adam}
+_SCHEDULERS = {
+    "step_decay": StepDecay,
+    "exponential_decay": ExponentialDecay,
+    "adaptive": AdaptiveLR,
+}
 
 
 def load_config(path):
@@ -19,7 +26,15 @@ def load_config(path):
 
 def make_optimizer(cfg):
     cls = _OPTIMIZERS[cfg["optimizer"]]
-    return cls(lr=cfg["lr"])
+    return cls(lr=cfg["lr"], weight_decay=cfg.get("weight_decay", 0.0))
+
+
+def make_scheduler(cfg):
+    sched_cfg = cfg.get("lr_scheduler")
+    if not sched_cfg:
+        return None
+    cls = _SCHEDULERS[sched_cfg["type"]]
+    return cls(**{k: v for k, v in sched_cfg.items() if k != "type"})
 
 
 def encoding_for(loss):
@@ -74,9 +89,11 @@ def main():
         batch_size=cfg.get("batch_size", 32),
         optimizer=make_optimizer(cfg),
         patience=cfg.get("patience"),
+        min_delta=cfg.get("min_delta", 0.0),
         verbose=True,
         tracker=tracker,
-        data_augmentation=cfg.get("data_augmentation", False)
+        data_augmentation=cfg.get("data_augmentation", False),
+        lr_scheduler=make_scheduler(cfg),
     )
 
     test_m = mlp.evaluate(X_test, Y_test)
