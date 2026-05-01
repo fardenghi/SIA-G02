@@ -209,11 +209,12 @@ class MLP:
                 if shift_y > 0: img[:shift_y, :] = 0
                 else: img[shift_y:, :] = 0
                 
-            # Add small Gaussian noise
-            noise = rng.normal(0, 0.05, img.shape)
-            img = np.clip(img + noise, 0, 1)
-            
             X_aug[i] = img.flatten()
+            
+        # Add small Gaussian noise to the whole batch at once (much faster)
+        noise = rng.normal(0, 0.05, X_aug.shape)
+        X_aug = np.clip(X_aug + noise, 0, 1)
+        
         return X_aug
 
     # ------------------------------------------------------------------

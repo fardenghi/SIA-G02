@@ -84,6 +84,7 @@ def main():
         patience=cfg.get("patience"),
         verbose=True,
         tracker=tracker,
+        data_augmentation=cfg.get("data_augmentation", False)
     )
 
     test_m = mlp.evaluate(X_test, Y_test)

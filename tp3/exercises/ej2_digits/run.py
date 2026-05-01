@@ -81,16 +81,15 @@ def main():
 
     test_m = mlp.evaluate(X_test, Y_test)
     print(f"\nTest accuracy (all classes): {test_m['accuracy']:.4f}  "
-          f"Test loss: {test_m['loss']:.4f}")
+          f"Test loss (all classes): {test_m['loss']:.4f}")
 
-    pred_cls = np.argmax(mlp.forward(X_test), axis=1)
-    
-    # Accuracy on seen classes
+    # Metrics on seen classes only
     present_classes = np.unique(y_train_raw)
     mask_seen = np.isin(y_test_raw, present_classes)
     if mask_seen.sum() > 0:
-        acc_seen = np.mean(pred_cls[mask_seen] == y_test_raw[mask_seen])
-        print(f"Test accuracy (only seen classes): {acc_seen:.4f}")
+        seen_m = mlp.evaluate(X_test[mask_seen], Y_test[mask_seen])
+        print(f"Test accuracy (only seen): {seen_m['accuracy']:.4f}  "
+              f"Test loss (only seen): {seen_m['loss']:.4f}")
 
     # Per-class accuracy
     pred_cls = np.argmax(mlp.forward(X_test), axis=1)

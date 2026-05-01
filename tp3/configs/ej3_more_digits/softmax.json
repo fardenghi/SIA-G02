@@ -1,5 +1,5 @@
 {
-  "architecture": [784, 256, 10],
+  "architecture": [784, 128, 64, 32, 10],
   "activation": "tanh",
   "output_activation": "softmax",
   "loss": "cross_entropy",
@@ -12,6 +12,7 @@
   "patience": 25,
   "seed": 42,
   "combine_datasets": true,
+  "data_augmentation": true,
   "save_model": "outputs/ej3_more_digits/models/softmax.npz",
   "export_metrics": "outputs/ej3_more_digits/metrics/softmax.csv",
   "goal_accuracy": 0.98
