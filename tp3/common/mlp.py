@@ -197,44 +197,42 @@ class MLP:
         return self
 
     def _augment_batch(self, X_batch, rng, rotation_deg=0.0, scale_range=None):
-        X_aug = np.empty_like(X_batch)
-        for i in range(len(X_batch)):
-            img = X_batch[i].reshape(28, 28)
+        B = len(X_batch)
+        imgs = X_batch.reshape(B, 28, 28)
 
-            if rotation_deg > 0 or scale_range is not None:
-                angle = rng.uniform(-rotation_deg, rotation_deg) * np.pi / 180.0
-                scale = rng.uniform(*scale_range) if scale_range is not None else 1.0
-                img = self._affine(img, angle, scale)
+        angles = (rng.uniform(-rotation_deg, rotation_deg, B) * np.pi / 180.0
+                  if rotation_deg > 0 else np.zeros(B))
+        scales = (rng.uniform(scale_range[0], scale_range[1], B)
+                  if scale_range is not None else np.ones(B))
+        tx = rng.integers(-2, 3, B).astype(float)
+        ty = rng.integers(-2, 3, B).astype(float)
 
-            shift_x = rng.integers(-2, 3)
-            shift_y = rng.integers(-2, 3)
-            if shift_x != 0:
-                img = np.roll(img, shift_x, axis=1)
-                if shift_x > 0: img[:, :shift_x] = 0
-                else: img[:, shift_x:] = 0
-            if shift_y != 0:
-                img = np.roll(img, shift_y, axis=0)
-                if shift_y > 0: img[:shift_y, :] = 0
-                else: img[shift_y:, :] = 0
-
-            X_aug[i] = img.flatten()
-
-        noise = rng.normal(0, 0.05, X_aug.shape)
-        X_aug = np.clip(X_aug + noise, 0, 1)
-        return X_aug
+        imgs_aug = self._affine_batch(imgs, angles, scales, tx, ty)
+        noise = rng.normal(0, 0.05, imgs_aug.shape)
+        imgs_aug = np.clip(imgs_aug + noise, 0, 1)
+        return imgs_aug.reshape(B, -1)
 
     @staticmethod
-    def _affine(img, angle, scale):
-        """Rotate (rad) + uniform scale around image center, bilinear interp."""
-        h, w = img.shape
-        cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
-        cos, sin = np.cos(angle), np.sin(angle)
+    def _affine_batch(imgs, angles, scales, tx, ty):
+        """Per-image affine (rotation+scale around center, then translation),
+        bilinear interp, all in one vectorized pass.
 
-        yy, xx = np.indices(img.shape)
-        dx = xx - cx
-        dy = yy - cy
-        src_x = (cos * dx + sin * dy) / scale + cx
-        src_y = (-sin * dx + cos * dy) / scale + cy
+        imgs: (B, H, W); angles, scales, tx, ty: (B,) — angles in radians,
+        translations in pixels.
+        """
+        B, h, w = imgs.shape
+        cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+        cos = np.cos(angles)[:, None, None]
+        sin = np.sin(angles)[:, None, None]
+        s = scales[:, None, None]
+        txb = tx[:, None, None]
+        tyb = ty[:, None, None]
+
+        yy, xx = np.indices((h, w))
+        dx = xx - cx - txb
+        dy = yy - cy - tyb
+        src_x = (cos * dx + sin * dy) / s + cx
+        src_y = (-sin * dx + cos * dy) / s + cy
 
         x0 = np.floor(src_x).astype(int)
         y0 = np.floor(src_y).astype(int)
@@ -251,10 +249,11 @@ class MLP:
         y0c = np.clip(y0, 0, h - 1)
         y1c = np.clip(y1, 0, h - 1)
 
-        Ia = img[y0c, x0c] * valid_y0 * valid_x0
-        Ib = img[y1c, x0c] * valid_y1 * valid_x0
-        Ic = img[y0c, x1c] * valid_y0 * valid_x1
-        Id = img[y1c, x1c] * valid_y1 * valid_x1
+        bidx = np.arange(B)[:, None, None]
+        Ia = imgs[bidx, y0c, x0c] * valid_y0 * valid_x0
+        Ib = imgs[bidx, y1c, x0c] * valid_y1 * valid_x0
+        Ic = imgs[bidx, y0c, x1c] * valid_y0 * valid_x1
+        Id = imgs[bidx, y1c, x1c] * valid_y1 * valid_x1
 
         wa = (x1 - src_x) * (y1 - src_y)
         wb = (x1 - src_x) * (src_y - y0)
