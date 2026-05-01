@@ -110,7 +110,8 @@ class MLP:
 
     def fit(self, X_train, y_train, X_val=None, y_val=None,
             epochs=100, batch_size=32, optimizer=None,
-            patience=None, verbose=True, tracker=None):
+            patience=None, verbose=True, tracker=None,
+            data_augmentation=False):
         rng = np.random.default_rng(self.seed)
         N = X_train.shape[0]
         lr = getattr(optimizer, "lr", 0.0)
@@ -129,6 +130,10 @@ class MLP:
             for start in range(0, N, batch_size):
                 X_batch = X_shuf[start:start + batch_size]
                 y_batch = y_shuf[start:start + batch_size]
+                
+                if data_augmentation:
+                    X_batch = self._augment_batch(X_batch, rng)
+
                 self.forward(X_batch)
                 grads = self.backward(y_batch)
                 for l, (dW, db) in enumerate(grads):
@@ -182,6 +187,34 @@ class MLP:
                         break
 
         return self
+
+    def _augment_batch(self, X_batch, rng):
+        X_aug = np.empty_like(X_batch)
+        for i in range(len(X_batch)):
+            img = X_batch[i].reshape(28, 28)
+            
+            # Random shifts (-1, 0, 1) pixels
+            shift_x = rng.integers(-2, 3) # -2 to 2
+            shift_y = rng.integers(-2, 3)
+            
+            # Roll and pad horizontally
+            if shift_x != 0:
+                img = np.roll(img, shift_x, axis=1)
+                if shift_x > 0: img[:, :shift_x] = 0
+                else: img[:, shift_x:] = 0
+                
+            # Roll and pad vertically
+            if shift_y != 0:
+                img = np.roll(img, shift_y, axis=0)
+                if shift_y > 0: img[:shift_y, :] = 0
+                else: img[shift_y:, :] = 0
+                
+            # Add small Gaussian noise
+            noise = rng.normal(0, 0.05, img.shape)
+            img = np.clip(img + noise, 0, 1)
+            
+            X_aug[i] = img.flatten()
+        return X_aug
 
     # ------------------------------------------------------------------
     # Persistence

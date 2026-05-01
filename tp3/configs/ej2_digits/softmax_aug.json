@@ -6,11 +6,12 @@
   "weight_init": "xavier",
   "optimizer": "adam",
   "lr": 0.001,
-  "epochs": 50,
+  "epochs": 100,
   "batch_size": 32,
   "val_split": 0.2,
   "patience": 20,
   "seed": 42,
-  "save_model": "outputs/ej2_digits/models/softmax.npz",
-  "export_metrics": "outputs/ej2_digits/metrics/softmax.csv"
+  "data_augmentation": true,
+  "save_model": "outputs/ej2_digits/models/softmax_aug.npz",
+  "export_metrics": "outputs/ej2_digits/metrics/softmax_aug.csv"
 }
