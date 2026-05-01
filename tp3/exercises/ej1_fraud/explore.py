@@ -58,7 +58,7 @@ def run_eda():
     corr = df[FEATURE_COLS + [TARGET_COL]].corr()[TARGET_COL].drop(TARGET_COL)
     print(corr.sort_values(key=abs, ascending=False).round(4).to_string())
 
-    _plot_correlation_matrix(df)
+    _plot_feature_correlations(df)
 
     # ── 5. Outliers ──────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
@@ -78,12 +78,12 @@ def run_eda():
     print("=" * 60)
     print("""
   - Sin valores faltantes → no hay filas a eliminar (D1 N/A)
-  - timestamp descartado  → correlación ~0, no es predictivo
+  - timestamp descartado  → por ser variable absoluta/monótona, no por su correlación.
   - Normalización: z-score sobre las 8 features restantes
   - Outliers mantenidos   → representan transacciones reales
-  - Features de baja correlación (device_screen_resolution,
-    time_since_last_login_s) conservadas; el modelo decidirá
-    su peso final vía los pesos aprendidos
+  - Correlaciones: Calculamos las correlaciones como base teórica, 
+    pero dejamos todas las features estáticas para que el algoritmo 
+    corrobore empíricamente asignándoles pesos cercanos a cero.
 """)
 
 
@@ -112,28 +112,31 @@ def _plot_target_distribution(df):
     _save("target_distribution.png")
 
 
-def _plot_correlation_matrix(df):
-    numeric_cols = FEATURE_COLS + [TARGET_COL]
-    corr_matrix = df[numeric_cols].corr()
-
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(corr_matrix.values, cmap="coolwarm", vmin=-1, vmax=1)
-    plt.colorbar(im, ax=ax)
-
-    labels = [c.replace("_", "\n") for c in numeric_cols]
-    ax.set_xticks(range(len(numeric_cols)))
-    ax.set_yticks(range(len(numeric_cols)))
-    ax.set_xticklabels(labels, fontsize=7, rotation=45, ha="right")
-    ax.set_yticklabels(labels, fontsize=7)
-
-    for i in range(len(numeric_cols)):
-        for j in range(len(numeric_cols)):
-            ax.text(j, i, f"{corr_matrix.values[i, j]:.2f}",
-                    ha="center", va="center", fontsize=6)
-
-    ax.set_title("Matriz de correlación")
+def _plot_feature_correlations(df):
+    corr = df[FEATURE_COLS + [TARGET_COL]].corr()[TARGET_COL].drop(TARGET_COL)
+    corr = corr.sort_values(ascending=True)
+    
+    fig, ax = plt.subplots(figsize=(8, 5))
+    colors = ["tomato" if c < 0 else "steelblue" for c in corr.values]
+    
+    labels = [col.replace("_", " ").title() for col in corr.index]
+    bars = ax.barh(labels, corr.values, color=colors, alpha=0.8)
+    
+    ax.set_xlim(-1.1, 1.1)
+    ax.axvline(0, color="black", linewidth=1)
+    
+    for bar, val in zip(bars, corr.values):
+        offset = 0.05 if val >= 0 else -0.05
+        ha = "left" if val >= 0 else "right"
+        ax.text(val + offset, bar.get_y() + bar.get_height()/2, f"{val:.3f}", 
+                va='center', ha=ha, fontsize=9)
+        
+    ax.set_title("Correlación con la Probabilidad de Fraude (Target)")
+    ax.set_xlabel("Coeficiente de Correlación de Pearson")
+    ax.grid(axis='x', alpha=0.3)
+    
     plt.tight_layout()
-    _save("correlation_matrix.png")
+    _save("feature_correlations.png")
 
 
 def _plot_feature_boxplots(df):

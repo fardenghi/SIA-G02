@@ -67,7 +67,7 @@ def run():
     plot_model_comparison(
         [lin_h, sig_h],
         ["Lineal", "Sigmoid"],
-        title="Fase 5 — Lineal vs Sigmoid: convergencia y loss final",
+        title="Lineal vs Sigmoid: convergencia y loss final",
         save_path=_PLOTS_DIR / "phase5_comparison.png",
     )
 

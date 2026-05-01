@@ -33,6 +33,13 @@ def plot_loss_curves(train_loss, val_loss=None, title="Loss vs Epochs",
             val_std = val_loss.std(axis=0)
             ax.plot(epochs, val_mean, label="Val MSE (media)", color="tomato", linestyle="--")
             ax.fill_between(epochs, val_mean - val_std, val_mean + val_std, color="tomato", alpha=0.2)
+            
+            # Zoom dinámico: ignorar el pico de las primeras épocas para apreciar la varianza y el gap
+            if len(epochs) > 20:
+                min_y = min(train_mean[-1], val_mean[-1])
+                max_y = max(train_mean[10:].max() + train_std[10:].max(), 
+                            val_mean[10:].max() + val_std[10:].max())
+                ax.set_ylim(bottom=min_y * 0.95, top=max_y * 1.05)
     else:
         ax.plot(train_loss, label="Train MSE", color="steelblue")
         if val_loss is not None:
@@ -49,8 +56,9 @@ def plot_loss_curves(train_loss, val_loss=None, title="Loss vs Epochs",
 def plot_predictions_distribution(predictions, targets, title="Distribución de predicciones",
                                   save_path=None):
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.hist(targets,      bins=40, alpha=0.6, label="Target (BigModel)", color="steelblue")
-    ax.hist(predictions,  bins=40, alpha=0.6, label="Predicciones (TinyModel)", color="tomato")
+    # Al pasar una lista de arreglos, matplotlib agrupa las barras lado a lado
+    ax.hist([targets, predictions], bins=30, label=["Target (BigModel)", "Predicciones (TinyModel)"], 
+            color=["steelblue", "tomato"], edgecolor="white", linewidth=0.5)
     ax.set_xlabel("Probabilidad de fraude")
     ax.set_ylabel("Frecuencia")
     ax.set_title(title)

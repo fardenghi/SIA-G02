@@ -128,14 +128,14 @@ def run():
     plot_loss_curves(
         all_train_loss,
         all_val_loss,
-        title=f"Fase 6 — Generalización (K-Fold K={CFG['k_folds']})",
+        title=f"Generalización (K-Fold K={CFG['k_folds']})",
         save_path=_PLOTS_DIR / "generalization_loss.png",
     )
 
     plot_predictions_distribution(
         oof_preds,
         y,
-        title="Fase 6 — Distribución predicciones (Out-Of-Fold)",
+        title="Distribución predicciones (Out-Of-Fold)",
         save_path=_PLOTS_DIR / "generalization_pred_dist.png",
     )
 
