@@ -1,10 +1,12 @@
-.PHONY: clean-outputs clean-ej1 inspect-digit run-ej1 run-ej2 run-ej3 run-xor test plot-metrics
+.PHONY: clean-outputs clean-ej1 inspect-digit run-ej1 run-ej2 run-ej3 run-ej3-ensembles run-xor test plot-metrics
 
 EJ1_DIR = outputs/ej1_fraud
 EJ2_DIR = outputs/ej2_digits
 EJ3_DIR = outputs/ej3_more_digits
 EJ2_CONFIG ?= configs/ej2_digits/baseline.json
-EJ3_CONFIG ?= configs/ej3_more_digits/softmax.json
+EJ3_CONFIG ?= configs/ej3_more_digits/historical/best_l2(+pat_weight).json
+EJ3_WORKERS ?= 4
+EJ3_ENSEMBLE_CONFIGS = $(wildcard configs/ej3_more_digits/ensembles/*/*.json)
 DIGIT_DATASET ?= test
 DIGIT_INDEX ?= 0
 METRICS_CSV = outputs/ej2_digits/metrics/$(notdir $(EJ2_CONFIG:.json=.csv))
@@ -46,6 +48,16 @@ run-ej2:
 run-ej3:
 	uv run python -m exercises.ej3_more_digits.run $(EJ3_CONFIG)
 	uv run python exercises/ej2_digits/plot_metrics.py --csv $(METRICS_CSV_EJ3) --out $(METRICS_OUT_EJ3)
+
+run-ej3-ensembles:
+	@for cfg in $(EJ3_ENSEMBLE_CONFIGS); do \
+	    echo ""; \
+	    echo "=========="; \
+	    echo "Training $$cfg"; \
+	    echo "=========="; \
+	    uv run python -m exercises.ej3_more_digits.run $$cfg || exit 1; \
+	done
+	uv run python -m exercises.ej3_more_digits.plot_ensembles_comparison
 
 inspect-digit:
 	uv run python -m exercises.ej2_digits.inspect_sample --dataset $(DIGIT_DATASET) --index $(DIGIT_INDEX)
