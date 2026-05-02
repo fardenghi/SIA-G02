@@ -19,6 +19,7 @@ MODELS_DIR = ROOT / "outputs" / "ej3_more_digits" / "models"
 CONFIGS_DIRS = [
     ROOT / "configs" / "ej3_more_digits" / "baselines",
     ROOT / "configs" / "ej3_more_digits" / "historical",
+    ROOT / "configs" / "ej3_more_digits" / "vanilla",
     ROOT / "configs" / "ej3_more_digits" / "ensembles" / "aug_variations",
     ROOT / "configs" / "ej3_more_digits" / "ensembles" / "diverse_architectures",
     ROOT / "configs" / "ej3_more_digits" / "ensembles" / "wd_variations",

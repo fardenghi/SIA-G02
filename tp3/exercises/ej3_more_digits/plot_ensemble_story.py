@@ -50,14 +50,15 @@ SINGLE_AXIS = {
     ],
 }
 
-# Ensemble heterogéneo: mezcla de ejes de diversidad. Usa los 4 seeds "sin rot"
-# (best_l2_4seeds_*) para complementar a best_l2_aug, en vez de los seeds
-# "con rot" (que se parecen demasiado a best_l2_aug → menos diversidad).
+# Ensemble heterogéneo ganador: 3 modelos diversos en ejes complementarios
+# (L2 fuerte, arquitectura profunda, sin L2). Encontrado por busqueda exhaustiva
+# en ensemble_search.py → 99.04% test acc.
 HETERO_MODELS = [
-    "best", "best_decay", "best_l2(+pat_weight)", "best_l2_aug",
-    "best_l2_4seeds_seed42", "best_l2_4seeds_seed0",
-    "best_l2_4seeds_seed7", "best_l2_4seeds_seed13",
+    "wd_1e-3",     # L2 fuerte (λ=1e-3) + Aug + ES, arch default
+    "arch_deep",   # arch profunda 256x256x256x128, L2+Aug+ES
+    "best",        # sin L2, solo Aug + ES, arch default
 ]
+HETERO_LABEL = "Heterogéneo\n(3 modelos)"
 
 
 def main():
@@ -85,7 +86,7 @@ def main():
     hetero_ens = Ensemble.from_paths([str(_MODELS_DIR / f"{n}.npz") for n in HETERO_MODELS])
     hetero_test = hetero_ens.evaluate(X_test, Y_test)["accuracy"]
     hetero_train = hetero_ens.evaluate(X_train, Y_train)["accuracy"]
-    rows.append(("Heterogéneo\n(8 modelos)", hetero_test, hetero_train))
+    rows.append((HETERO_LABEL, hetero_test, hetero_train))
 
     # Plot: solo el panel superior con barras + anotaciones
     fig, ax = plt.subplots(figsize=(13, 6))
@@ -111,7 +112,9 @@ def main():
                 ha="center", va="top", fontsize=8.5, color="white")
 
     ax.axhline(0.98, color="green", linestyle="--", lw=1.2, alpha=0.7, label="Goal 98%")
-    ax.set_ylim(0.978, 0.990)
+    ymin = min(test_accs) - 0.002
+    ymax = max(test_accs) + 0.003
+    ax.set_ylim(ymin, ymax)
     ax.set_ylabel("Test accuracy", fontsize=11)
     ax.set_title("Comparación de estrategias de ensemble en Ej3", fontsize=13, pad=12)
     ax.legend(loc="lower left", fontsize=10)
