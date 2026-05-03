@@ -91,7 +91,7 @@ def _plot_accuracy_global(all_results, out_path):
 
 
 def _plot_per_class_heatmap(all_results, out_path):
-    names = sorted(all_results.keys())
+    names = sorted(all_results.keys(), reverse=True)
     matrix = np.array([
         [all_results[n]["per_class_accuracy"].get(str(c), 0.0) for c in range(_N_CLASSES)]
         for n in names

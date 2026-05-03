@@ -3,6 +3,7 @@
 Ejemplos:
     uv run python -m exercises.ej2_digits.compare_arch_width
     uv run python -m exercises.ej2_digits.compare_arch_width --only-comparison
+    uv run python -m exercises.ej2_digits.compare_arch_width --models arch_1hidden_16:16 arch_1hidden_32:32 arch_1hidden_64:64 arch_1hidden_128:128 arch_1hidden_256:256 arch_1hidden_512:512
 """
 
 import argparse
@@ -23,8 +24,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_DATASET = _ROOT / "data" / "ej2_digits" / "digits_test.csv"
 _OUT_DIR = _ROOT / "outputs" / "ej2_digits" / "evaluation" / "comparison_arch_width"
 
-# nombre → neuronas en la capa oculta
-_MODELS = {
+_DEFAULT_MODELS = {
     "arch_narrow":   32,
     "arch_medium":   64,
     "arch_wide":     128,
@@ -41,12 +41,26 @@ def parse_args():
                         help="Omite las evaluaciones individuales y solo genera los gráficos.")
     parser.add_argument("--dataset", type=Path, default=_DEFAULT_DATASET,
                         help="Path al dataset para la evaluación.")
+    parser.add_argument("--models", nargs="+", default=None,
+                        help="Modelos en formato nombre:ancho, ej: arch_1hidden_128:128 arch_1hidden_256:256")
+    parser.add_argument("--out-dir", type=Path, default=_OUT_DIR,
+                        help="Directorio de salida para los gráficos.")
     return parser.parse_args()
 
 
-def _plot_accuracy_vs_width(all_results, out_path):
+def _parse_models(models_arg):
+    result = {}
+    for item in models_arg:
+        if ":" not in item:
+            raise SystemExit(f"Formato inválido '{item}'. Usar nombre:ancho, ej: arch_1hidden_128:128")
+        name, width = item.rsplit(":", 1)
+        result[name] = int(width)
+    return result
+
+
+def _plot_accuracy_vs_width(all_results, models, out_path):
     widths, accs, names = [], [], []
-    for name, width in _MODELS.items():
+    for name, width in models.items():
         if name not in all_results:
             continue
         widths.append(width)
@@ -56,8 +70,8 @@ def _plot_accuracy_vs_width(all_results, out_path):
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(widths, accs, marker="o", color="steelblue", linewidth=2, markersize=8)
 
-    for x, y, name in zip(widths, accs, names):
-        ax.annotate(f"{y:.4f}\n({name})", (x, y), textcoords="offset points",
+    for x, y in zip(widths, accs):
+        ax.annotate(f"{y:.4f}", (x, y), textcoords="offset points",
                     xytext=(0, 12), ha="center", fontsize=8)
 
     ax.set_xscale("log", base=2)
@@ -77,10 +91,10 @@ def _plot_accuracy_vs_width(all_results, out_path):
     plt.close(fig)
 
 
-def _plot_gap_vs_width(curves, out_path):
+def _plot_gap_vs_width(curves, models, out_path):
     widths, gaps, train_finals, val_finals = [], [], [], []
 
-    for name, width in _MODELS.items():
+    for name, width in models.items():
         if name not in curves:
             continue
         df = curves[name]
@@ -117,7 +131,7 @@ def _plot_gap_vs_width(curves, out_path):
     axes[1].axhline(0, color="black", linewidth=0.8)
     axes[1].set_xlabel("Neuronas en la capa oculta")
     axes[1].set_ylabel("Gap (val - train)")
-    axes[1].set_title("Gap val−train loss final\n(rojo = val > train = posible overfitting)")
+    axes[1].set_title("Gap val−train loss final")
     axes[1].grid(axis="y", alpha=0.3)
 
     for bar, gap in zip(bars, gaps):
@@ -134,7 +148,9 @@ def _plot_gap_vs_width(curves, out_path):
 
 def main():
     args = parse_args()
-    model_names = list(_MODELS.keys())
+    models = _parse_models(args.models) if args.models else _DEFAULT_MODELS
+    model_names = list(models.keys())
+    out_dir = args.out_dir
 
     print(f"Modelos: {', '.join(model_names)}")
     print("=" * 55)
@@ -156,13 +172,13 @@ def main():
 
     curves = _load_all_loss_curves(model_names)
 
-    _plot_accuracy_global(all_results, _OUT_DIR / "accuracy_global.png")
-    _plot_per_class_heatmap(all_results, _OUT_DIR / "accuracy_per_class_heatmap.png")
-    _plot_loss_curves(curves, _OUT_DIR / "loss_curves.png")
-    _plot_accuracy_vs_width(all_results, _OUT_DIR / "accuracy_vs_width.png")
-    _plot_gap_vs_width(curves, _OUT_DIR / "gap_vs_width.png")
+    _plot_accuracy_global(all_results, out_dir / "accuracy_global.png")
+    _plot_per_class_heatmap(all_results, out_dir / "accuracy_per_class_heatmap.png")
+    _plot_loss_curves(curves, out_dir / "loss_curves.png")
+    _plot_accuracy_vs_width(all_results, models, out_dir / "accuracy_vs_width.png")
+    _plot_gap_vs_width(curves, models, out_dir / "gap_vs_width.png")
 
-    print(f"\nComparación guardada en {_OUT_DIR}")
+    print(f"\nComparación guardada en {out_dir}")
 
 
 if __name__ == "__main__":
