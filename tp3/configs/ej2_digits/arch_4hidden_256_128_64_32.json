@@ -1,0 +1,16 @@
+{
+  "architecture": [784, 256, 128, 64, 32, 10],
+  "activation": "tanh",
+  "output_activation": "tanh",
+  "loss": "mse",
+  "weight_init": "xavier",
+  "optimizer": "sgd",
+  "lr": 0.01,
+  "epochs": 500,
+  "batch_size": 32,
+  "val_split": 0.2,
+  "patience": 20,
+  "seed": 42,
+  "save_model": "outputs/ej2_digits/models/arch_4hidden_256_128_64_32.npz",
+  "export_metrics": "outputs/ej2_digits/metrics/arch_4hidden_256_128_64_32.csv"
+}

@@ -104,9 +104,7 @@ def report(mlp_or_ens, X_test, y_test_raw, Y_test, n_classes, label):
     return test_m["accuracy"]
 
 
-def main():
-    config_path = (sys.argv[1] if len(sys.argv) > 1
-                   else "configs/ej3_more_digits/softmax.json")
+def run(config_path):
     cfg = load_config(config_path)
 
     X_more, y_more = load_more_digits()
@@ -178,6 +176,12 @@ def main():
         print(f"\n✓ goal reached ({accuracy:.4f} >= {goal})")
     else:
         print(f"\n✗ goal not reached ({accuracy:.4f} < {goal})")
+
+
+def main():
+    config_path = (sys.argv[1] if len(sys.argv) > 1
+                   else "configs/ej3_more_digits/historical/best_l2(+pat_weight).json")
+    run(config_path)
 
 
 if __name__ == "__main__":

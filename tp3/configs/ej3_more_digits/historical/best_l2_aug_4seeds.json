@@ -1,0 +1,21 @@
+{
+  "architecture": [784, 512, 256, 128, 10],
+  "activation": "relu",
+  "output_activation": "softmax",
+  "loss": "cross_entropy",
+  "weight_init": "he",
+  "optimizer": "adam",
+  "lr": 0.0001,
+  "weight_decay": 0.0005,
+  "epochs": 500,
+  "batch_size": 64,
+  "val_split": 0.15,
+  "patience": 120,
+  "min_delta": 0.0005,
+  "seeds": [42, 0, 7, 13],
+  "data_augmentation": true,
+  "aug_rotation_deg": 10,
+  "aug_scale_range": [0.9, 1.1],
+  "save_model": "outputs/ej3_more_digits/models/best_l2_aug_4seeds.npz",
+  "export_metrics": "outputs/ej3_more_digits/metrics/best_l2_aug_4seeds.csv"
+}
