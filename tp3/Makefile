@@ -34,9 +34,13 @@ run-ej1:
 	uv run python -m exercises.ej1_fraud.explore
 	uv run python -m exercises.ej1_fraud.train_linear
 	uv run python -m exercises.ej1_fraud.train_sigmoid
+	uv run python -m exercises.ej1_fraud.train_relu
 	uv run python -m exercises.ej1_fraud.compare_models
+	uv run python -m exercises.ej1_fraud.compare_models_relu
 	uv run python -m exercises.ej1_fraud.train_generalization
+	uv run python -m exercises.ej1_fraud.train_generalization_relu
 	uv run python -m exercises.ej1_fraud.threshold_analysis
+	uv run python -m exercises.ej1_fraud.threshold_analysis_relu
 
 run-xor:
 	uv run python -m exercises.xor.run configs/xor/default.json

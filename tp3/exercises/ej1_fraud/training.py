@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from common.activations import linear, sigmoid, sigmoid_prime, step, tanh_act, tanh_prime
+from common.activations import linear, sigmoid, sigmoid_prime, step, tanh_act, tanh_prime, relu, relu_prime
 from common.simple_perceptron import SimplePerceptron
 
 _ACTIVATION_MAP = {
@@ -13,6 +13,7 @@ _ACTIVATION_MAP = {
     "sigmoid": (sigmoid,  sigmoid_prime),
     "tanh":    (tanh_act, tanh_prime),
     "step":    (step,     None),
+    "relu":    (relu,     relu_prime),
 }
 
 
