@@ -18,7 +18,7 @@
 
 El objetivo es entrenar un **TinyModel** (perceptrón simple) que replique el comportamiento del **BigModel** para predecir la probabilidad de fraude en transacciones de comercio electrónico.
 
-- **Input:** 8 features numéricas por transacción
+- **Input:** 9 features numéricas por transacción
 - **Target:** `big_model_fraud_probability` ∈ [0, 1] — probabilidad continua asignada por el BigModel
 - **Ground truth binario:** `flagged_fraud` ∈ {0, 1} — usado para evaluar el umbral de detección
 
@@ -51,13 +51,10 @@ El objetivo es entrenar un **TinyModel** (perceptrón simple) que replique el co
 | `items_viewed_before_purchase` | +0.334 | |
 | `device_screen_resolution` | +0.025 | correlación casi nula |
 | `time_since_last_login_s` | +0.002 | correlación casi nula |
-| `timestamp` | +0.001 | **descartado** |
+| `timestamp` | +0.001 | correlación casi nula |
 
-### Decisiones de preprocesamiento
-
-- `timestamp` eliminado — no por su correlación, sino por ser una variable monótona creciente que rompe la generalización del modelo lineal en producción.
-- Correlaciones: Calculamos la correlación para establecer una expectativa **teórica**, pero conservamos todas las features estáticas (incluso las cercanas a 0) para que el algoritmo lo valide **empíricamente** empujando los pesos hacia cero.
-- Las 8 features se normalizan con **z-score**.
+- Conservamos todas las variables originales para permitir que el modelo determine su importancia empírica a través de los pesos.
+- Las 9 features se normalizan con **z-score**.
 - Outliers conservados — representan transacciones reales válidas.
 
 ---

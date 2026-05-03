@@ -9,6 +9,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 _DATA_DIR = _ROOT / "data" / "ej1_fraud"
 
 FEATURE_COLS = [
+    "timestamp",
     "amount_usd",
     "quantity_purchased",
     "session_duration_seconds",

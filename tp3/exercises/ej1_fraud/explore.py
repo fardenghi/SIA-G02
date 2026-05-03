@@ -140,7 +140,7 @@ def _plot_feature_correlations(df):
 
 
 def _plot_feature_boxplots(df):
-    fig, axes = plt.subplots(2, 4, figsize=(14, 7))
+    fig, axes = plt.subplots(3, 3, figsize=(14, 10))
     axes = axes.flatten()
     for i, col in enumerate(FEATURE_COLS):
         axes[i].boxplot(df[col], vert=True, patch_artist=True,
