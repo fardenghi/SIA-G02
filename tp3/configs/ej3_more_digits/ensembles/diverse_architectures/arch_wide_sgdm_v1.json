@@ -19,7 +19,6 @@
   "patience": 150,
   "min_delta": 0.0005,
   "seed": 42,
-  "combine_datasets": true,
   "data_augmentation": true,
   "aug_rotation_deg": 10,
   "aug_scale_range": [0.9, 1.1],
