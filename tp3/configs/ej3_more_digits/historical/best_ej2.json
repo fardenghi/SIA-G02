@@ -1,0 +1,16 @@
+{
+  "architecture": [784, 512, 10],
+  "activation": "tanh",
+  "output_activation": "tanh",
+  "loss": "mse",
+  "weight_init": "xavier",
+  "optimizer": "rmsprop",
+  "lr": 0.001,
+  "epochs": 500,
+  "batch_size": 32,
+  "val_split": 0.2,
+  "patience": 50,
+  "seed": 42,
+  "save_model": "outputs/ej3_more_digits/models/best_ej2.npz",
+  "export_metrics": "outputs/ej3_more_digits/metrics/best_ej2.csv"
+}
