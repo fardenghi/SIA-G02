@@ -13,6 +13,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+import pandas as pd
+
 from common.datasets import load_digit_frame, to_one_hot
 from common.mlp import MLP
 
@@ -48,22 +50,75 @@ def _confusion_matrix(y_true, y_pred, n_classes):
     return cm
 
 
-def _plot_accuracy_per_class(per_class_acc, out_path):
+def _get_val_accuracy(model_name, configs_dir):
+    metrics_dir = _ROOT / "outputs" / "ej2_digits" / "metrics"
+    csv_path = metrics_dir / f"{model_name}.csv"
+    if not csv_path.exists():
+        return None, None
+    df = pd.read_csv(csv_path)
+    if "acc_val" not in df.columns or "loss_val" not in df.columns:
+        return None, None
+    config_path = Path(configs_dir) / f"{model_name}.json"
+    early_stopping = False
+    if config_path.exists():
+        with open(config_path) as f:
+            cfg = json.load(f)
+        max_epochs = cfg.get("epochs", None)
+        if max_epochs is not None and df["epoch"].max() < max_epochs:
+            early_stopping = True
+    if early_stopping:
+        best_idx = df["loss_val"].idxmin()
+        val_acc = float(df.loc[best_idx, "acc_val"])
+        best_epoch = int(df.loc[best_idx, "epoch"])
+    else:
+        val_acc = float(df["acc_val"].iloc[-1])
+        best_epoch = int(df["epoch"].iloc[-1])
+    return val_acc, {"early_stopping": early_stopping, "epoch": best_epoch}
+
+
+def _plot_accuracy_per_class(per_class_acc, model_name, out_path):
     classes = list(range(_N_CLASSES))
-    accs = [per_class_acc[str(c)] for c in classes]
+    matrix = np.array([[per_class_acc.get(str(c), 0.0) for c in classes]])
 
-    fig, ax = plt.subplots(figsize=(7, 5))
-    bars = ax.barh(classes, accs, color="steelblue")
-    ax.set_xlim(0, 1)
-    ax.set_xlabel("Accuracy")
-    ax.set_ylabel("Dígito")
-    ax.set_yticks(classes)
+    fig, ax = plt.subplots(figsize=(12, 1.8))
+    im = ax.imshow(matrix, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
+    fig.colorbar(im, ax=ax, label="Accuracy")
+
+    ax.set_xticks(range(_N_CLASSES))
+    ax.set_xticklabels([str(c) for c in classes])
+    ax.set_yticks([0])
+    ax.set_yticklabels([model_name])
+    ax.set_xlabel("Dígito")
     ax.set_title("Accuracy por clase")
-    ax.grid(axis="x", alpha=0.3)
 
-    for bar, acc in zip(bars, accs):
-        ax.text(acc + 0.01, bar.get_y() + bar.get_height() / 2,
-                f"{acc:.3f}", va="center", fontsize=9)
+    for j, c in enumerate(classes):
+        val = matrix[0, j]
+        ax.text(j, 0, f"{val:.2f}", ha="center", va="center",
+                fontsize=9, color="black" if 0.3 < val < 0.8 else "white")
+
+    fig.tight_layout()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=120, bbox_inches="tight")
+    print(f"  guardado: {out_path}")
+    plt.close(fig)
+
+
+def _plot_val_vs_test_accuracy(val_acc, test_acc, model_name, out_path):
+    labels = ["Val Accuracy", "Test Accuracy"]
+    values = [val_acc, test_acc]
+    colors = ["steelblue", "tomato"]
+
+    fig, ax = plt.subplots(figsize=(5, 4))
+    bars = ax.bar(labels, values, color=colors, width=0.5)
+
+    for bar, val in zip(bars, values):
+        ax.text(bar.get_x() + bar.get_width() / 2, val + 0.005,
+                f"{val:.4f}", ha="center", va="bottom", fontsize=10)
+
+    ax.set_ylim(min(values) - 0.05, 1.0)
+    ax.set_ylabel("Accuracy")
+    ax.set_title(f"Val vs Test Accuracy — {model_name}")
+    ax.grid(axis="y", alpha=0.3)
 
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -150,7 +205,14 @@ def run(model_name, dataset_path=None, out_dir=None):
         json.dump(results, f, indent=2)
     print(f"\n  guardado: {json_path}")
 
-    _plot_accuracy_per_class(per_class, out_dir / "accuracy_per_class.png")
+    _plot_accuracy_per_class(per_class, model_name, out_dir / "accuracy_per_class.png")
+
+    val_acc, _ = _get_val_accuracy(model_name, _ROOT / "configs" / "ej2_digits")
+    if val_acc is not None:
+        _plot_val_vs_test_accuracy(val_acc, float(metrics["accuracy"]), model_name,
+                                   out_dir / "val_vs_test_accuracy.png")
+    else:
+        print("  [WARN] No se encontró val accuracy en métricas — omitiendo val vs test plot.")
 
     cm = _confusion_matrix(y, pred_cls, _N_CLASSES)
     _plot_confusion_matrix(cm, out_dir / "confusion_matrix.png")
