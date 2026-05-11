@@ -7,7 +7,7 @@ KOHONEN_CONFIG ?= configs/kohonen_europe.json
 # --- PCA (sklearn) ---
 PCA_N ?= 1
 
-.PHONY: all kohonen pca test help
+.PHONY: all kohonen pca test clean clean-kohonen clean-pca help
 
 all: kohonen pca
 
@@ -20,6 +20,14 @@ pca:
 test:
 	$(PYTEST) -v
 
+clean-kohonen:
+	rm -rf output/kohonen
+
+clean-pca:
+	rm -rf output/[0-9]*
+
+clean: clean-kohonen clean-pca
+
 help:
 	@echo "Targets disponibles:"
 	@echo "  make kohonen                          Entrena SOM con config default"
@@ -28,3 +36,6 @@ help:
 	@echo "  make pca PCA_N=3                      PCA con N componentes"
 	@echo "  make all                              Corre kohonen + pca"
 	@echo "  make test                             Corre la suite de tests"
+	@echo "  make clean-kohonen                    Borra output/kohonen/"
+	@echo "  make clean-pca                        Borra output de PCA (output/1/, output/2/, ...)"
+	@echo "  make clean                            Borra todo el output"
