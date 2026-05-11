@@ -1,0 +1,47 @@
+# Configuración de combinaciones para compare_method_combinations.py
+#
+# Define exactamente dos combinaciones de operadores del AG.
+# Cada combinación especifica: selección, supervivencia, cruza y mutación.
+# Los parámetros globales (imagen, triangulos, generaciones, población, fitness)
+# se pasan por línea de comandos al script.
+
+combination_a:
+  name: "Torneo + Exclusiva + Un Punto + Multigen Uniforme"
+  selection:
+    method: tournament
+    tournament_size: 3
+  survival:
+    method: exclusive
+    selection_method: elite
+    offspring_ratio: 1.0
+  crossover:
+    method: single_point
+    probability: 0.8
+  mutation:
+    method: uniform_multigen
+    probability: 0.3
+    gene_probability: 0.1
+    position_delta: 0.1
+    color_delta: 30
+    alpha_delta: 0.1
+    field_probability: 1.0
+
+combination_b:
+  name: "Ruleta + Aditiva + Uniforme + Multigen Limitado"
+  selection:
+    method: roulette
+  survival:
+    method: additive
+    selection_method: elite
+    offspring_ratio: 1.0
+  crossover:
+    method: uniform
+    probability: 0.8
+  mutation:
+    method: limited_multigen
+    probability: 0.3
+    gene_probability: 0.1
+    position_delta: 0.1
+    color_delta: 30
+    alpha_delta: 0.1
+    field_probability: 1.0
