@@ -2,6 +2,9 @@ import argparse
 import json
 import os
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -43,6 +46,80 @@ def build_assignments(countries: list[str], coords: np.ndarray) -> dict[tuple, l
     return assignments
 
 
+def plot_country_map(
+    assignments: dict[tuple, list[str]],
+    grid_rows: int,
+    grid_cols: int,
+    path: str,
+) -> None:
+    fig, ax = plt.subplots(figsize=(grid_cols * 2, grid_rows * 2))
+    ax.set_xlim(0, grid_cols)
+    ax.set_ylim(0, grid_rows)
+    ax.set_xticks(range(grid_cols))
+    ax.set_yticks(range(grid_rows))
+    ax.grid(True, color="gray", linewidth=0.5)
+    ax.set_xticklabels([str(c) for c in range(grid_cols)])
+    ax.set_yticklabels([str(r) for r in range(grid_rows)])
+
+    for (r, c), countries in assignments.items():
+        # row 0 at top: invert y
+        y = grid_rows - 1 - r
+        text = "\n".join(countries)
+        ax.text(
+            c + 0.5, y + 0.5, text,
+            ha="center", va="center", fontsize=7,
+            bbox=dict(boxstyle="round,pad=0.2", facecolor="steelblue", alpha=0.3),
+        )
+
+    ax.set_title("Mapa de países — Red de Kohonen")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def plot_u_matrix(som: SOM, path: str) -> None:
+    u = som.u_matrix()
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(u, cmap="bone_r", interpolation="nearest")
+    plt.colorbar(im, ax=ax, label="Distancia promedio")
+    ax.set_title("U-Matrix — distancias entre neuronas vecinas")
+    ax.set_xlabel("Columna")
+    ax.set_ylabel("Fila")
+    for r in range(som.grid_rows):
+        for c in range(som.grid_cols):
+            ax.text(c, r, f"{u[r, c]:.2f}", ha="center", va="center", fontsize=7,
+                    color="white" if u[r, c] > u.mean() else "black")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def plot_hit_map(
+    assignments: dict[tuple, list[str]],
+    grid_rows: int,
+    grid_cols: int,
+    n_total: int,
+    path: str,
+) -> None:
+    counts = np.zeros((grid_rows, grid_cols), dtype=int)
+    for (r, c), countries in assignments.items():
+        counts[r, c] = len(countries)
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(counts, cmap="YlOrRd", interpolation="nearest")
+    plt.colorbar(im, ax=ax, label="Cantidad de países")
+    ax.set_title(f"Hit map — países por neurona (total: {n_total})")
+    ax.set_xlabel("Columna")
+    ax.set_ylabel("Fila")
+    for r in range(grid_rows):
+        for c in range(grid_cols):
+            ax.text(c, r, str(counts[r, c]), ha="center", va="center", fontsize=9,
+                    color="white" if counts[r, c] > counts.mean() else "black")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
 def print_assignments(assignments: dict[tuple, list[str]], grid_rows: int, grid_cols: int) -> None:
     print("\nAsignación de países por neurona:")
     print(f"{'Neurona':<12} {'Países'}")
@@ -79,7 +156,14 @@ def main():
             row_str += f"{n:3}"
         print(row_str)
 
-    print(f"\nModelo entrenado. Resultados en {cfg['output_dir']}/")
+    out = cfg["output_dir"]
+    plot_country_map(assignments, cfg["grid_rows"], cfg["grid_cols"],
+                     os.path.join(out, "country_map.png"))
+    plot_u_matrix(som, os.path.join(out, "u_matrix.png"))
+    plot_hit_map(assignments, cfg["grid_rows"], cfg["grid_cols"],
+                 len(countries), os.path.join(out, "hit_map.png"))
+
+    print(f"\nGráficos guardados en {out}/")
 
 
 if __name__ == "__main__":
