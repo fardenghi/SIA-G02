@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "europe.csv"
 OUTPUT_PATH = Path(__file__).resolve().parent / "europe_standardized.csv"
@@ -9,7 +10,8 @@ OUTPUT_PATH = Path(__file__).resolve().parent / "europe_standardized.csv"
 
 def standardize(df: pd.DataFrame) -> pd.DataFrame:
     numeric = df.select_dtypes(include=[np.number])
-    standardized = (numeric - numeric.mean()) / numeric.std(ddof=0)
+    scaled = StandardScaler().fit_transform(numeric.to_numpy(dtype=float))
+    standardized = pd.DataFrame(scaled, index=numeric.index, columns=numeric.columns)
     non_numeric = df.select_dtypes(exclude=[np.number])
     return pd.concat([non_numeric, standardized], axis=1)[df.columns]
 
