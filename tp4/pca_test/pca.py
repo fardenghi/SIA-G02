@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
 
-from standardize import standardize
+from pca_test.standardize import standardize
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "europe.csv"
 OUTPUT_DIR = Path(__file__).resolve().parent / "plots"

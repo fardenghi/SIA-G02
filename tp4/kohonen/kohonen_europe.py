@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
-from som import SOM
+from kohonen.som import SOM
 
 
 def load_data(path: str) -> tuple[list[str], np.ndarray]:
@@ -135,7 +135,7 @@ def print_assignments(assignments: dict[tuple, list[str]], grid_rows: int, grid_
 
 def main():
     parser = argparse.ArgumentParser(description="Red de Kohonen — Ejercicio Europa")
-    parser.add_argument("--config", default="../configs/kohonen_europe.json")
+    parser.add_argument("--config", default="configs/kohonen_europe.json")
     args = parser.parse_args()
 
     with open(args.config) as f:

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from pca import run_pca
+from pca_test.pca import run_pca
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "europe.csv"
 OUTPUT_DIR = Path(__file__).resolve().parent / "plots"

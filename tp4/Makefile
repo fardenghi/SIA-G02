@@ -12,19 +12,19 @@ OJA_CONFIG ?= configs/oja_europe.json
 all: kohonen pca oja
 
 kohonen:
-	$(PYTHON) kohonen_europe.py --config $(KOHONEN_CONFIG)
+	$(PYTHON) -m kohonen.kohonen_europe --config $(KOHONEN_CONFIG)
 
 pca: pca-plots pca-boxplots
-	cd pca_test && $(PYTHON) pca.py
+	$(PYTHON) -m pca_test.pca
 
 pca-plots:
-	cd pca_test && $(PYTHON) plots.py
+	$(PYTHON) -m pca_test.plots
 
 pca-boxplots:
-	cd pca_test && $(PYTHON) boxplots.py
+	$(PYTHON) -m pca_test.boxplots
 
 oja:
-	cd oja && $(PYTHON) oja_europe.py --config ../$(OJA_CONFIG)
+	$(PYTHON) -m oja.oja_europe --config $(OJA_CONFIG)
 
 test:
 	$(PYTEST) -v

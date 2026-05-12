@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-from oja import OjaNetwork
+from oja.oja import OjaNetwork
 
 
 def load_data(path: str) -> tuple[list[str], np.ndarray, list[str]]:
@@ -152,7 +152,7 @@ def print_ranking(countries: list[str], scores: np.ndarray) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Regla de Oja — Ejercicio Europa")
-    parser.add_argument("--config", default="../configs/oja_europe.json")
+    parser.add_argument("--config", default="configs/oja_europe.json")
     args = parser.parse_args()
 
     with open(args.config) as f:

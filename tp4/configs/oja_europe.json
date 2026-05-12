@@ -1,5 +1,5 @@
 {
-  "data": "../data/europe.csv",
+  "data": "data/europe.csv",
   "lr": 0.5,
   "epochs": 1000,
   "seed": 42,
