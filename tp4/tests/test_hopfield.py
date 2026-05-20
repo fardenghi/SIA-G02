@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 from hopfield.network import HopfieldNetwork
-from hopfield.patterns import ALL_LETTERS, LETTERS, GRID, as_vector, render, add_noise, identify
+from hopfield.patterns import (
+    ALL_LETTERS, LETTERS, GRID, as_vector, render, add_noise, identify,
+    min_scale_factor, scale_pattern,
+)
 
 
 # --- helpers ---
@@ -331,4 +334,79 @@ def test_all_letters_capacity_degradation():
     rate_large = recovery_rate(names[:26])  # p=26, far beyond capacity
     assert rate_small > rate_large, (
         f"Expected degradation: small={rate_small:.2f} should > large={rate_large:.2f}"
+    )
+
+
+# --- scale_pattern and min_scale_factor ---
+
+def test_scale_pattern_k1_identity():
+    mat = ALL_LETTERS["Z"]
+    np.testing.assert_array_equal(scale_pattern(mat, 1), mat)
+
+
+def test_scale_pattern_shape():
+    mat = ALL_LETTERS["A"]
+    for k in (2, 3, 4):
+        scaled = scale_pattern(mat, k)
+        assert scaled.shape == (GRID * k, GRID * k), f"Wrong shape for k={k}"
+
+
+def test_scale_pattern_values_bipolar():
+    mat = ALL_LETTERS["E"]
+    for k in (2, 3):
+        scaled = scale_pattern(mat, k)
+        assert set(scaled.flatten().tolist()) <= {1.0, -1.0}
+
+
+def test_scale_pattern_block_structure():
+    """Each pixel of the original must appear as a uniform k×k block."""
+    mat = ALL_LETTERS["T"]
+    k = 2
+    scaled = scale_pattern(mat, k)
+    for i in range(GRID):
+        for j in range(GRID):
+            block = scaled[i*k:(i+1)*k, j*k:(j+1)*k]
+            assert np.all(block == mat[i, j]), f"Block ({i},{j}) not uniform"
+
+
+@pytest.mark.parametrize("p,expected_k", [
+    (1,  1),   # 1 pattern: k=1 (N=25, capacity≈3.45 ≥ 1) ✓
+    (3,  1),   # 3 patterns: k=1 (capacity≈3.45 ≥ 3) ✓
+    (4,  2),   # 4 patterns: k=1 gives N=25, cap=3.45 < 4 → need k=2
+    (13, 2),   # 13 patterns: k=2 (N=100, cap≈13.8 ≥ 13) ✓
+    (14, 3),   # 14 patterns: k=2 gives cap=13.8 < 14 → need k=3
+    (26, 3),   # full alphabet: k=3 (N=225, cap≈31 ≥ 26) ✓
+])
+def test_min_scale_factor(p, expected_k):
+    k = min_scale_factor(p)
+    assert k == expected_k, f"p={p}: expected k={expected_k}, got k={k}"
+    N = (GRID * k) ** 2
+    assert N * 0.138 >= p, f"p={p}, k={k}: N={N} still below capacity"
+
+
+def test_adaptive_alphabet_recovers_better_than_fixed():
+    """Network with adaptive scale (k=3) must recover more letters than fixed k=1."""
+    names = sorted(ALL_LETTERS.keys())
+    k = min_scale_factor(len(names))
+    rng = np.random.default_rng(42)
+    noise = 0.1
+    n_trials = 30
+
+    def rate(scale: int) -> float:
+        net = HopfieldNetwork()
+        stored = {n: scale_pattern(ALL_LETTERS[n], scale).flatten() for n in names}
+        net.train(np.array(list(stored.values())))
+        correct = total = 0
+        for name in names:
+            v = stored[name]
+            for _ in range(n_trials):
+                if identify(net.predict(add_noise(v, noise, rng))[0], stored) == name:
+                    correct += 1
+                total += 1
+        return correct / total
+
+    r_fixed = rate(1)
+    r_adaptive = rate(k)
+    assert r_adaptive > r_fixed, (
+        f"Adaptive (k={k}) rate {r_adaptive:.2f} should exceed fixed (k=1) rate {r_fixed:.2f}"
     )

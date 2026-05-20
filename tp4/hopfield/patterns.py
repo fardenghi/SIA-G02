@@ -223,9 +223,20 @@ def as_vector(letter: str) -> np.ndarray:
     return ALL_LETTERS[letter].flatten()
 
 
-def render(pattern: np.ndarray) -> str:
+def scale_pattern(mat: np.ndarray, k: int) -> np.ndarray:
+    """Upscale a GRID×GRID bipolar pattern to (GRID·k)×(GRID·k) via block replication."""
+    return np.kron(mat, np.ones((k, k), dtype=mat.dtype))
+
+
+def min_scale_factor(p: int, capacity: float = 0.138) -> int:
+    """Minimum k such that (GRID·k)² neurons satisfy the theoretical capacity limit for p patterns."""
+    import math
+    return math.ceil(math.sqrt(p / (capacity * GRID * GRID)))
+
+
+def render(pattern: np.ndarray, grid: int = GRID) -> str:
     rows = []
-    for row in pattern.reshape(GRID, GRID):
+    for row in pattern.reshape(grid, grid):
         rows.append(" ".join("*" if v > 0 else " " for v in row))
     return "\n".join(rows)
 
