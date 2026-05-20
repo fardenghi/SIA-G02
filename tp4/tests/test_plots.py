@@ -24,7 +24,7 @@ def trained():
     with open("configs/kohonen_europe.json") as f:
         cfg = json.load(f)
     cfg["epochs"] = 10
-    countries, X = load_data(cfg["data"])
+    countries, X, _ = load_data(cfg["data"])
     som, coords = run(cfg, X)
     assignments = build_assignments(countries, coords)
     return cfg, countries, X, som, coords, assignments
