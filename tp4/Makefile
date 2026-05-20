@@ -10,7 +10,12 @@ OJA_CONFIG ?= configs/oja_europe.json
 # --- Hopfield ---
 HOPFIELD_CONFIG ?= configs/hopfield.json
 
-.PHONY: all kohonen pca pca-plots pca-boxplots oja hopfield hopfield-alphabet test clean clean-kohonen clean-pca clean-oja clean-hopfield help
+# --- Analysis ---
+MIDDLE_THRESHOLD ?= 0.5
+
+.PHONY: all kohonen pca pca-plots pca-boxplots oja hopfield hopfield-alphabet \
+        compare standardization analysis \
+        test clean clean-kohonen clean-pca clean-oja clean-hopfield clean-analysis help
 
 all: kohonen pca oja hopfield
 
@@ -35,6 +40,17 @@ hopfield:
 hopfield-alphabet:
 	$(PYTHON) hopfield_letters.py --alphabet
 
+compare:
+	$(PYTHON) -m analysis.compare \
+	  --kohonen-config $(KOHONEN_CONFIG) \
+	  --middle-threshold $(MIDDLE_THRESHOLD)
+
+standardization:
+	$(PYTHON) -m analysis.standardization_experiment \
+	  --kohonen-config $(KOHONEN_CONFIG)
+
+analysis: compare standardization
+
 test:
 	$(PYTEST) -v
 
@@ -50,7 +66,10 @@ clean-oja:
 clean-hopfield:
 	rm -rf output/hopfield
 
-clean: clean-kohonen clean-pca clean-oja clean-hopfield
+clean-analysis:
+	rm -rf output/compare output/standardization
+
+clean: clean-kohonen clean-pca clean-oja clean-hopfield clean-analysis
 
 help:
 	@echo "Targets disponibles:"
@@ -64,10 +83,15 @@ help:
 	@echo "  make hopfield                           Ejecuta red de Hopfield (4 letras, config default)"
 	@echo "  make hopfield HOPFIELD_CONFIG=<path>    Ejecuta Hopfield con config alternativo"
 	@echo "  make hopfield-alphabet                  Experimento con alfabeto completo (A-Z, grilla adaptativa)"
+	@echo "  make compare                            Validación cruzada PCA vs Kohonen (Secciones 1.1, 1.2, 2.1)"
+	@echo "  make compare MIDDLE_THRESHOLD=0.8       Umbral personalizado para países 'promedio'"
+	@echo "  make standardization                    Experimento 2x2 estandarización vs datos crudos"
+	@echo "  make analysis                           Corre compare + standardization"
 	@echo "  make all                                Corre kohonen + pca + oja + hopfield"
 	@echo "  make test                               Corre la suite de tests"
 	@echo "  make clean-kohonen                      Borra output/kohonen/"
 	@echo "  make clean-pca                          Borra pca_test/plots/ y CSVs generados"
 	@echo "  make clean-oja                          Borra oja/output/oja/"
 	@echo "  make clean-hopfield                     Borra output/hopfield/"
+	@echo "  make clean-analysis                     Borra output/compare/ y output/standardization/"
 	@echo "  make clean                              Borra todo el output"
