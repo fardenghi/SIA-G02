@@ -1,3 +1,3 @@
-from .network import HopfieldNetwork
+from .hopfield import HopfieldNetwork
 
 __all__ = ["HopfieldNetwork"]

@@ -1,6 +1,6 @@
 # TP4 — Aprendizaje No Supervisado
 
-Implementaciones de Red de Kohonen (SOM) y Modelo de Oja sobre el dataset de países europeos.
+Implementaciones de Red de Kohonen (SOM), Modelo de Oja y Red de Hopfield sobre datasets europeos y patrones de letras.
 
 ## Dataset
 
@@ -77,89 +77,110 @@ uv run python pca_europe.py [--n-components N]
 
 ---
 
+## Análisis cruzado (Kohonen + PCA + Oja)
+
+Scripts en `analysis/` que se apoyan en los modelos anteriores.
+
+```bash
+make compare                              # Validación cruzada PCA vs Kohonen (Secciones 1.1, 1.2, 2.1)
+make compare MIDDLE_THRESHOLD=0.8         # umbral personalizado para países "promedio"
+make standardization                      # Experimento 2x2 estandarización vs datos crudos
+make analysis                             # corre compare + standardization
+```
+
+Salidas en `output/compare/` y `output/standardization/`.
+
 ---
 
-## Ejercicio 2 — Red de Hopfield
+## Ejercicio 2.1 — Modelo de Hopfield
 
-Implementación propia de una red de Hopfield para almacenar y recuperar patrones de letras sobre una grilla bipolar (+1/−1).
+Memoria asociativa que recupera patrones de letras 5×5 a partir de versiones ruidosas.
+El abecedario completo (A–Z) está definido en `hopfield/alphabet.py` como matrices de `{+1, −1}`.
 
 ### Uso
 
 ```bash
-# Análisis con 4 letras (Z, E, N, T) — configuración por defecto
-uv run python hopfield_letters.py --config configs/hopfield.json
+# parte (a) recuperación con ruido + (b) estado espúreo (elige el subset más ortogonal)
+make hopfield
 
-# Experimento con el alfabeto completo (A–Z) con grilla adaptativa
-uv run python hopfield_letters.py --alphabet
+# graficar un rango cualquiera de letras en grilla 5x5
+make hopfield-alphabet LET_START=C LET_END=H
+uv run python -m hopfield.plot_letters --start a --end z --output output/hopfield/abecedario.png
+
+# análisis de ortogonalidad para C(26, k) combinaciones
+make hopfield-orthogonality HOPFIELD_K=4
+
+# cómo varía la métrica de recall según la cantidad de patrones almacenados
+make hopfield-capacity
+make hopfield-capacity-adaptive           # idem comparando N fijo (5x5) vs N adaptativo
+
+# almacenar las 26 letras con escalado adaptativo (k=3, 15x15 = 225 neuronas)
+make hopfield-full-alphabet
 ```
 
 ### Configuración (`configs/hopfield.json`)
 
 | Parámetro | Descripción | Default |
 |---|---|---|
-| `letters` | Letras a almacenar | `["Z","E","N","T"]` |
-| `noise_level` | Fracción de bits invertidos para recuperación | `0.2` |
-| `max_iter` | Iteraciones máximas de convergencia | `20` |
+| `letters` | Letras a almacenar. Si es `null`, se elige el subconjunto de tamaño `k` más ortogonal | `null` |
+| `k` | Tamaño del subconjunto a elegir cuando `letters` es `null` | `4` |
+| `noise` | Fracción de bits invertidos en la parte (a) | `0.15` |
+| `high_noise` | Fracción de bits invertidos en la parte (b) | `0.40` |
+| `mode` | `sync` o `async` | `sync` |
+| `max_steps` | Máximo de iteraciones por consulta | `50` |
+| `spurious_attempts` | Intentos para encontrar un estado espúreo | `10` |
+| `noise_levels_analysis` | Barrido de ruido para `recovery_rate.png` | `[0.0 … 0.5]` |
+| `n_trials` | Ensayos por nivel de ruido | `50` |
 | `seed` | Semilla aleatoria | `42` |
-| `noise_levels_analysis` | Barrido de ruido para análisis de tasa | `[0.0 … 0.5]` |
-| `n_trials` | Ensayos por nivel de ruido | `100` |
-| `spurious_noise_level` | Ruido para buscar estados espúreos | `0.5` |
+| `output_dir` | Directorio de salida | `output/hopfield` |
 
 ### Salida — modo estándar (`output/hopfield/`)
 
 | Archivo | Descripción |
 |---|---|
-| `recovery_<X>.png` | Recuperación paso a paso de la letra X desde versión ruidosa |
-| `energy_<X>.png` | Evolución de la energía H durante la convergencia de X |
-| `recovery_rate.png` | Tasa de recuperación vs nivel de ruido por letra |
-| `crosstalk.png` | Matriz de correlación normalizada entre patrones almacenados |
-| `spurious_state.png` | Estado espúreo identificado vs patrones almacenados |
-
-### Salida — modo alfabeto (`output/hopfield/alphabet/`)
-
-| Archivo | Descripción |
-|---|---|
-| `crosstalk_alphabet.png` | Matriz de correlación para las 26 letras |
-| `capacity_experiment.png` | Tasa de recuperación vs p: N fijo (5×5) vs N adaptativo |
+| `recall_a_<L>.png` | Evolución paso a paso para cada letra almacenada (parte a) |
+| `recall_b_try*_<L>.png` | Intentos con ruido alto buscando estado espúreo (parte b) |
+| `energy_a_<L>.png` | Energía H vs iteración durante la convergencia de L |
+| `crosstalk.png` | Correlación normalizada `xi·xj / N` entre patrones almacenados |
+| `recovery_rate.png` | Tasa de recuperación vs nivel de ruido, una curva por letra |
+| `orthogonality/dot_heatmap.png` | Matriz 26×26 de \|⟨xi,xj⟩\| entre todas las letras |
+| `orthogonality/combos_k<k>.csv` | Todas las combinaciones C(26,k) con su `max_abs_dot` y `mean_abs_dot` |
+| `orthogonality/top_bottom_k<k>.png` | Mejores y peores subconjuntos según ortogonalidad |
+| `capacity/accuracy_vs_n.png` | Recall accuracy vs N de patrones almacenados |
+| `capacity/spurious_vs_n.png` | Tasa de estados espúreos vs N |
+| `capacity/hamming_vs_n.png` | Hamming promedio al patrón original vs N |
+| `capacity/fixed_vs_adaptive.png` | Recall N fijo vs N adaptativo (con `--adaptive`) |
+| `capacity/capacity.csv` | Métricas para cada combinación de modo / N / ruido |
+| `alphabet/crosstalk_alphabet.png` | Crosstalk de las 26 letras (modo `--alphabet`) |
+| `alphabet/recovery_rate_alphabet.png` | Curvas de recall por letra (modo `--alphabet`) |
 
 ### Metodología
 
-**Entrenamiento (regla de Hebb):**
+**Regla de Hebb:**
 
 $$W_{ij} = \frac{1}{N} \sum_{\mu} \xi_i^\mu \xi_j^\mu, \quad W_{ii} = 0$$
 
-Los pesos se calculan solo sobre el triángulo superior y se copian por simetría.
+**Recuperación síncrona:** `s(t+1) = sgn(W s(t))`. Se detecta tanto la convergencia (estado fijo) como el ciclo de período 2 típico del modo síncrono.
 
-**Actualización síncrona:**
+**Recuperación asíncrona:** cada neurona se actualiza una a una en orden aleatorio.
 
-$$S_i(t+1) = \text{sign}\!\left(\sum_j W_{ij} S_j(t)\right)$$
+**Energía:** `E = −½ sᵀ W s`, monótonamente no creciente bajo update asíncrono.
 
-La red converge cuando ningún nodo cambia entre iteraciones.
+**Estado espúreo:** punto fijo distinto a todos los patrones almacenados (y a sus complementos).
 
-**Función de energía:**
-
-$$H = -\sum_{j>i} W_{ij} S_i S_j$$
-
-La energía es no-creciente a lo largo de la dinámica.
-
-### Análisis (4 letras Z, E, N, T)
-
-- p=4, N=25 → p/N=0.16, ligeramente por encima del límite teórico (≈0.138).
-- Alta correlación entre patrones: Z·E=0.44, Z·T=0.36 → crosstalk significativo.
-- T se recupera solo ~46% de las veces con 10% de ruido; Z es la más robusta.
-- Estado espúreo encontrado con energía −12.48 (igual a N), originado desde perturbaciones de Z.
+**Elección del subconjunto:** se barren las **C(26, 4) = 14 950** combinaciones y se elige la que minimiza `max |⟨xi, xj⟩|`. Para 5×5 = 25 dimensiones, el óptimo es **`GRTV`** con `max|⟨·,·⟩| = 1` (prácticamente ortogonal).
 
 ### Escalado adaptativo del alfabeto completo
 
-Con p=26 letras y N=25 la red colapsa (p/N=1.04 ≫ 0.138). La grilla se puede escalar automáticamente con factor k tal que (5k)² × 0.138 ≥ p:
+Con p=26 y N=25 la red colapsa (p/N ≈ 1.04 ≫ 0.138). Vía `np.kron` se replica cada bit en un bloque k×k y la grilla pasa a (5k)×(5k), con k = ⌈√(p / (0.138·25))⌉:
 
 | p | k | N = (5k)² | p/N |
 |---|---|---|---|
 | ≤ 3 | 1 | 25 | ≤ 0.12 |
 | 4–13 | 2 | 100 | ≤ 0.13 |
-| 14–31 | 3 | 225 | ≤ 0.138 |
+| 14–31 | 3 | 225 | ≤ 0.116 |
 
-Con k=3 (15×15=225 neuronas) la red queda dentro del límite de capacidad (p/N=0.116). H, O, B, U, N recuperan bien; las letras visualmente similares (A/H, C/G/O, E/F) siguen siendo afectadas por crosstalk, no por capacidad.
+Con k=3 (225 neuronas) la red queda dentro del límite teórico; las letras visualmente similares (A/H, C/G/O, E/F) siguen interfiriéndose por **crosstalk**, no por capacidad.
 
 ---
 
@@ -169,4 +190,4 @@ Con k=3 (15×15=225 neuronas) la red queda dentro del límite de capacidad (p/N=
 uv run pytest
 ```
 
-Cubre red de Hopfield (pesos, convergencia, energía, patrones, escalado adaptativo), SOM, config y gráficos.
+Cubre red de Hopfield (pesos de Hebb verificados contra el ejemplo de las diapositivas, sync + async, ciclos, complemento como atractor, escalado adaptativo, ortogonalidad), SOM, regla de Oja, PCA y config (>100 tests).
