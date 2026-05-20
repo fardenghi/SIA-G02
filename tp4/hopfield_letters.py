@@ -5,10 +5,15 @@ import os
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import numpy as np
 
 from hopfield.network import HopfieldNetwork
 from hopfield.patterns import GRID, LETTERS, add_noise, as_vector, identify
+
+_CMAP = mcolors.LinearSegmentedColormap.from_list(
+    "hopfield", ["#F5F0E8", "#1E3A5F"]  # cream (inactive) → dark blue (active)
+)
 
 
 def _build_net(letter_names: list[str]) -> tuple[HopfieldNetwork, dict[str, np.ndarray]]:
@@ -22,7 +27,7 @@ def _build_net(letter_names: list[str]) -> tuple[HopfieldNetwork, dict[str, np.n
 
 def _pattern_ax(ax, pattern: np.ndarray, title: str) -> None:
     grid = pattern.reshape(GRID, GRID)
-    ax.imshow(grid, cmap="RdYlGn", vmin=-1, vmax=1, interpolation="nearest")
+    ax.imshow(grid, cmap=_CMAP, vmin=-1, vmax=1, interpolation="nearest")
     ax.set_title(title, fontsize=8)
     ax.set_xticks([])
     ax.set_yticks([])
