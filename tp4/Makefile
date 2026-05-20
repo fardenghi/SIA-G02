@@ -13,9 +13,13 @@ HOPFIELD_K      ?= 4
 LET_START       ?= A
 LET_END         ?= Z
 
+# --- Analysis ---
+MIDDLE_THRESHOLD ?= 0.5
+
 .PHONY: all kohonen pca pca-plots pca-boxplots oja hopfield hopfield-alphabet \
-	hopfield-orthogonality hopfield-capacity test clean clean-kohonen \
-	clean-pca clean-oja clean-hopfield help
+	hopfield-orthogonality hopfield-capacity hopfield-capacity-adaptive \
+	compare standardization analysis \
+	test clean clean-kohonen clean-pca clean-oja clean-hopfield clean-analysis help
 
 all: kohonen pca oja hopfield
 
@@ -40,11 +44,28 @@ hopfield:
 hopfield-alphabet:
 	$(PYTHON) -m hopfield.plot_letters --start $(LET_START) --end $(LET_END)
 
+hopfield-full-alphabet:
+	$(PYTHON) -m hopfield.hopfield_runner --config $(HOPFIELD_CONFIG) --alphabet
+
 hopfield-orthogonality:
 	$(PYTHON) -m hopfield.orthogonality --k $(HOPFIELD_K)
 
 hopfield-capacity:
 	$(PYTHON) -m hopfield.capacity
+
+hopfield-capacity-adaptive:
+	$(PYTHON) -m hopfield.capacity --adaptive
+
+compare:
+	$(PYTHON) -m analysis.compare \
+	  --kohonen-config $(KOHONEN_CONFIG) \
+	  --middle-threshold $(MIDDLE_THRESHOLD)
+
+standardization:
+	$(PYTHON) -m analysis.standardization_experiment \
+	  --kohonen-config $(KOHONEN_CONFIG)
+
+analysis: compare standardization
 
 test:
 	$(PYTEST) -v
@@ -61,25 +82,35 @@ clean-oja:
 clean-hopfield:
 	rm -rf output/hopfield
 
-clean: clean-kohonen clean-pca clean-oja clean-hopfield
+clean-analysis:
+	rm -rf output/compare output/standardization
+
+clean: clean-kohonen clean-pca clean-oja clean-hopfield clean-analysis
 
 help:
 	@echo "Targets disponibles:"
-	@echo "  make kohonen                          Entrena SOM con config default"
-	@echo "  make kohonen KOHONEN_CONFIG=<path>    Entrena SOM con config alternativo"
-	@echo "  make pca                              PCA completo (analisis + plots + boxplots)"
-	@echo "  make pca-plots                        Solo variance, biplot y ranking"
-	@echo "  make pca-boxplots                     Solo boxplots pre/post estandarizacion"
-	@echo "  make oja                              Entrena Oja con config default"
-	@echo "  make oja OJA_CONFIG=<path>            Entrena Oja con config alternativo"
-	@echo "  make hopfield                         Corre Hopfield (parte a + b)"
+	@echo "  make kohonen                              Entrena SOM con config default"
+	@echo "  make kohonen KOHONEN_CONFIG=<path>        Entrena SOM con config alternativo"
+	@echo "  make pca                                  PCA completo (analisis + plots + boxplots)"
+	@echo "  make pca-plots                            Solo variance, biplot y ranking"
+	@echo "  make pca-boxplots                         Solo boxplots pre/post estandarizacion"
+	@echo "  make oja                                  Entrena Oja con config default"
+	@echo "  make oja OJA_CONFIG=<path>                Entrena Oja con config alternativo"
+	@echo "  make hopfield                             Hopfield: parte (a) recall + (b) espureo"
 	@echo "  make hopfield-alphabet LET_START=C LET_END=H   Grafica letras en grilla"
-	@echo "  make hopfield-orthogonality HOPFIELD_K=4       Analisis de ortogonalidad"
-	@echo "  make hopfield-capacity                Metrica vs cantidad de patrones"
-	@echo "  make all                              Corre kohonen + pca + oja + hopfield"
-	@echo "  make test                             Corre la suite de tests"
-	@echo "  make clean-kohonen                    Borra output/kohonen/"
-	@echo "  make clean-pca                        Borra pca_test/plots/ y CSVs generados"
-	@echo "  make clean-oja                        Borra oja/output/oja/"
-	@echo "  make clean-hopfield                   Borra output/hopfield/"
-	@echo "  make clean                            Borra todo el output"
+	@echo "  make hopfield-full-alphabet               Almacena las 26 letras con escalado adaptativo (k=3)"
+	@echo "  make hopfield-orthogonality HOPFIELD_K=4  Analisis de ortogonalidad C(26,k)"
+	@echo "  make hopfield-capacity                    Metrica vs cantidad de patrones (N fijo)"
+	@echo "  make hopfield-capacity-adaptive           Idem con barrido extra usando N adaptativo"
+	@echo "  make compare                              Validacion cruzada PCA vs Kohonen"
+	@echo "  make compare MIDDLE_THRESHOLD=0.8         Umbral personalizado para paises promedio"
+	@echo "  make standardization                      Experimento 2x2 estandarizacion vs datos crudos"
+	@echo "  make analysis                             Corre compare + standardization"
+	@echo "  make all                                  Corre kohonen + pca + oja + hopfield"
+	@echo "  make test                                 Corre la suite de tests"
+	@echo "  make clean-kohonen                        Borra output/kohonen/"
+	@echo "  make clean-pca                            Borra pca_test/plots/ y CSVs generados"
+	@echo "  make clean-oja                            Borra oja/output/oja/"
+	@echo "  make clean-hopfield                       Borra output/hopfield/"
+	@echo "  make clean-analysis                       Borra output/compare/ y output/standardization/"
+	@echo "  make clean                                Borra todo el output"

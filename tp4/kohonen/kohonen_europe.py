@@ -12,12 +12,13 @@ from sklearn.preprocessing import StandardScaler
 from kohonen.som import SOM
 
 
-def load_data(path: str) -> tuple[list[str], np.ndarray]:
+def load_data(path: str) -> tuple[list[str], np.ndarray, list[str]]:
     df = pd.read_csv(path)
     countries = df["Country"].tolist()
-    X = df.drop(columns=["Country"]).to_numpy(dtype=float)
-    X_scaled = StandardScaler().fit_transform(X)
-    return countries, X_scaled
+    feature_df = df.drop(columns=["Country"])
+    feature_names = feature_df.columns.tolist()
+    X_scaled = StandardScaler().fit_transform(feature_df.to_numpy(dtype=float))
+    return countries, X_scaled, feature_names
 
 
 def run(cfg: dict, X: np.ndarray) -> tuple[SOM, np.ndarray]:
@@ -120,6 +121,27 @@ def plot_hit_map(
     plt.close(fig)
 
 
+def plot_component_planes(som: SOM, feature_names: list[str], path: str) -> None:
+    n = len(feature_names)
+    ncols = 4
+    nrows = (n + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * 3, nrows * 2.8))
+    axes = np.array(axes).ravel()
+    for i, name in enumerate(feature_names):
+        plane = som.weights[:, :, i]
+        im = axes[i].imshow(plane, cmap="RdBu_r", interpolation="nearest")
+        plt.colorbar(im, ax=axes[i], fraction=0.046, pad=0.04)
+        axes[i].set_title(name, fontsize=9)
+        axes[i].set_xticks([])
+        axes[i].set_yticks([])
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+    fig.suptitle("Planos de Componentes — Red de Kohonen", fontsize=11)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
 def print_assignments(assignments: dict[tuple, list[str]], grid_rows: int, grid_cols: int) -> None:
     print("\nAsignación de países por neurona:")
     print(f"{'Neurona':<12} {'Países'}")
@@ -143,7 +165,7 @@ def main():
 
     os.makedirs(cfg["output_dir"], exist_ok=True)
 
-    countries, X = load_data(cfg["data"])
+    countries, X, feature_names = load_data(cfg["data"])
     som, coords = run(cfg, X)
     assignments = build_assignments(countries, coords)
     print_assignments(assignments, cfg["grid_rows"], cfg["grid_cols"])
@@ -162,6 +184,7 @@ def main():
     plot_u_matrix(som, os.path.join(out, "u_matrix.png"))
     plot_hit_map(assignments, cfg["grid_rows"], cfg["grid_cols"],
                  len(countries), os.path.join(out, "hit_map.png"))
+    plot_component_planes(som, feature_names, os.path.join(out, "component_planes.png"))
 
     print(f"\nGráficos guardados en {out}/")
 
