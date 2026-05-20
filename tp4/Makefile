@@ -10,7 +10,7 @@ PCA_N ?= 1
 # --- Hopfield ---
 HOPFIELD_CONFIG ?= configs/hopfield.json
 
-.PHONY: all kohonen pca hopfield test clean clean-kohonen clean-pca clean-hopfield help
+.PHONY: all kohonen pca hopfield hopfield-alphabet test clean clean-kohonen clean-pca clean-hopfield help
 
 all: kohonen pca hopfield
 
@@ -22,6 +22,9 @@ pca:
 
 hopfield:
 	$(PYTHON) hopfield_letters.py --config $(HOPFIELD_CONFIG)
+
+hopfield-alphabet:
+	$(PYTHON) hopfield_letters.py --alphabet
 
 test:
 	$(PYTEST) -v
@@ -43,8 +46,9 @@ help:
 	@echo "  make kohonen KOHONEN_CONFIG=<path>      Entrena SOM con config alternativo"
 	@echo "  make pca                                PCA con 1 componente"
 	@echo "  make pca PCA_N=3                        PCA con N componentes"
-	@echo "  make hopfield                           Ejecuta red de Hopfield con config default"
+	@echo "  make hopfield                           Ejecuta red de Hopfield (4 letras, config default)"
 	@echo "  make hopfield HOPFIELD_CONFIG=<path>    Ejecuta Hopfield con config alternativo"
+	@echo "  make hopfield-alphabet                  Experimento con alfabeto completo (A-Z, grilla adaptativa)"
 	@echo "  make all                                Corre kohonen + pca + hopfield"
 	@echo "  make test                               Corre la suite de tests"
 	@echo "  make clean-kohonen                      Borra output/kohonen/"

@@ -77,10 +77,96 @@ uv run python pca_europe.py [--n-components N]
 
 ---
 
+---
+
+## Ejercicio 2 — Red de Hopfield
+
+Implementación propia de una red de Hopfield para almacenar y recuperar patrones de letras sobre una grilla bipolar (+1/−1).
+
+### Uso
+
+```bash
+# Análisis con 4 letras (Z, E, N, T) — configuración por defecto
+uv run python hopfield_letters.py --config configs/hopfield.json
+
+# Experimento con el alfabeto completo (A–Z) con grilla adaptativa
+uv run python hopfield_letters.py --alphabet
+```
+
+### Configuración (`configs/hopfield.json`)
+
+| Parámetro | Descripción | Default |
+|---|---|---|
+| `letters` | Letras a almacenar | `["Z","E","N","T"]` |
+| `noise_level` | Fracción de bits invertidos para recuperación | `0.2` |
+| `max_iter` | Iteraciones máximas de convergencia | `20` |
+| `seed` | Semilla aleatoria | `42` |
+| `noise_levels_analysis` | Barrido de ruido para análisis de tasa | `[0.0 … 0.5]` |
+| `n_trials` | Ensayos por nivel de ruido | `100` |
+| `spurious_noise_level` | Ruido para buscar estados espúreos | `0.5` |
+
+### Salida — modo estándar (`output/hopfield/`)
+
+| Archivo | Descripción |
+|---|---|
+| `recovery_<X>.png` | Recuperación paso a paso de la letra X desde versión ruidosa |
+| `energy_<X>.png` | Evolución de la energía H durante la convergencia de X |
+| `recovery_rate.png` | Tasa de recuperación vs nivel de ruido por letra |
+| `crosstalk.png` | Matriz de correlación normalizada entre patrones almacenados |
+| `spurious_state.png` | Estado espúreo identificado vs patrones almacenados |
+
+### Salida — modo alfabeto (`output/hopfield/alphabet/`)
+
+| Archivo | Descripción |
+|---|---|
+| `crosstalk_alphabet.png` | Matriz de correlación para las 26 letras |
+| `capacity_experiment.png` | Tasa de recuperación vs p: N fijo (5×5) vs N adaptativo |
+
+### Metodología
+
+**Entrenamiento (regla de Hebb):**
+
+$$W_{ij} = \frac{1}{N} \sum_{\mu} \xi_i^\mu \xi_j^\mu, \quad W_{ii} = 0$$
+
+Los pesos se calculan solo sobre el triángulo superior y se copian por simetría.
+
+**Actualización síncrona:**
+
+$$S_i(t+1) = \text{sign}\!\left(\sum_j W_{ij} S_j(t)\right)$$
+
+La red converge cuando ningún nodo cambia entre iteraciones.
+
+**Función de energía:**
+
+$$H = -\sum_{j>i} W_{ij} S_i S_j$$
+
+La energía es no-creciente a lo largo de la dinámica.
+
+### Análisis (4 letras Z, E, N, T)
+
+- p=4, N=25 → p/N=0.16, ligeramente por encima del límite teórico (≈0.138).
+- Alta correlación entre patrones: Z·E=0.44, Z·T=0.36 → crosstalk significativo.
+- T se recupera solo ~46% de las veces con 10% de ruido; Z es la más robusta.
+- Estado espúreo encontrado con energía −12.48 (igual a N), originado desde perturbaciones de Z.
+
+### Escalado adaptativo del alfabeto completo
+
+Con p=26 letras y N=25 la red colapsa (p/N=1.04 ≫ 0.138). La grilla se puede escalar automáticamente con factor k tal que (5k)² × 0.138 ≥ p:
+
+| p | k | N = (5k)² | p/N |
+|---|---|---|---|
+| ≤ 3 | 1 | 25 | ≤ 0.12 |
+| 4–13 | 2 | 100 | ≤ 0.13 |
+| 14–31 | 3 | 225 | ≤ 0.138 |
+
+Con k=3 (15×15=225 neuronas) la red queda dentro del límite de capacidad (p/N=0.116). H, O, B, U, N recuperan bien; las letras visualmente similares (A/H, C/G/O, E/F) siguen siendo afectadas por crosstalk, no por capacidad.
+
+---
+
 ## Tests
 
 ```bash
 uv run pytest
 ```
 
-Cubre inicialización del SOM, BMU, funciones de vecindad, decaimiento, entrenamiento, U-matrix, validación del config y generación de gráficos (47 tests).
+Cubre red de Hopfield (pesos, convergencia, energía, patrones, escalado adaptativo), SOM, config y gráficos.
