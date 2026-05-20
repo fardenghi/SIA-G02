@@ -25,8 +25,8 @@ class SOM:
         self.neighborhood_fn = neighborhood_fn
         self.epochs = epochs
 
-        rng = np.random.default_rng(seed)
-        self.weights = rng.standard_normal((grid_rows, grid_cols, input_dim))
+        self._rng = np.random.default_rng(seed)
+        self.weights = self._rng.standard_normal((grid_rows, grid_cols, input_dim))
 
         # precompute grid coordinate arrays for vectorised distance calculations
         rows_idx, cols_idx = np.meshgrid(np.arange(grid_rows), np.arange(grid_cols), indexing="ij")
@@ -62,8 +62,9 @@ class SOM:
 
     def _decay(self, value: float, t: int, T: int, mode: str) -> float:
         if mode == "exponential":
-            tau = T / np.log(value + 1e-12) if False else T  # τ = T for simplicity
-            return value * np.exp(-t / T)
+            # τ = T/log(σ₀) cuando value > 1 (radio), τ = T para learning rate
+            tau = T / np.log(value) if value > 1 else T
+            return value * np.exp(-t / tau)
         # linear
         return value * (1 - t / T)
 
@@ -72,6 +73,11 @@ class SOM:
     # ------------------------------------------------------------------
 
     def train(self, X: np.ndarray) -> None:
+        # inicialización con muestras aleatorias del dataset
+        n_neurons = self.grid_rows * self.grid_cols
+        sample_idx = self._rng.choice(len(X), size=n_neurons, replace=True)
+        self.weights = X[sample_idx].reshape(self.grid_rows, self.grid_cols, self.input_dim).copy()
+
         T = self.epochs
         for t in range(T):
             lr_t = self._decay(self.lr, t, T, self.lr_decay)
@@ -79,9 +85,7 @@ class SOM:
             # clamp sigma to avoid division by zero in gaussian
             sigma_t = max(sigma_t, 1e-6)
 
-            # shuffle presentation order each epoch
-            idx = np.random.permutation(len(X))
-            for i in idx:
+            for i in self._rng.permutation(len(X)):
                 x = X[i]
                 bmu = self._find_bmu(x)
                 h = self._neighborhood(bmu, sigma_t, self.neighborhood_fn)  # (R, C)

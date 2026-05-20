@@ -1,2 +1,3 @@
-data
 output
+/pca_test/pca_scores.csv
+/pca_test/europe_standardized.csv
