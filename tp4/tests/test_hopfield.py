@@ -199,3 +199,48 @@ def test_low_noise_recovers_correct_letter():
         noisy = add_noise(v, noise_level=0.1, rng=rng)
         result, _ = net.predict(noisy)
         assert identify(result, stored) == name
+
+
+# --- spurious states ---
+
+def test_spurious_state_is_stable():
+    """A spurious state found from a noisy query must be a fixed point."""
+    from hopfield_letters import find_spurious
+    net, _, stored = four_letter_net()
+    spurious, _ = find_spurious(
+        net, stored,
+        noise_level=0.5,
+        n_trials=500,
+        rng=np.random.default_rng(44),
+    )
+    if spurious is None:
+        pytest.skip("No spurious state found with this seed")
+    result, history = net.predict(spurious.copy())
+    np.testing.assert_array_equal(result, spurious)
+    assert len(history) == 1
+
+
+def test_spurious_state_differs_from_all_stored():
+    from hopfield_letters import find_spurious
+    net, _, stored = four_letter_net()
+    spurious, _ = find_spurious(
+        net, stored,
+        noise_level=0.5,
+        n_trials=500,
+        rng=np.random.default_rng(44),
+    )
+    if spurious is None:
+        pytest.skip("No spurious state found with this seed")
+    assert identify(spurious, stored) is None
+
+
+def test_energy_non_increasing_letter_recovery():
+    net, _, stored = four_letter_net()
+    rng = np.random.default_rng(3)
+    for name in ["Z", "N"]:
+        v = stored[name]
+        noisy = add_noise(v, noise_level=0.2, rng=rng)
+        _, history = net.predict(noisy)
+        energies = [net.energy(s) for s in history]
+        for i in range(len(energies) - 1):
+            assert energies[i + 1] <= energies[i] + 1e-10
