@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from hopfield.network import HopfieldNetwork
-from hopfield.patterns import LETTERS, GRID, as_vector, render, add_noise, identify
+from hopfield.patterns import ALL_LETTERS, LETTERS, GRID, as_vector, render, add_noise, identify
 
 
 # --- helpers ---
@@ -244,3 +244,91 @@ def test_energy_non_increasing_letter_recovery():
         energies = [net.energy(s) for s in history]
         for i in range(len(energies) - 1):
             assert energies[i + 1] <= energies[i] + 1e-10
+
+
+# --- ALL_LETTERS (full alphabet) ---
+
+def test_all_letters_count():
+    assert len(ALL_LETTERS) == 26
+
+
+def test_all_letters_covers_alphabet():
+    assert set(ALL_LETTERS.keys()) == set("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+def test_all_letters_shapes():
+    for name, mat in ALL_LETTERS.items():
+        assert mat.shape == (GRID, GRID), f"{name} has wrong shape"
+
+
+def test_all_letters_values_bipolar():
+    for name, mat in ALL_LETTERS.items():
+        assert set(mat.flatten().tolist()) <= {1.0, -1.0}, f"{name} has non-bipolar values"
+
+
+def test_all_letters_consistent_with_letters():
+    """ALL_LETTERS must agree with LETTERS for the 4 original patterns."""
+    for name in LETTERS:
+        np.testing.assert_array_equal(
+            ALL_LETTERS[name], LETTERS[name],
+            err_msg=f"ALL_LETTERS['{name}'] differs from LETTERS['{name}']",
+        )
+
+
+def test_all_letters_network_is_deterministic():
+    """With 26 patterns (p/N ≈ 1.04 >> capacity), the network is overloaded.
+    Stored patterns may not be fixed points (synchronous update can produce
+    period-2 cycles), but predict() must be deterministic: same input → same output.
+    """
+    net = HopfieldNetwork()
+    patterns = np.array([mat.flatten() for mat in ALL_LETTERS.values()])
+    net.train(patterns)
+    stored = {name: mat.flatten() for name, mat in ALL_LETTERS.items()}
+    for name, v in stored.items():
+        result1, _ = net.predict(v.copy())
+        result2, _ = net.predict(v.copy())
+        np.testing.assert_array_equal(result1, result2, err_msg=f"predict('{name}') is not deterministic")
+
+
+def test_all_letters_energy_non_increasing():
+    """Energy must be non-increasing during convergence for the full-alphabet network."""
+    net = HopfieldNetwork()
+    patterns = np.array([mat.flatten() for mat in ALL_LETTERS.values()])
+    net.train(patterns)
+    rng = np.random.default_rng(7)
+    for name in ["A", "M", "Z"]:
+        v = ALL_LETTERS[name].flatten()
+        noisy = add_noise(v, noise_level=0.2, rng=rng)
+        _, history = net.predict(noisy)
+        energies = [net.energy(s) for s in history]
+        for i in range(len(energies) - 1):
+            assert energies[i + 1] <= energies[i] + 1e-10, f"Energy increased at step {i} for '{name}'"
+
+
+def test_all_letters_capacity_degradation():
+    """Recovery rate must drop significantly once p >> 0.138·N (N=25 → limit ≈ 3.5)."""
+    N = GRID * GRID
+    names = sorted(ALL_LETTERS.keys())
+    rng = np.random.default_rng(99)
+    noise = 0.1
+    n_trials = 50
+
+    def recovery_rate(letter_subset: list[str]) -> float:
+        net = HopfieldNetwork()
+        stored = {n: ALL_LETTERS[n].flatten() for n in letter_subset}
+        net.train(np.array(list(stored.values())))
+        correct = total = 0
+        for name in letter_subset:
+            v = stored[name]
+            for _ in range(n_trials):
+                result, _ = net.predict(add_noise(v, noise, rng))
+                if identify(result, stored) == name:
+                    correct += 1
+                total += 1
+        return correct / total
+
+    rate_small = recovery_rate(names[:3])   # p=3, well within capacity
+    rate_large = recovery_rate(names[:26])  # p=26, far beyond capacity
+    assert rate_small > rate_large, (
+        f"Expected degradation: small={rate_small:.2f} should > large={rate_large:.2f}"
+    )

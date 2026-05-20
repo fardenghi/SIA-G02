@@ -9,7 +9,7 @@ import matplotlib.colors as mcolors
 import numpy as np
 
 from hopfield.network import HopfieldNetwork
-from hopfield.patterns import GRID, LETTERS, add_noise, as_vector, identify
+from hopfield.patterns import ALL_LETTERS, GRID, LETTERS, add_noise, as_vector, identify
 
 _CMAP = mcolors.LinearSegmentedColormap.from_list(
     "hopfield", ["#F5F0E8", "#1E3A5F"]  # cream (inactive) → dark blue (active)
@@ -187,9 +187,57 @@ def plot_spurious(
 
 # --- main ---
 
+def plot_capacity_experiment(
+    letter_names: list[str],
+    noise_levels: list[float],
+    n_trials: int,
+    seed: int,
+    out_path: str,
+) -> None:
+    """Recovery rate for each subset size p = 1..len(letter_names), at fixed noise."""
+    N = GRID * GRID
+    subset_sizes = list(range(1, len(letter_names) + 1))
+    capacity_limit = 0.138 * N  # theoretical ≈ 0.138·N
+
+    mean_rates: list[float] = []
+    for p in subset_sizes:
+        names = letter_names[:p]
+        net, stored = _build_net(names)
+        rng = np.random.default_rng(seed)
+        total = 0
+        correct = 0
+        for noise in noise_levels:
+            for name in names:
+                v = stored[name]
+                for _ in range(n_trials):
+                    result, _ = net.predict(add_noise(v, noise, rng))
+                    if identify(result, stored) == name:
+                        correct += 1
+                    total += 1
+        mean_rates.append(correct / total)
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(subset_sizes, mean_rates, marker="o", linewidth=2, color="#1E3A5F")
+    ax.axvline(x=capacity_limit, color="red", linestyle="--", linewidth=1.5,
+               label=f"Límite teórico (0.138·N ≈ {capacity_limit:.1f})")
+    ax.set_xlabel("Cantidad de patrones almacenados (p)")
+    ax.set_ylabel("Tasa de recuperación media")
+    ax.set_title("Capacidad de la red de Hopfield (N=25)")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    ax.set_ylim(-0.05, 1.05)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/hopfield.json")
+    parser.add_argument(
+        "--alphabet", action="store_true",
+        help="Use the full 26-letter alphabet and run capacity experiment",
+    )
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -199,8 +247,44 @@ def main() -> None:
     os.makedirs(out_dir, exist_ok=True)
 
     rng = np.random.default_rng(cfg["seed"])
-    letter_names: list[str] = cfg["letters"]
 
+    if args.alphabet:
+        letter_names = sorted(ALL_LETTERS.keys())
+        out_dir = "output/hopfield/alphabet"
+        os.makedirs(out_dir, exist_ok=True)
+        print(f"Modo alfabeto completo: {len(letter_names)} letras")
+        net, stored = _build_net(letter_names)
+        p, N = len(letter_names), GRID * GRID
+        print(f"p={p}, N={N}, p/N={p/N:.3f}  (límite teórico ≈ 0.138)")
+
+        plot_crosstalk(stored, os.path.join(out_dir, "crosstalk_alphabet.png"))
+        print("Matriz de correlación del alfabeto guardada.")
+
+        plot_capacity_experiment(
+            letter_names,
+            cfg["noise_levels_analysis"][:5],
+            cfg["n_trials"] // 5,
+            cfg["seed"],
+            os.path.join(out_dir, "capacity_experiment.png"),
+        )
+        print("Experimento de capacidad guardado.")
+
+        print("\nTasa de recuperación por letra con 10% de ruido:")
+        rng2 = np.random.default_rng(cfg["seed"] + 1)
+        for name in letter_names:
+            v = stored[name]
+            correct = sum(
+                identify(net.predict(add_noise(v, 0.1, rng2))[0], stored) == name
+                for _ in range(cfg["n_trials"])
+            )
+            rate = correct / cfg["n_trials"]
+            bar = "#" * int(rate * 20)
+            print(f"  {name}: {rate:.2f}  [{bar:<20}]")
+
+        print(f"\nTodos los plots guardados en {out_dir}/")
+        return
+
+    letter_names = cfg["letters"]
     net, stored = _build_net(letter_names)
 
     print("Patrones almacenados:")
