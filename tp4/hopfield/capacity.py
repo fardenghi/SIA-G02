@@ -23,7 +23,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from hopfield.alphabet import ALPHABET, LETTERS, letter_vector
+from hopfield.alphabet import (
+    ALPHABET, GRID, HOPFIELD_CAPACITY, LETTERS,
+    letter_vector, min_scale_factor, scaled_letter_vector,
+)
 from hopfield.hopfield import HopfieldNetwork, add_noise
 from hopfield.orthogonality import pairwise_dot_matrix, rank_combinations
 
@@ -38,8 +41,9 @@ def evaluate_set(
     n_trials: int,
     max_steps: int,
     rng: np.random.Generator,
+    scale: int = 1,
 ) -> dict:
-    patterns = np.stack([letter_vector(c) for c in letters])
+    patterns = np.stack([scaled_letter_vector(c, scale) for c in letters])
     net = HopfieldNetwork(n_units=patterns.shape[1])
     net.store(patterns)
 
@@ -62,6 +66,8 @@ def evaluate_set(
                 total += 1
         rows.append({
             "n_patterns": len(letters),
+            "scale": scale,
+            "n_units": patterns.shape[1],
             "noise": noise,
             "recall_accuracy": recall_hits / total,
             "spurious_rate": spurious_hits / total,
@@ -92,6 +98,7 @@ def run_sweep(
     n_trials: int,
     max_steps: int,
     seed: int,
+    adaptive: bool = False,
 ) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     dot = pairwise_dot_matrix()
@@ -99,7 +106,9 @@ def run_sweep(
     for mode in modes:
         for k in range(1, k_max + 1):
             letters = pick_combo(k, mode, dot, rng)
-            rows = evaluate_set(letters, noise_levels, n_trials, max_steps, rng)
+            scale = min_scale_factor(k) if adaptive else 1
+            rows = evaluate_set(letters, noise_levels, n_trials, max_steps,
+                                rng, scale=scale)
             for r in rows:
                 r["mode"] = mode
                 r["letters"] = "".join(letters)
@@ -159,6 +168,44 @@ def plot_spurious_vs_n(df: pd.DataFrame, output_dir: str) -> None:
     plt.close(fig)
 
 
+def plot_fixed_vs_adaptive(
+    df_fixed: pd.DataFrame,
+    df_adaptive: pd.DataFrame,
+    output_dir: str,
+) -> None:
+    """Compara recall accuracy con N fijo (5x5=25) vs N adaptativo (k=min_scale_factor(p))."""
+    # promedio sobre los noise levels presentes y el modo "best"
+    def mean_curve(df: pd.DataFrame) -> pd.DataFrame:
+        sub = df[df["mode"] == "best"]
+        if sub.empty:
+            sub = df
+        return sub.groupby("n_patterns")["recall_accuracy"].mean().reset_index()
+
+    f_curve = mean_curve(df_fixed)
+    a_curve = mean_curve(df_adaptive)
+
+    limit_fixed = HOPFIELD_CAPACITY * GRID * GRID
+
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    ax.plot(f_curve["n_patterns"], f_curve["recall_accuracy"],
+            marker="o", linewidth=2, color="#1E3A5F",
+            label="N fijo (5×5 = 25)")
+    ax.plot(a_curve["n_patterns"], a_curve["recall_accuracy"],
+            marker="s", linewidth=2, color="#2E8B57",
+            label="N adaptativo (k = ⌈√(p/(0.138·25))⌉)")
+    ax.axvline(x=limit_fixed, color="red", linestyle="--", linewidth=1.5,
+               label=f"Límite teórico N=25 (≈{limit_fixed:.2f})")
+    ax.set_xlabel("Cantidad de patrones almacenados (p)")
+    ax.set_ylabel("Recall accuracy promedio")
+    ax.set_title("Capacidad fija vs adaptativa")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    ax.set_ylim(-0.05, 1.05)
+    fig.tight_layout()
+    fig.savefig(os.path.join(output_dir, "fixed_vs_adaptive.png"), dpi=150)
+    plt.close(fig)
+
+
 def plot_hamming_vs_n(df: pd.DataFrame, output_dir: str) -> None:
     noises = sorted(df["noise"].unique())
     modes = df["mode"].unique()
@@ -193,17 +240,28 @@ def main():
     parser.add_argument("--max-steps", type=int, default=50)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", default="output/hopfield/capacity")
+    parser.add_argument("--adaptive", action="store_true",
+                        help="Comparar también N adaptativo (escalado por np.kron)")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
 
     df = run_sweep(args.k_max, args.modes, args.noise, args.trials,
-                   args.max_steps, args.seed)
+                   args.max_steps, args.seed, adaptive=False)
     df.to_csv(os.path.join(args.output_dir, "capacity.csv"), index=False)
 
     plot_accuracy_vs_n(df, args.output_dir)
     plot_spurious_vs_n(df, args.output_dir)
     plot_hamming_vs_n(df, args.output_dir)
+
+    if args.adaptive:
+        df_ad = run_sweep(args.k_max, args.modes, args.noise, args.trials,
+                          args.max_steps, args.seed, adaptive=True)
+        df_ad.to_csv(os.path.join(args.output_dir, "capacity_adaptive.csv"),
+                     index=False)
+        plot_fixed_vs_adaptive(df, df_ad, args.output_dir)
+        print(f"Sweep adaptativo guardado en capacity_adaptive.csv y "
+              f"fixed_vs_adaptive.png")
 
     print("\n=== Sweep de capacidad ===")
     print(df.to_string(index=False))

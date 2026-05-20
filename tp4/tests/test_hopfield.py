@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from hopfield.alphabet import ALPHABET, LETTERS, letter_vector, letters_in_range
+from hopfield.alphabet import (
+    ALPHABET, GRID, LETTERS, letter_vector, letters_in_range,
+    min_scale_factor, scale_pattern, scaled_letter_vector,
+)
 from hopfield.hopfield import HopfieldNetwork, add_noise
 
 
@@ -109,3 +112,111 @@ def test_best_k4_combo_has_low_max_dot():
     assert int(df.iloc[0]["max_abs_dot"]) <= 5
     # Worst combo should have much larger max|dot|.
     assert int(df.iloc[-1]["max_abs_dot"]) >= 15
+
+
+# --- regla de Hebb: ejemplo de las diapositivas (4 neuronas, 2 patrones) ---
+
+def _slide_example_net() -> tuple[HopfieldNetwork, np.ndarray]:
+    """xi1 = ( 1, 1,-1,-1), xi2 = (-1,-1, 1, 1), N=4."""
+    patterns = np.array([
+        [ 1,  1, -1, -1],
+        [-1, -1,  1,  1],
+    ], dtype=np.int8)
+    net = HopfieldNetwork(n_units=4)
+    net.store(patterns)
+    return net, patterns
+
+
+def test_slide_example_weights_symmetric():
+    net, _ = _slide_example_net()
+    np.testing.assert_array_almost_equal(net.weights, net.weights.T)
+
+
+def test_slide_example_weights_diagonal_zero():
+    net, _ = _slide_example_net()
+    np.testing.assert_array_equal(np.diag(net.weights), np.zeros(4))
+
+
+def test_slide_example_weights_match_textbook():
+    net, _ = _slide_example_net()
+    W = net.weights
+    # Con N=4 y 2 patrones complementarios: w_ij = (xi1_i*xi1_j + xi2_i*xi2_j)/N
+    # → w_ij = 0.5 si xi1_i*xi1_j = xi2_i*xi2_j = +1, -0.5 si = -1.
+    assert W[0, 1] == pytest.approx(0.5)
+    assert W[0, 2] == pytest.approx(-0.5)
+    assert W[0, 3] == pytest.approx(-0.5)
+    assert W[2, 3] == pytest.approx(0.5)
+
+
+def test_slide_example_stored_is_fixed_point():
+    net, patterns = _slide_example_net()
+    for p in patterns:
+        final, _h, _e, conv = net.recall(p.copy(), mode="sync", max_steps=5)
+        assert conv
+        np.testing.assert_array_equal(final, p)
+
+
+def test_slide_example_recovers_close_query():
+    net, patterns = _slide_example_net()
+    query = np.array([1, -1, -1, -1], dtype=np.int8)
+    final, _h, _e, _c = net.recall(query, mode="sync", max_steps=5)
+    np.testing.assert_array_equal(final, patterns[0])
+
+
+# --- scale_pattern / min_scale_factor ---
+
+def test_scale_pattern_k1_identity():
+    mat = ALPHABET["Z"]
+    np.testing.assert_array_equal(scale_pattern(mat, 1), mat)
+
+
+@pytest.mark.parametrize("k", [2, 3, 4])
+def test_scale_pattern_shape(k):
+    mat = ALPHABET["A"]
+    assert scale_pattern(mat, k).shape == (GRID * k, GRID * k)
+
+
+def test_scale_pattern_values_bipolar():
+    for k in (2, 3):
+        scaled = scale_pattern(ALPHABET["E"], k)
+        assert set(np.unique(scaled).tolist()).issubset({-1, 1})
+
+
+def test_scale_pattern_block_structure():
+    mat = ALPHABET["T"]
+    k = 2
+    scaled = scale_pattern(mat, k)
+    for i in range(GRID):
+        for j in range(GRID):
+            block = scaled[i * k:(i + 1) * k, j * k:(j + 1) * k]
+            assert np.all(block == mat[i, j])
+
+
+@pytest.mark.parametrize("p,expected_k", [
+    (1, 1), (3, 1), (4, 2), (13, 2), (14, 3), (26, 3),
+])
+def test_min_scale_factor(p, expected_k):
+    k = min_scale_factor(p)
+    assert k == expected_k
+    N = (GRID * k) ** 2
+    assert 0.138 * N >= p
+
+
+def test_scaled_letter_vector_size():
+    assert scaled_letter_vector("A", k=1).shape == (25,)
+    assert scaled_letter_vector("A", k=3).shape == (225,)
+
+
+def test_adaptive_alphabet_recovers_some_letters():
+    """Con k=3 (N=225, capacity≈31) la red SÍ puede ser punto fijo para varios patrones,
+    cosa imposible con N=25 (capacity≈3.45 << 26)."""
+    k = min_scale_factor(26)
+    patterns = np.stack([scaled_letter_vector(c, k) for c in LETTERS])
+    net = HopfieldNetwork(n_units=patterns.shape[1])
+    net.store(patterns)
+    fixed_count = sum(
+        np.array_equal(net.recall(p.copy(), mode="sync", max_steps=10)[0], p)
+        for p in patterns
+    )
+    # con N=25 esto sería casi siempre 0; con N=225 esperamos >= 4.
+    assert fixed_count >= 4

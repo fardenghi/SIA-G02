@@ -20,9 +20,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from hopfield.alphabet import ALPHABET, letter_vector, render_ascii
+from hopfield.alphabet import (
+    ALPHABET, GRID, LETTERS, letter_vector, min_scale_factor, render_ascii,
+    scaled_letter_vector,
+)
 from hopfield.hopfield import HopfieldNetwork, add_noise
 from hopfield.orthogonality import pairwise_dot_matrix, rank_combinations
+from hopfield.plots import (
+    plot_crosstalk, plot_energy_evolution, plot_recovery_rate_vs_noise,
+)
 
 
 def pick_letters(cfg: dict) -> list[str]:
@@ -116,6 +122,10 @@ def run_recall(
         output=os.path.join(output_dir, f"recall_{tag}_{target_letter}.png"),
         target=target,
     )
+    plot_energy_evolution(
+        energies, target_letter,
+        output=os.path.join(output_dir, f"energy_{tag}_{target_letter}.png"),
+    )
     return {
         "letter": target_letter,
         "noise": noise,
@@ -126,9 +136,63 @@ def run_recall(
     }
 
 
+def run_alphabet_mode(cfg: dict) -> None:
+    """Modo `--alphabet`: almacena las 26 letras con escalado adaptativo."""
+    letters = LETTERS[:]
+    k = min_scale_factor(len(letters))
+    n_units = (GRID * k) ** 2
+    print(f"Modo alfabeto: p={len(letters)} letras, k={k} → grilla "
+          f"{GRID * k}×{GRID * k} = {n_units} neuronas (p/N={len(letters)/n_units:.4f})")
+
+    patterns = np.stack([scaled_letter_vector(c, k) for c in letters])
+    net = HopfieldNetwork(n_units=patterns.shape[1])
+    net.store(patterns)
+
+    out = os.path.join(cfg["output_dir"], "alphabet")
+    os.makedirs(out, exist_ok=True)
+    rng = np.random.default_rng(cfg.get("seed", 42))
+
+    stored = {c: p.astype(np.int32) for c, p in zip(letters, patterns)}
+    plot_crosstalk(stored, os.path.join(out, "crosstalk_alphabet.png"))
+    rates = plot_recovery_rate_vs_noise(
+        net, stored,
+        noise_levels=cfg.get("noise_levels_analysis", [0.0, 0.05, 0.1, 0.15, 0.2]),
+        n_trials=cfg.get("n_trials", 20),
+        rng=rng,
+        output=os.path.join(out, "recovery_rate_alphabet.png"),
+        mode=cfg.get("mode", "sync"),
+        max_steps=cfg.get("max_steps", 50),
+    )
+
+    # tasa de recuperación al 10% de ruido, una línea por letra
+    print(f"\nTasa de recuperación al 10% de ruido (k={k}):")
+    rng2 = np.random.default_rng(cfg.get("seed", 42) + 1)
+    target_noise = 0.10
+    for name in letters:
+        v = stored[name]
+        correct = 0
+        n_trials = cfg.get("n_trials", 20)
+        for _ in range(n_trials):
+            noisy = add_noise(v, target_noise, rng2)
+            final, _h, _e, _c = net.recall(noisy, mode=cfg.get("mode", "sync"),
+                                           max_steps=cfg.get("max_steps", 50))
+            if np.array_equal(final, v):
+                correct += 1
+        rate = correct / n_trials
+        bar = "#" * int(rate * 20)
+        print(f"  {name}: {rate:.2f}  [{bar:<20}]")
+
+    print(f"\nResultados del modo alfabeto en {out}/")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Hopfield — Ejercicio Patrones")
     parser.add_argument("--config", default="configs/hopfield.json")
+    parser.add_argument(
+        "--alphabet", action="store_true",
+        help="Modo alfabeto: almacena las 26 letras con escalado adaptativo "
+             "y reporta recall por letra + crosstalk",
+    )
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -136,6 +200,11 @@ def main():
 
     out = cfg["output_dir"]
     os.makedirs(out, exist_ok=True)
+
+    if args.alphabet:
+        run_alphabet_mode(cfg)
+        return
+
     rng = np.random.default_rng(cfg.get("seed", 42))
 
     letters = pick_letters(cfg)
@@ -152,6 +221,20 @@ def main():
     np.fill_diagonal(abs_off, 0)
     print(f"max |<xi,xj>| del subconjunto: {abs_off.max()}")
     print(f"mean |<xi,xj>| del subconjunto: {abs_off[np.triu_indices_from(abs_off, k=1)].mean():.2f}")
+
+    # ---- Plots auxiliares: crosstalk del subset y curva ruido/recall ----
+    stored = {c: p.astype(np.int32) for c, p in zip(letters, patterns)}
+    plot_crosstalk(stored, os.path.join(out, "crosstalk.png"))
+    plot_recovery_rate_vs_noise(
+        net, stored,
+        noise_levels=cfg.get("noise_levels_analysis",
+                             [0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5]),
+        n_trials=cfg.get("n_trials", 50),
+        rng=np.random.default_rng(cfg.get("seed", 42) + 99),
+        output=os.path.join(out, "recovery_rate.png"),
+        mode=cfg.get("mode", "sync"),
+        max_steps=cfg.get("max_steps", 50),
+    )
 
     # ---- Parte (a) ----
     print("\n############ PARTE (a) — recuperación con ruido ############")

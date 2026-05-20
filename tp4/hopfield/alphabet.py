@@ -5,7 +5,13 @@ distribuidos en 5 filas de 5 columnas (top-down, left-to-right).
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
+
+
+GRID = 5
+HOPFIELD_CAPACITY = 0.138  # límite teórico de Hopfield: p_max ≈ 0.138 · N
 
 
 _RAW: dict[str, str] = {
@@ -231,3 +237,24 @@ def render_ascii(matrix: np.ndarray) -> str:
     for row in matrix:
         rows.append(" ".join("*" if v == 1 else " " for v in row))
     return "\n".join(rows)
+
+
+def scale_pattern(matrix: np.ndarray, k: int) -> np.ndarray:
+    """Upscalea un patrón GRID×GRID a (GRID·k)×(GRID·k) replicando cada bit en un bloque k×k."""
+    if k < 1:
+        raise ValueError("k debe ser >= 1")
+    return np.kron(matrix, np.ones((k, k), dtype=matrix.dtype))
+
+
+def min_scale_factor(p: int, capacity: float = HOPFIELD_CAPACITY) -> int:
+    """Mínimo k tal que (GRID·k)² satisface p ≤ capacity · N."""
+    if p < 1:
+        return 1
+    return max(1, math.ceil(math.sqrt(p / (capacity * GRID * GRID))))
+
+
+def scaled_letter_vector(ch: str, k: int = 1) -> np.ndarray:
+    """letter_vector con escalado adaptativo opcional."""
+    if k == 1:
+        return letter_vector(ch)
+    return scale_pattern(get_letter(ch), k).flatten().astype(np.int8)
