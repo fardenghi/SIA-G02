@@ -1,0 +1,57 @@
+import numpy as np
+
+GRID = 5  # grid side length; each pattern is GRID×GRID = 25 neurons
+
+LETTERS: dict[str, np.ndarray] = {
+    "Z": np.array([
+        [ 1,  1,  1,  1,  1],
+        [-1, -1, -1,  1, -1],
+        [-1, -1,  1, -1, -1],
+        [-1,  1, -1, -1, -1],
+        [ 1,  1,  1,  1,  1],
+    ], dtype=float),
+    "E": np.array([
+        [ 1,  1,  1,  1,  1],
+        [ 1, -1, -1, -1, -1],
+        [ 1,  1,  1,  1, -1],
+        [ 1, -1, -1, -1, -1],
+        [ 1,  1,  1,  1,  1],
+    ], dtype=float),
+    "N": np.array([
+        [ 1, -1, -1, -1,  1],
+        [ 1,  1, -1, -1,  1],
+        [ 1, -1,  1, -1,  1],
+        [ 1, -1, -1,  1,  1],
+        [ 1, -1, -1, -1,  1],
+    ], dtype=float),
+    "T": np.array([
+        [ 1,  1,  1,  1,  1],
+        [-1, -1,  1, -1, -1],
+        [-1, -1,  1, -1, -1],
+        [-1, -1,  1, -1, -1],
+        [-1, -1,  1, -1, -1],
+    ], dtype=float),
+}
+
+
+def as_vector(letter: str) -> np.ndarray:
+    return LETTERS[letter].flatten()
+
+
+def render(pattern: np.ndarray) -> str:
+    rows = []
+    for row in pattern.reshape(GRID, GRID):
+        rows.append(" ".join("*" if v > 0 else " " for v in row))
+    return "\n".join(rows)
+
+
+def add_noise(pattern: np.ndarray, noise_level: float, rng: np.random.Generator) -> np.ndarray:
+    mask = rng.random(pattern.shape) < noise_level
+    return np.where(mask, -pattern, pattern)
+
+
+def identify(state: np.ndarray, stored: dict[str, np.ndarray]) -> str | None:
+    for name, p in stored.items():
+        if np.array_equal(state, p):
+            return name
+    return None
