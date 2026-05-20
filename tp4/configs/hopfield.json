@@ -1,0 +1,11 @@
+{
+  "letters": null,
+  "k": 4,
+  "noise": 0.15,
+  "high_noise": 0.40,
+  "mode": "sync",
+  "max_steps": 50,
+  "spurious_attempts": 10,
+  "seed": 42,
+  "output_dir": "output/hopfield"
+}
