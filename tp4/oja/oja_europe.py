@@ -78,11 +78,14 @@ def plot_country_scores(
     sorted_scores = scores[order]
     colors = ["steelblue" if s < 0 else "indianred" for s in sorted_scores]
 
-    fig, ax = plt.subplots(figsize=(8, 9))
-    ax.barh(sorted_countries, sorted_scores, color=colors)
-    ax.axvline(0, color="black", linewidth=0.5)
-    ax.set_xlabel("Score sobre PC1 (Oja)")
+    fig, ax = plt.subplots(figsize=(14, 6))
+    ax.bar(sorted_countries, sorted_scores, color=colors)
+    ax.axhline(0, color="black", linewidth=0.5)
+    ax.set_ylabel("Score sobre PC1 (Oja)")
     ax.set_title("Países proyectados sobre la primer componente — Oja")
+    ax.tick_params(axis="x", rotation=45)
+    for label in ax.get_xticklabels():
+        label.set_horizontalalignment("right")
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)

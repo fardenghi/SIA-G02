@@ -62,17 +62,18 @@ def plot_country_map(
     ax.set_xticklabels([str(c) for c in range(grid_cols)])
     ax.set_yticklabels([str(r) for r in range(grid_rows)])
 
+    ax.tick_params(axis="both", labelsize=14)
     for (r, c), countries in assignments.items():
         # row 0 at top: invert y
         y = grid_rows - 1 - r
         text = "\n".join(countries)
         ax.text(
             c + 0.5, y + 0.5, text,
-            ha="center", va="center", fontsize=7,
-            bbox=dict(boxstyle="round,pad=0.2", facecolor="steelblue", alpha=0.3),
+            ha="center", va="center", fontsize=15,
+            bbox=dict(boxstyle="round,pad=0.35", facecolor="steelblue", alpha=0.3),
         )
 
-    ax.set_title("Mapa de países — Red de Kohonen")
+    ax.set_title("Mapa de países — Red de Kohonen", fontsize=18)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)

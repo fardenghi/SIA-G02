@@ -232,16 +232,16 @@ def plot_kohonen_extremes(
                     else:
                         lines.append(ct)
                 ax.text(c + 0.5, y + 0.5, "\n".join(lines),
-                        ha="center", va="center", fontsize=7)
+                        ha="center", va="center", fontsize=15)
 
     ax.set_xticks(np.arange(grid_cols) + 0.5)
-    ax.set_xticklabels(range(grid_cols))
+    ax.set_xticklabels(range(grid_cols), fontsize=14)
     ax.set_yticks(np.arange(grid_rows) + 0.5)
-    ax.set_yticklabels(range(grid_rows - 1, -1, -1))
+    ax.set_yticklabels(range(grid_rows - 1, -1, -1), fontsize=14)
     ax.set_title(
         "Kohonen — posición de los extremos de PC1\n"
         f"▲ Top {n_top} (fondo rojo)  |  ▼ Bottom {n_bottom} (fondo azul)",
-        fontsize=11,
+        fontsize=16,
     )
     legend = [
         mpatches.Patch(facecolor=_RED_L,  edgecolor=_RED,  linewidth=2,
@@ -252,7 +252,7 @@ def plot_kohonen_extremes(
                        label="Resto"),
     ]
     ax.legend(handles=legend, loc="upper center",
-              bbox_to_anchor=(0.5, -0.05), ncol=3, fontsize=9)
+              bbox_to_anchor=(0.5, -0.05), ncol=3, fontsize=14)
     fig.tight_layout()
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -298,23 +298,25 @@ def plot_pc1_gradient_map(
                 ax.add_patch(plt.Rectangle((c, y), 1, 1,
                                            facecolor=color, edgecolor="gray", linewidth=0.7))
                 ax.text(c + 0.5, y + 0.5, "\n".join(cell_countries[(r, c)]),
-                        ha="center", va="center", fontsize=6.5)
+                        ha="center", va="center", fontsize=15)
             else:
                 ax.add_patch(plt.Rectangle((c, y), 1, 1,
                                            facecolor="#e8e8e8", edgecolor="gray", linewidth=0.5))
 
     sm = cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
-    plt.colorbar(sm, ax=ax, label="Score PC1 promedio", fraction=0.03, pad=0.02)
+    cbar = plt.colorbar(sm, ax=ax, label="Score PC1 promedio", fraction=0.03, pad=0.02)
+    cbar.ax.tick_params(labelsize=14)
+    cbar.set_label("Score PC1 promedio", fontsize=15)
     ax.set_xticks(np.arange(grid_cols) + 0.5)
-    ax.set_xticklabels(range(grid_cols))
+    ax.set_xticklabels(range(grid_cols), fontsize=14)
     ax.set_yticks(np.arange(grid_rows) + 0.5)
-    ax.set_yticklabels(range(grid_rows - 1, -1, -1))
+    ax.set_yticklabels(range(grid_rows - 1, -1, -1), fontsize=14)
     ax.set_title(
         "Sección 2.1 — Mapa de Kohonen coloreado por score PC1\n"
-        "La franja gris intermedia agrupa países con score ≈ 0 en PCA, "
+        "La franja gris intermedia agrupa países con score ≈ 0 en PCA,\n"
         "pero Kohonen los distribuye en posiciones distantes",
-        fontsize=10,
+        fontsize=14,
     )
     fig.tight_layout()
     fig.savefig(path, dpi=150)
