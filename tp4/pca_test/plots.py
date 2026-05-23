@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from pca_test.pca import run_pca
+from pca_test.standardize import standardize
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "europe.csv"
 OUTPUT_DIR = Path(__file__).resolve().parent / "plots"
@@ -89,6 +90,35 @@ def plot_pc1_ranking(components: np.ndarray, countries: list[str], pca, output_d
     print(f"Saved {out}")
 
 
+def plot_covariance_matrix(df: pd.DataFrame, output_dir: Path) -> None:
+    standardized = standardize(df)
+    numeric = standardized.select_dtypes(include=[np.number])
+    cov_matrix = np.cov(numeric.values.T, ddof=0)
+    feature_names = numeric.columns.tolist()
+
+    fig, ax = plt.subplots(figsize=(8, 7))
+    cax = ax.matshow(cov_matrix, cmap="coolwarm", vmin=-1, vmax=1)
+    fig.colorbar(cax, fraction=0.046, pad=0.04)
+
+    ax.set_xticks(np.arange(len(feature_names)))
+    ax.set_yticks(np.arange(len(feature_names)))
+    ax.set_xticklabels(feature_names, rotation=45, ha="left")
+    ax.set_yticklabels(feature_names)
+
+    for i in range(len(feature_names)):
+        for j in range(len(feature_names)):
+            val = cov_matrix[i, j]
+            color = "white" if abs(val) > 0.5 else "black"
+            ax.text(j, i, f"{val:.2f}", ha="center", va="center", color=color, fontsize=9)
+
+    ax.set_title("Matriz de Covarianza", pad=20)
+    fig.tight_layout()
+    out = output_dir / "covariance_matrix.png"
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"Saved {out}")
+
+
 def main() -> None:
     OUTPUT_DIR.mkdir(exist_ok=True)
     df = pd.read_csv(DATA_PATH)
@@ -98,6 +128,7 @@ def main() -> None:
     plot_variance(pca, OUTPUT_DIR)
     plot_pc1_vs_pc2(components, countries, pca, feature_names, OUTPUT_DIR)
     plot_pc1_ranking(components, countries, pca, OUTPUT_DIR)
+    plot_covariance_matrix(df, OUTPUT_DIR)
 
 
 if __name__ == "__main__":

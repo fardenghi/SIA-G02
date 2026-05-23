@@ -2,7 +2,7 @@
   "data": "data/europe.csv",
   "grid_rows": 5,
   "grid_cols": 5,
-  "lr": 0.5,
+  "lr": 0.3,
   "lr_decay": "exponential",
   "radius": 3.0,
   "radius_decay": "exponential",

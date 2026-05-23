@@ -72,12 +72,21 @@ class SOM:
     # public API
     # ------------------------------------------------------------------
 
-    def train(self, X: np.ndarray) -> None:
+    def get_quantization_error(self, X: np.ndarray) -> float:
+        coords = self.predict(X)
+        dists = []
+        for x, (r, c) in zip(X, coords):
+            d = np.linalg.norm(x - self.weights[r, c])
+            dists.append(d)
+        return float(np.mean(dists))
+
+    def train(self, X: np.ndarray) -> list[float]:
         # inicialización con muestras aleatorias del dataset
         n_neurons = self.grid_rows * self.grid_cols
         sample_idx = self._rng.choice(len(X), size=n_neurons, replace=True)
         self.weights = X[sample_idx].reshape(self.grid_rows, self.grid_cols, self.input_dim).copy()
 
+        history = []
         T = self.epochs
         for t in range(T):
             lr_t = self._decay(self.lr, t, T, self.lr_decay)
@@ -91,6 +100,10 @@ class SOM:
                 h = self._neighborhood(bmu, sigma_t, self.neighborhood_fn)  # (R, C)
                 delta = lr_t * h[:, :, np.newaxis] * (x - self.weights)
                 self.weights += delta
+            
+            # Record quantization error at the end of each epoch
+            history.append(self.get_quantization_error(X))
+        return history
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         coords = np.array([self._find_bmu(x) for x in X])

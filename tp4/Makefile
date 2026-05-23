@@ -16,15 +16,18 @@ LET_END         ?= Z
 # --- Analysis ---
 MIDDLE_THRESHOLD ?= 0.5
 
-.PHONY: all kohonen pca pca-plots pca-boxplots oja hopfield hopfield-alphabet \
+.PHONY: all kohonen convergence pca pca-plots pca-boxplots oja hopfield hopfield-alphabet \
 	hopfield-orthogonality hopfield-capacity hopfield-capacity-adaptive \
 	compare standardization analysis \
-	test clean clean-kohonen clean-pca clean-oja clean-hopfield clean-analysis help
+	test clean clean-kohonen clean-convergence clean-pca clean-oja clean-hopfield clean-analysis help
 
 all: kohonen pca oja hopfield
 
 kohonen:
 	$(PYTHON) -m kohonen.kohonen_europe --config $(KOHONEN_CONFIG)
+
+convergence:
+	$(PYTHON) -m kohonen.convergence_analysis
 
 pca: pca-plots pca-boxplots
 	$(PYTHON) -m pca_test.pca
@@ -85,7 +88,10 @@ clean-hopfield:
 clean-analysis:
 	rm -rf output/compare output/standardization
 
-clean: clean-kohonen clean-pca clean-oja clean-hopfield clean-analysis
+clean-convergence:
+	rm -rf output/convergence
+
+clean: clean-kohonen clean-convergence clean-pca clean-oja clean-hopfield clean-analysis
 
 help:
 	@echo "Targets disponibles:"
@@ -108,7 +114,9 @@ help:
 	@echo "  make analysis                             Corre compare + standardization"
 	@echo "  make all                                  Corre kohonen + pca + oja + hopfield"
 	@echo "  make test                                 Corre la suite de tests"
+	@echo "  make convergence                          Genera los gráficos minimalistas de convergencia"
 	@echo "  make clean-kohonen                        Borra output/kohonen/"
+	@echo "  make clean-convergence                    Borra output/convergence/"
 	@echo "  make clean-pca                            Borra pca_test/plots/ y CSVs generados"
 	@echo "  make clean-oja                            Borra oja/output/oja/"
 	@echo "  make clean-hopfield                       Borra output/hopfield/"
