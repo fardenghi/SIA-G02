@@ -126,7 +126,7 @@ def main():
     parser = argparse.ArgumentParser(description="Análisis de ortogonalidad del abecedario")
     parser.add_argument("--k", type=int, default=4, help="Tamaño del subconjunto")
     parser.add_argument("--output-dir", default="output/hopfield/orthogonality")
-    parser.add_argument("--top", type=int, default=15)
+    parser.add_argument("--top", type=int, default=10)
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)

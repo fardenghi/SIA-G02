@@ -27,7 +27,7 @@ from hopfield.alphabet import (
 from hopfield.hopfield import HopfieldNetwork, add_noise
 from hopfield.orthogonality import pairwise_dot_matrix, rank_combinations
 from hopfield.plots import (
-    plot_crosstalk, plot_energy_evolution, plot_recovery_rate_vs_noise,
+    plot_crosstalk, plot_crosstalk_per_neuron, plot_energy_evolution, plot_recovery_rate_vs_noise,
 )
 
 
@@ -51,15 +51,18 @@ def plot_steps(
     cols = min(n, 8)
     rows = (n + cols - 1) // cols
 
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 1.8, rows * 2.0))
-    axes_flat = np.atleast_2d(axes).ravel() if n > 1 else [axes]
+    fig = plt.figure(figsize=(cols * 1.8, rows * 2.0 + 2.5))
+    gs = fig.add_gridspec(rows + 1, cols, height_ratios=[2.0] * rows + [2.5], hspace=0.45)
+
+    axes_flat = [fig.add_subplot(gs[r, c]) for r in range(rows) for c in range(cols)]
     for ax in axes_flat:
         ax.axis("off")
 
     for i, (state, e) in enumerate(zip(history, energies)):
         ax = axes_flat[i]
         ax.axis("on")
-        img = state.reshape(5, 5)
+        grid_size = int(np.sqrt(len(state)))
+        img = state.reshape(grid_size, grid_size)
         ax.imshow(np.where(img == 1, 1.0, 0.0), cmap="Greys",
                   vmin=0, vmax=1, interpolation="nearest")
         match = ""
@@ -69,16 +72,23 @@ def plot_steps(
         ax.set_xticks([])
         ax.set_yticks([])
 
+    ax_e = fig.add_subplot(gs[rows, :])
+    ax_e.plot(range(len(energies)), energies, marker="o", linewidth=2, color="#1E3A5F")
+    ax_e.set_xlabel("Iteración")
+    ax_e.set_ylabel("Energía H")
+    ax_e.set_title("Evolución de energía")
+    ax_e.grid(True, alpha=0.3)
+
     fig.suptitle(title, fontsize=12)
-    fig.tight_layout()
     os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
-    fig.savefig(output, dpi=150)
+    fig.savefig(output, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
 def print_pattern(state: np.ndarray, header: str) -> None:
     print(f"\n{header}")
-    print(render_ascii(state.reshape(5, 5)))
+    grid_size = int(np.sqrt(len(state)))
+    print(render_ascii(state.reshape(grid_size, grid_size)) if grid_size == 5 else f"(patrón {grid_size}×{grid_size})")
 
 
 def run_recall(
@@ -90,9 +100,11 @@ def run_recall(
     rng: np.random.Generator,
     output_dir: str,
     tag: str,
+    scale: int = 1,
+    noisy_input: np.ndarray | None = None,
 ) -> dict:
-    target = letter_vector(target_letter)
-    noisy = add_noise(target, noise, rng)
+    target = scaled_letter_vector(target_letter, scale)
+    noisy = noisy_input if noisy_input is not None else add_noise(target, noise, rng)
     final, history, energies, converged = net.recall(
         noisy, mode=mode, max_steps=max_steps, rng=rng
     )
@@ -122,10 +134,6 @@ def run_recall(
         output=os.path.join(output_dir, f"recall_{tag}_{target_letter}.png"),
         target=target,
     )
-    plot_energy_evolution(
-        energies, target_letter,
-        output=os.path.join(output_dir, f"energy_{tag}_{target_letter}.png"),
-    )
     return {
         "letter": target_letter,
         "noise": noise,
@@ -153,7 +161,12 @@ def run_alphabet_mode(cfg: dict) -> None:
     rng = np.random.default_rng(cfg.get("seed", 42))
 
     stored = {c: p.astype(np.int32) for c, p in zip(letters, patterns)}
+
+    from hopfield.plot_letters import plot_letters
+    plot_letters(letters, os.path.join(out, f"alphabet_k{k}.png"), scale=k)
+
     plot_crosstalk(stored, os.path.join(out, "crosstalk_alphabet.png"))
+    plot_crosstalk_per_neuron(stored, os.path.join(out, "crosstalk_AB_comparison.png"), subset=["A", "B"])
     rates = plot_recovery_rate_vs_noise(
         net, stored,
         noise_levels=cfg.get("noise_levels_analysis", [0.0, 0.05, 0.1, 0.15, 0.2]),
@@ -166,21 +179,52 @@ def run_alphabet_mode(cfg: dict) -> None:
 
     # tasa de recuperación al 10% de ruido, una línea por letra
     print(f"\nTasa de recuperación al 10% de ruido (k={k}):")
-    rng2 = np.random.default_rng(cfg.get("seed", 42) + 1)
+    noise_levels = cfg.get("noise_levels_analysis", [0.0, 0.05, 0.1, 0.15, 0.2])
     target_noise = 0.10
+    if target_noise in noise_levels:
+        idx = noise_levels.index(target_noise)
+        for name in letters:
+            rate = rates[name][idx]
+            bar = "#" * int(rate * 20)
+            print(f"  {name}: {rate:.2f}  [{bar:<20}]")
+
+    # diagnóstico sin ruido: qué pasa con cada letra
+    wrong_stored = []
+    spurious_list = []
+    fixed_points = []
     for name in letters:
-        v = stored[name]
-        correct = 0
-        n_trials = cfg.get("n_trials", 20)
-        for _ in range(n_trials):
-            noisy = add_noise(v, target_noise, rng2)
-            final, _h, _e, _c = net.recall(noisy, mode=cfg.get("mode", "sync"),
-                                           max_steps=cfg.get("max_steps", 50))
-            if np.array_equal(final, v):
-                correct += 1
-        rate = correct / n_trials
-        bar = "#" * int(rate * 20)
-        print(f"  {name}: {rate:.2f}  [{bar:<20}]")
+        target = stored[name].astype(np.int8)
+        final, _, _, _ = net.recall(target, mode=cfg.get("mode", "sync"),
+                                    max_steps=cfg.get("max_steps", 50))
+        if np.array_equal(final, target):
+            fixed_points.append(name)
+        elif net.is_stored(final) != -1:
+            wrong_stored.append(name)
+        else:
+            spurious_list.append(name)
+
+    print(f"\n=== Diagnóstico sin ruido ===")
+    print(f"Puntos fijos (se reconocen)      ({len(fixed_points)}): {' '.join(fixed_points) or 'ninguna'}")
+    print(f"Converge a otra letra            ({len(wrong_stored)}): {' '.join(wrong_stored) or 'ninguna'}")
+    print(f"Cae en estado espúreo            ({len(spurious_list)}): {' '.join(spurious_list) or 'ninguna'}")
+
+    # recall paso a paso: 4 que se reconocen + 2 que no, sin ruido
+    good = fixed_points
+    bad  = (wrong_stored + spurious_list)[:2]
+
+    rng2 = np.random.default_rng(cfg.get("seed", 42))
+    print(f"\n=== Recall paso a paso (sin ruido) ===")
+    for letter in good + bad:
+        run_recall(
+            net, letter,
+            noise=0.0,
+            mode=cfg.get("mode", "sync"),
+            max_steps=cfg.get("max_steps", 50),
+            rng=rng2,
+            output_dir=out,
+            tag="alphabet",
+            scale=k,
+        )
 
     print(f"\nResultados del modo alfabeto en {out}/")
 
@@ -224,7 +268,21 @@ def main():
 
     # ---- Plots auxiliares: crosstalk del subset y curva ruido/recall ----
     stored = {c: p.astype(np.int32) for c, p in zip(letters, patterns)}
+
+    # imagen vertical con los patrones almacenados
+    fig, axes = plt.subplots(2, 2, figsize=(3.6, 3.8))
+    for ax, (name, pat) in zip(axes.ravel(), stored.items()):
+        ax.imshow(np.where(pat.reshape(5, 5) == 1, 1.0, 0.0),
+                  cmap="Greys", vmin=0, vmax=1, interpolation="nearest")
+        ax.set_title(name, fontsize=11, fontweight="bold")
+        ax.set_xticks([])
+        ax.set_yticks([])
+    fig.tight_layout()
+    fig.savefig(os.path.join(out, "stored_patterns.png"), dpi=150)
+    plt.close(fig)
+
     plot_crosstalk(stored, os.path.join(out, "crosstalk.png"))
+    plot_crosstalk_per_neuron(stored, os.path.join(out, "crosstalk_per_neuron.png"))
     plot_recovery_rate_vs_noise(
         net, stored,
         noise_levels=cfg.get("noise_levels_analysis",

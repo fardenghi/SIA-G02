@@ -63,7 +63,6 @@ def plot_crosstalk(
             ax.text(j, i, f"{mat[i, j]:.2f}", ha="center", va="center",
                     fontsize=fontsize)
     fig.colorbar(im, ax=ax, label="Correlación normalizada")
-    ax.set_title("Correlación entre patrones almacenados")
     fig.tight_layout()
     os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
     fig.savefig(output, dpi=120)
@@ -97,9 +96,18 @@ def plot_recovery_rate_vs_noise(
                     correct += 1
             rates[name].append(correct / n_trials)
 
+    good = [n for n in names if rates[n][0] >= 0.5]
+    rest = [n for n in names if n not in good]
+    highlight_colors = ["#1E3A5F", "#E63946", "#2A9D8F", "#E9C46A", "#F4A261"]
+
     fig, ax = plt.subplots(figsize=(7, 4))
-    for name in names:
-        ax.plot(noise_levels, rates[name], marker="o", label=name, linewidth=2)
+    rest_plotted = False
+    for name in rest:
+        ax.plot(noise_levels, rates[name], marker="o", linewidth=1.5,
+                color="#BBBBBB", alpha=0.6, label="Resto" if not rest_plotted else "_nolegend_")
+        rest_plotted = True
+    for name, color in zip(good, highlight_colors):
+        ax.plot(noise_levels, rates[name], marker="o", label=name, linewidth=2, color=color)
     ax.axvline(x=0.5, color="gray", linestyle="--", alpha=0.5, label="50% ruido")
     ax.set_xlabel("Nivel de ruido (fracción de bits invertidos)")
     ax.set_ylabel("Tasa de recuperación")
@@ -112,6 +120,63 @@ def plot_recovery_rate_vs_noise(
     fig.savefig(output, dpi=120)
     plt.close(fig)
     return rates
+
+
+def plot_crosstalk_per_neuron(
+    stored: dict[str, np.ndarray],
+    output: str,
+    subset: list[str] | None = None,
+) -> None:
+    """Para cada patrón ν en subset (o todos si None), calcula el crosstalk real por neurona
+    usando todos los patrones almacenados:
+       crosstalk_i^ν = Σ_{μ≠ν} ξ_i^μ · <ξ^μ, ξ^ν> / N
+    """
+    names = list(stored.keys())
+    patterns = np.array([stored[n] for n in names], dtype=np.float64)
+    p, N = patterns.shape
+    grid = int(np.sqrt(N))
+
+    show = subset if subset is not None else names
+    show_idx = [names.index(n) for n in show]
+
+    cell_size = 0.4 if grid <= 5 else 0.25
+    fig_size = grid * cell_size
+    fig, axes = plt.subplots(1, len(show), figsize=(len(show) * fig_size + 1.5, fig_size))
+    axes = np.atleast_1d(axes)
+
+    vmax = 0.0
+    crosstalks = []
+    for nu in show_idx:
+        ct = np.zeros(N)
+        for mu in range(p):
+            if mu != nu:
+                dot = np.dot(patterns[mu], patterns[nu]) / N
+                ct += patterns[mu] * dot
+        crosstalks.append(ct)
+        vmax = max(vmax, np.abs(ct).max())
+
+    for (ax, ct, name) in zip(axes, crosstalks, show):
+        im = ax.imshow(ct.reshape(grid, grid), cmap="RdBu_r",
+                       vmin=-vmax, vmax=vmax, interpolation="none")
+        ax.set_title(name, fontsize=11, fontweight="bold")
+        if grid > 5:
+            ax.set_xticks(np.arange(-0.5, grid, 1), minor=True)
+            ax.set_yticks(np.arange(-0.5, grid, 1), minor=True)
+            ax.grid(which="minor", color="white", linewidth=0.4)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        if grid <= 5:
+            for i in range(grid):
+                for j in range(grid):
+                    ax.text(j, i, f"{ct.reshape(grid, grid)[i, j]:.2f}",
+                            ha="center", va="center", fontsize=6)
+
+    fig.subplots_adjust(left=0.02, right=0.82)
+    cbar_ax = fig.add_axes([0.85, 0.15, 0.03, 0.7])
+    fig.colorbar(im, cax=cbar_ax, label="Crosstalk por neurona")
+    os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
+    fig.savefig(output, dpi=150)
+    plt.close(fig)
 
 
 def plot_pattern_grid(
