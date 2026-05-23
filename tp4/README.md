@@ -24,8 +24,14 @@ Implementación propia (numpy puro) de un Self-Organizing Map (SOM) para agrupar
 
 ### Uso
 
+**Opción A: Usando el Makefile (Recomendado)**
 ```bash
-uv run python kohonen_europe.py --config configs/kohonen_europe.json
+make kohonen
+```
+
+**Opción B: Corriendo con Python de forma directa**
+```bash
+uv run python -m kohonen.kohonen_europe --config configs/kohonen_europe.json
 ```
 
 ### Configuración (`configs/kohonen_europe.json`)
@@ -42,23 +48,46 @@ uv run python kohonen_europe.py --config configs/kohonen_europe.json
 | `seed` | Semilla aleatoria | `42` |
 | `output_dir` | Directorio de salida para gráficos | `output/kohonen` |
 
-### Salida
+### Salida Estándar (`output/kohonen/`)
 
-Imprime la asignación de países a neuronas y genera tres gráficos en `output_dir/`:
+Imprime la asignación de países a neuronas y genera los siguientes gráficos en `output_dir/`:
 
 | Archivo | Descripción |
 |---|---|
 | `country_map.png` | Grilla con los nombres de los países en su neurona BMU |
 | `u_matrix.png` | Distancias promedio entre neuronas vecinas (U-Matrix) |
 | `hit_map.png` | Cantidad de países asignados a cada neurona |
+| `component_planes.png` | Planos de componentes individuales para cada una de las 7 variables |
+
+---
+
+### Análisis de Convergencia (Variación de Hiperparámetros)
+
+Para estudiar el comportamiento del modelo frente a la variación de sus hiperparámetros de forma limpia y técnica, se provee un módulo especializado de **Análisis de Convergencia Minimalista** que grafica exclusivamente el Error de Cuantización (Distancia promedio a BMU) en función de las Épocas.
+
+#### Uso:
+```bash
+make convergence
+```
+*(Alternativa directa: `uv run python -m kohonen.convergence_analysis`)*
+
+#### Salida (`output/convergence/`):
+Genera exactamente dos gráficos de alta resolución en un estilo limpio y profesional (sin anotaciones ruidosas ni puntos decorativos):
+
+| Archivo | Descripción |
+|---|---|
+| `convergencia_radio.png` | Curvas de convergencia comparativas variando el Radio de Vecindad ($R = [0.5, 1.5, 3.0, 5.0]$) |
+| `convergencia_lr.png` | Curvas de convergencia comparativas variando la Tasa de Aprendizaje ($LR = [0.3, 0.5, 0.7]$) |
+
+---
 
 ### Metodología
 
 1. Los datos se estandarizan con `StandardScaler` (media 0, varianza 1).
-2. Los pesos se inicializan con ruido gaussiano.
+2. Los pesos se inicializan con una muestra aleatoria de los propios datos (o ruido).
 3. En cada época se presenta cada muestra en orden aleatorio; se busca la neurona ganadora (BMU) por distancia euclidiana mínima y se actualizan los pesos vecinos según la función de vecindad y la tasa de aprendizaje vigentes.
 4. El radio y la tasa de aprendizaje decaen a lo largo del entrenamiento (exponencial o lineal).
-5. La U-Matrix se calcula como la distancia promedio de cada neurona a sus 4 vecinos directos.
+5. La U-Matrix se calcula como la distancia promedio de cada neurona a sus vecinos directos en la grilla.
 
 ---
 
