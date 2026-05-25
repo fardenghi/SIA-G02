@@ -126,12 +126,13 @@ def analyze_middle(
 # Plots — Section 1.1
 # ---------------------------------------------------------------------------
 
-_RED   = "#B2182B"
-_BLUE  = "#2166AC"
-_RED_L = "#FDDBC7"
+_RED    = "#B2182B"
+_BLUE   = "#2166AC"
+_RED_L  = "#FDDBC7"
 _BLUE_L = "#D1E5F0"
-_GRAY  = "#CCCCCC"
+_GRAY   = "#CCCCCC"
 _GRAY_L = "#F5F5F5"
+_GREEN  = "#1A7F37"
 
 
 def plot_pc1_ranking(
@@ -140,20 +141,31 @@ def plot_pc1_ranking(
     n_top: int,
     n_bottom: int,
     path: str,
+    highlight: list[str] | None = None,
+    show_extremes: bool = True,
 ) -> None:
     """Horizontal bar chart of all countries sorted by PC1 score.
-    Top-n_top highlighted in red, bottom-n_bottom in blue."""
+    show_extremes=True: top red, bottom blue, highlighted green (overrides).
+    show_extremes=False: only highlighted countries colored green, rest gray."""
+    highlight_set = set(highlight) if highlight else set()
     order = np.argsort(pc1_scores)
     sorted_countries = [countries[i] for i in order]
     sorted_scores    = pc1_scores[order]
     n = len(countries)
 
-    colors = [
-        _BLUE  if i < n_bottom else
-        _RED   if i >= n - n_top else
-        "#AAAAAA"
-        for i in range(n)
-    ]
+    if show_extremes:
+        colors = [
+            _GREEN   if sorted_countries[i] in highlight_set else
+            _BLUE    if i < n_bottom else
+            _RED     if i >= n - n_top else
+            "#AAAAAA"
+            for i in range(n)
+        ]
+    else:
+        colors = [
+            _GREEN if sorted_countries[i] in highlight_set else "#AAAAAA"
+            for i in range(n)
+        ]
 
     fig, ax = plt.subplots(figsize=(8, 10))
     ax.barh(sorted_countries, sorted_scores, color=colors, edgecolor="white", linewidth=0.4)
@@ -163,17 +175,28 @@ def plot_pc1_ranking(
                  "(datos estandarizados, sklearn)", fontsize=11)
     ax.grid(axis="x", alpha=0.3)
 
+    labeled = (
+        {i for i in range(n) if i < n_bottom or i >= n - n_top} if show_extremes else set()
+    ) | {i for i, ct in enumerate(sorted_countries) if ct in highlight_set}
     for i, score in enumerate(sorted_scores):
-        if i < n_bottom or i >= n - n_top:
+        if i in labeled:
             offset = 0.07 if score >= 0 else -0.07
             ax.text(score + offset, i, f"{score:+.2f}",
                     va="center", ha="left" if score >= 0 else "right", fontsize=8)
 
-    legend = [
-        mpatches.Patch(facecolor=_RED,  label=f"Top {n_top} — PC1 alto (mayor desarrollo)"),
-        mpatches.Patch(facecolor=_BLUE, label=f"Bottom {n_bottom} — PC1 bajo (menor desarrollo)"),
-        mpatches.Patch(facecolor="#AAAAAA", label="Resto"),
-    ]
+    if show_extremes:
+        legend = [
+            mpatches.Patch(facecolor=_RED,  label=f"Top {n_top} — PC1 alto (mayor desarrollo)"),
+            mpatches.Patch(facecolor=_BLUE, label=f"Bottom {n_bottom} — PC1 bajo (menor desarrollo)"),
+            mpatches.Patch(facecolor="#AAAAAA", label="Resto"),
+        ]
+        if highlight_set:
+            legend.append(mpatches.Patch(facecolor=_GREEN, label=", ".join(sorted(highlight_set))))
+    else:
+        legend = [
+            mpatches.Patch(facecolor=_GREEN,    label=", ".join(sorted(highlight_set))),
+            mpatches.Patch(facecolor="#AAAAAA", label="Resto"),
+        ]
     ax.legend(handles=legend, loc="lower right", fontsize=8)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
@@ -269,10 +292,13 @@ def plot_pc1_gradient_map(
     grid_rows: int,
     grid_cols: int,
     path: str,
+    highlight: list[str] | None = None,
+    gradient: bool = True,
 ) -> None:
-    """Kohonen grid colored by average PC1 score per cell.
-    The gradient reveals the intermediate 'gray' band where PCA-similar
-    countries may occupy distant positions in the topology."""
+    """Kohonen grid colored by average PC1 score per cell (gradient=True)
+    or with a plain gray background (gradient=False).
+    Countries in `highlight` get a green border around their cell."""
+    highlight_set = set(highlight) if highlight else set()
     cell_scores: dict[tuple, list[float]] = {}
     cell_countries: dict[tuple, list[str]] = {}
     for country, coord, score in zip(countries, som_coords, pc1_scores):
@@ -280,42 +306,50 @@ def plot_pc1_gradient_map(
         cell_scores.setdefault(key, []).append(float(score))
         cell_countries.setdefault(key, []).append(country)
 
-    avg_score = {k: float(np.mean(v)) for k, v in cell_scores.items()}
-    vmin, vmax = min(avg_score.values()), max(avg_score.values())
-    norm = plt.Normalize(vmin=vmin, vmax=vmax)
-    cmap = cm.RdBu_r
-
     fig, ax = plt.subplots(figsize=(grid_cols * 2.4, grid_rows * 2.4))
     ax.set_xlim(0, grid_cols)
     ax.set_ylim(0, grid_rows)
     ax.set_aspect("equal")
 
+    if gradient:
+        avg_score = {k: float(np.mean(v)) for k, v in cell_scores.items()}
+        vmin, vmax = min(avg_score.values()), max(avg_score.values())
+        norm = plt.Normalize(vmin=vmin, vmax=vmax)
+        cmap = cm.RdBu_r
+
     for r in range(grid_rows):
         for c in range(grid_cols):
             y = grid_rows - 1 - r
-            if (r, c) in avg_score:
-                color = cmap(norm(avg_score[(r, c)]))
+            if (r, c) in cell_countries:
+                if gradient:
+                    face = cmap(norm(avg_score[(r, c)]))
+                    edge, lw = "gray", 0.7
+                else:
+                    face, edge, lw = _GRAY_L, _GRAY, 0.8
                 ax.add_patch(plt.Rectangle((c, y), 1, 1,
-                                           facecolor=color, edgecolor="gray", linewidth=0.7))
+                                           facecolor=face, edgecolor=edge, linewidth=lw))
                 ax.text(c + 0.5, y + 0.5, "\n".join(cell_countries[(r, c)]),
                         ha="center", va="center", fontsize=15)
+                if highlight_set and any(ct in highlight_set for ct in cell_countries[(r, c)]):
+                    ax.add_patch(plt.Rectangle((c, y), 1, 1,
+                                               facecolor="none", edgecolor=_GREEN, linewidth=4))
             else:
                 ax.add_patch(plt.Rectangle((c, y), 1, 1,
                                            facecolor="#e8e8e8", edgecolor="gray", linewidth=0.5))
 
-    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    cbar = plt.colorbar(sm, ax=ax, label="Score PC1 promedio", fraction=0.03, pad=0.02)
-    cbar.ax.tick_params(labelsize=14)
-    cbar.set_label("Score PC1 promedio", fontsize=15)
+    if gradient:
+        sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.02)
+        cbar.ax.tick_params(labelsize=14)
+        cbar.set_label("Score PC1 promedio", fontsize=15)
+
     ax.set_xticks(np.arange(grid_cols) + 0.5)
     ax.set_xticklabels(range(grid_cols), fontsize=14)
     ax.set_yticks(np.arange(grid_rows) + 0.5)
     ax.set_yticklabels(range(grid_rows - 1, -1, -1), fontsize=14)
     ax.set_title(
-        "Sección 2.1 — Mapa de Kohonen coloreado por score PC1\n"
-        "La franja gris intermedia agrupa países con score ≈ 0 en PCA,\n"
-        "pero Kohonen los distribuye en posiciones distantes",
+        "Mapa de Kohonen coloreado por score PC1",
         fontsize=14,
     )
     fig.tight_layout()
@@ -372,64 +406,13 @@ def plot_component_planes_ranked(
         axes[j].set_visible(False)
 
     fig.suptitle(
-        "Sección 1.2 — Planos de Componentes (Red de Kohonen)\n"
-        "Peso aprendido por neurona para cada variable · ordenados por loading PC1 (PCA)\n"
-        "Títulos rojos = loading positivo · títulos azules = loading negativo",
+        "Planos de Componentes (Red de Kohonen)",
         fontsize=10,
     )
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
 
-
-def plot_plane_correlations(
-    som: SOM,
-    feature_names: list[str],
-    loadings: np.ndarray,
-    path: str,
-) -> None:
-    """
-    Left: Pearson correlation between each pair of SOM component planes.
-    Right: Expected sign pattern from PCA loadings (outer product).
-    If both matrices agree, Kohonen's topology reflects PCA's linear structure.
-    """
-    planes = [som.weights[:, :, i].ravel() for i in range(len(feature_names))]
-    plane_corr = np.corrcoef(planes)
-
-    loading_outer = np.outer(loadings, loadings)
-    lo_norm = loading_outer / max(np.max(np.abs(loading_outer)), 1e-9)
-
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
-
-    for ax, mat, title in zip(
-        axes,
-        [plane_corr, lo_norm],
-        [
-            "Correlación entre planos\nde componentes Kohonen",
-            "Correlación esperada\nsegún loadings PCA (prod. exterior)",
-        ],
-    ):
-        im = ax.imshow(mat, cmap="RdBu_r", vmin=-1, vmax=1)
-        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        n = len(feature_names)
-        ax.set_xticks(range(n))
-        ax.set_yticks(range(n))
-        ax.set_xticklabels(feature_names, rotation=45, ha="right", fontsize=8)
-        ax.set_yticklabels(feature_names, fontsize=8)
-        ax.set_title(title, fontsize=10)
-        for i in range(n):
-            for j in range(n):
-                ax.text(j, i, f"{mat[i, j]:.2f}", ha="center", va="center",
-                        fontsize=7, color="white" if abs(mat[i, j]) > 0.7 else "black")
-
-    fig.suptitle(
-        "Sección 1.2 — Coherencia en la correlación de variables\n"
-        "(si ambas matrices coinciden en signo, Kohonen refleja la misma estructura lineal que PCA)",
-        fontsize=10,
-    )
-    fig.tight_layout()
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -460,27 +443,30 @@ def main() -> None:
     analyze_extremes(countries, som_coords, pc1_scores)
     analyze_middle(countries, som_coords, pc1_scores, threshold=args.middle_threshold)
 
-    n_top, n_bottom = 5, 4
+    n_top, n_bottom = 5, 5
     out = args.output_dir
     print("\nGenerando gráficos...")
 
     # Section 1.1
     plot_pc1_ranking(countries, pc1_scores, n_top, n_bottom,
                      os.path.join(out, "1.1_pc1_ranking.png"))
-    plot_kohonen_extremes(countries, som_coords, pc1_scores,
-                          som_cfg["grid_rows"], som_cfg["grid_cols"], n_top, n_bottom,
-                          os.path.join(out, "1.1_kohonen_extremes.png"))
+    plot_pc1_gradient_map(countries, som_coords, pc1_scores,
+                          som_cfg["grid_rows"], som_cfg["grid_cols"],
+                          os.path.join(out, "1.1_kohonen_gradient.png"))
 
     # Section 1.2
     plot_component_planes_ranked(som, feature_names, loading,
                                  os.path.join(out, "1.2_component_planes.png"))
-    plot_plane_correlations(som, feature_names, loading,
-                            os.path.join(out, "1.2_plane_correlations.png"))
 
     # Section 2.1
+    _highlight = ["Spain", "Slovenia"]
+    plot_pc1_ranking(countries, pc1_scores, n_top, n_bottom,
+                     os.path.join(out, "2.1_pc1_ranking_highlight.png"),
+                     highlight=_highlight, show_extremes=False)
     plot_pc1_gradient_map(countries, som_coords, pc1_scores,
                           som_cfg["grid_rows"], som_cfg["grid_cols"],
-                          os.path.join(out, "2.1_pc1_gradient_map.png"))
+                          os.path.join(out, "2.1_kohonen_plain.png"),
+                          highlight=_highlight, gradient=False)
 
     print(f"\nGráficos guardados en {out}/")
 
