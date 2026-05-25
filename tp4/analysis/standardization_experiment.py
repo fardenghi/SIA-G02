@@ -197,7 +197,7 @@ def _draw_country_map(
     ax.grid(True, color="gray", linewidth=0.4)
 
     for (r, c), country_list in assignments.items():
-        y = grid_rows - 1 - r
+        y = r
         ax.text(c + 0.5, y + 0.5, "\n".join(country_list),
                 ha="center", va="center", fontsize=6.2,
                 bbox=dict(boxstyle="round,pad=0.2", facecolor=facecolor, alpha=0.35))
@@ -241,7 +241,7 @@ def plot_component_planes_comparison(
     for i, name in enumerate(feature_names):
         for row, (som, label) in enumerate([(som_scaled, "Estándar"), (som_raw, "Crudo")]):
             plane = som.weights[:, :, i]
-            im = axes[row, i].imshow(plane, cmap="RdBu_r", interpolation="nearest")
+            im = axes[row, i].imshow(plane, cmap="RdBu_r", interpolation="nearest", origin="lower")
             plt.colorbar(im, ax=axes[row, i], fraction=0.046, pad=0.04)
             axes[row, i].set_title(f"{name}\n({label})", fontsize=8)
             axes[row, i].set_xticks([])

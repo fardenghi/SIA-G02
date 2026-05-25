@@ -25,8 +25,8 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def plot_radio_convergence(X: np.ndarray):
     print("Running Experiment: Neighborhood Radius (R) convergence...")
-    radii = [0.5, 1.5, 3.0, 5.0]
-    colors = {0.5: "#E74C3C", 1.5: "#F1C40F", 3.0: "#2ECC71", 5.0: "#3498DB"}
+    radii = [1.0, 3.0, 5.0]
+    colors = {1.0: "#F1C40F", 3.0: "#2ECC71", 5.0: "#3498DB"}
     
     fig, ax = plt.subplots(figsize=(10, 6), dpi=150)
     ax.set_facecolor("white")
