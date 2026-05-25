@@ -11,7 +11,7 @@ import numpy as np
 
 
 GRID = 5
-HOPFIELD_CAPACITY = 0.138  # límite teórico de Hopfield: p_max ≈ 0.138 · N
+HOPFIELD_CAPACITY = 0.15  # límite teórico de Hopfield: p_max ≈ 0.15 · N
 
 
 _RAW: dict[str, str] = {
