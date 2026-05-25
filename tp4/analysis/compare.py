@@ -230,7 +230,7 @@ def plot_kohonen_extremes(
 
     for r in range(grid_rows):
         for c in range(grid_cols):
-            y = grid_rows - 1 - r
+            y = r
             cell = assignments.get((r, c), [])
             has_top    = any(ct in top_set    for ct in cell)
             has_bottom = any(ct in bottom_set for ct in cell)
@@ -260,7 +260,7 @@ def plot_kohonen_extremes(
     ax.set_xticks(np.arange(grid_cols) + 0.5)
     ax.set_xticklabels(range(grid_cols), fontsize=14)
     ax.set_yticks(np.arange(grid_rows) + 0.5)
-    ax.set_yticklabels(range(grid_rows - 1, -1, -1), fontsize=14)
+    ax.set_yticklabels(range(grid_rows), fontsize=14)
     ax.set_title(
         "Kohonen — posición de los extremos de PC1\n"
         f"▲ Top {n_top} (fondo rojo)  |  ▼ Bottom {n_bottom} (fondo azul)",
@@ -319,7 +319,7 @@ def plot_pc1_gradient_map(
 
     for r in range(grid_rows):
         for c in range(grid_cols):
-            y = grid_rows - 1 - r
+            y = r
             if (r, c) in cell_countries:
                 if gradient:
                     face = cmap(norm(avg_score[(r, c)]))
@@ -347,9 +347,9 @@ def plot_pc1_gradient_map(
     ax.set_xticks(np.arange(grid_cols) + 0.5)
     ax.set_xticklabels(range(grid_cols), fontsize=14)
     ax.set_yticks(np.arange(grid_rows) + 0.5)
-    ax.set_yticklabels(range(grid_rows - 1, -1, -1), fontsize=14)
+    ax.set_yticklabels(range(grid_rows), fontsize=14)
     ax.set_title(
-        "Mapa de Kohonen coloreado por score PC1",
+        "Mapa de Kohonen coloreado por score PC1" if gradient else "Mapa de Kohonen",
         fontsize=14,
     )
     fig.tight_layout()
@@ -381,7 +381,7 @@ def plot_component_planes_ranked(
     for plot_idx, feat_idx in enumerate(order):
         ax = axes[plot_idx]
         plane = som.weights[:, :, feat_idx]
-        im = ax.imshow(plane, cmap="RdBu_r", interpolation="nearest")
+        im = ax.imshow(plane, cmap="RdBu_r", interpolation="nearest", origin="lower")
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04,
                      label="Peso de la neurona")
 

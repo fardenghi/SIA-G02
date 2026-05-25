@@ -64,8 +64,7 @@ def plot_country_map(
 
     ax.tick_params(axis="both", labelsize=14)
     for (r, c), countries in assignments.items():
-        # row 0 at top: invert y
-        y = grid_rows - 1 - r
+        y = r
         text = "\n".join(countries)
         ax.text(
             c + 0.5, y + 0.5, text,
@@ -82,7 +81,7 @@ def plot_country_map(
 def plot_u_matrix(som: SOM, path: str) -> None:
     u = som.u_matrix()
     fig, ax = plt.subplots(figsize=(6, 5))
-    im = ax.imshow(u, cmap="bone_r", interpolation="nearest")
+    im = ax.imshow(u, cmap="bone_r", interpolation="nearest", origin="lower")
     plt.colorbar(im, ax=ax, label="Distancia promedio")
     ax.set_title("U-Matrix — distancias entre neuronas vecinas")
     ax.set_xlabel("Columna")
@@ -108,7 +107,7 @@ def plot_hit_map(
         counts[r, c] = len(countries)
 
     fig, ax = plt.subplots(figsize=(6, 5))
-    im = ax.imshow(counts, cmap="YlOrRd", interpolation="nearest")
+    im = ax.imshow(counts, cmap="YlOrRd", interpolation="nearest", origin="lower")
     plt.colorbar(im, ax=ax, label="Cantidad de países")
     ax.set_title(f"Hit map — países por neurona (total: {n_total})")
     ax.set_xlabel("Columna")
@@ -130,7 +129,7 @@ def plot_component_planes(som: SOM, feature_names: list[str], path: str) -> None
     axes = np.array(axes).ravel()
     for i, name in enumerate(feature_names):
         plane = som.weights[:, :, i]
-        im = axes[i].imshow(plane, cmap="RdBu_r", interpolation="nearest")
+        im = axes[i].imshow(plane, cmap="RdBu_r", interpolation="nearest", origin="lower")
         plt.colorbar(im, ax=axes[i], fraction=0.046, pad=0.04)
         axes[i].set_title(name, fontsize=9)
         axes[i].set_xticks([])
