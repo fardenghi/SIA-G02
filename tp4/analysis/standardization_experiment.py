@@ -206,7 +206,9 @@ def plot_kohonen_comparison(
     cs_s, cc_s = build_cells(coords_scaled, scores_scaled)
     cs_r, cc_r = build_cells(coords_raw,    scores_raw)
 
-    fig, axes = plt.subplots(1, 2, figsize=(grid_cols * 2.6 * 2, grid_rows * 2.4))
+    fig, axes = plt.subplots(1, 2,
+                             figsize=(grid_cols * 2.6 * 2 + 3, grid_rows * 2.4 + 1),
+                             gridspec_kw={"wspace": 0.3})
 
     for ax, cell_scores, cell_ctries, title in [
         (axes[0], cs_s, cc_s, "Datos estandarizados"),
@@ -233,7 +235,7 @@ def plot_kohonen_comparison(
                                                facecolor="#e8e8e8", edgecolor="gray", linewidth=0.5))
         sm = cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
-        cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.02)
+        cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
         cbar.ax.tick_params(labelsize=10)
         cbar.set_label("Score PC1 promedio", fontsize=11)
         ax.set_xticks(np.arange(grid_cols) + 0.5)
@@ -241,10 +243,10 @@ def plot_kohonen_comparison(
         ax.set_yticks(np.arange(grid_rows) + 0.5)
         ax.set_yticklabels(range(grid_rows), fontsize=12)
         ax.set_title(title, fontsize=14)
+        ax.tick_params(axis="x", pad=6)
 
     fig.suptitle("Efecto de la estandarización sobre Kohonen", fontsize=12, weight="bold")
-    fig.tight_layout()
-    fig.savefig(path, dpi=150)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
