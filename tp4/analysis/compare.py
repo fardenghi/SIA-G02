@@ -413,6 +413,120 @@ def plot_component_planes_ranked(
     fig.savefig(path, dpi=150)
     plt.close(fig)
 
+# ---------------------------------------------------------------------------
+# Plots — Section 2.2
+# ---------------------------------------------------------------------------
+
+def plot_pca_outlier_comparison(
+    countries: list[str],
+    X: np.ndarray,
+    outlier: str,
+    path: str,
+) -> None:
+    """Grouped horizontal bar chart: PC1 scores with vs without the outlier.
+    Sorted by 'with' score — those bars form a staircase; 'without' bars reveal distortion."""
+    outlier_idx = countries.index(outlier)
+    mask = np.array([i != outlier_idx for i in range(len(countries))])
+    countries_no = [c for i, c in enumerate(countries) if mask[i]]
+
+    _, scores_with = get_pc1(X)
+    _, scores_without = get_pc1(X[mask])
+
+    if np.corrcoef(scores_with[mask], scores_without)[0, 1] < 0:
+        scores_without = -scores_without
+
+    order = np.argsort(scores_with[mask])
+    sorted_countries = [countries_no[i] for i in order]
+    sw  = scores_with[mask][order]
+    swo = scores_without[order]
+
+    n = len(sorted_countries)
+    y = np.arange(n)
+    h = 0.35
+
+    fig, ax = plt.subplots(figsize=(10, 0.4 * n + 2))
+    ax.barh(y + h / 2, sw,  h, label=f"Con {outlier}", color=_RED,  alpha=0.85)
+    ax.barh(y - h / 2, swo, h, label=f"Sin {outlier}", color=_BLUE, alpha=0.85)
+    ax.set_yticks(y)
+    ax.set_yticklabels(sorted_countries, fontsize=9)
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.set_xlabel("Score sobre PC1")
+    ax.set_title(f"PCA — Efecto palanca de {outlier} sobre los scores PC1", fontsize=11)
+    ax.legend(fontsize=9)
+    ax.grid(axis="x", alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def plot_kohonen_outlier_comparison(
+    countries_with: list[str],
+    som_coords_with: np.ndarray,
+    pc1_scores_with: np.ndarray,
+    countries_no: list[str],
+    som_coords_no: np.ndarray,
+    pc1_scores_no: np.ndarray,
+    grid_rows: int,
+    grid_cols: int,
+    outlier: str,
+    path: str,
+) -> None:
+    """Side-by-side gradient maps with and without the outlier.
+    Shows that non-outlier countries cluster identically in both cases."""
+
+    def build_cells(ctries, coords, scores):
+        cell_scores: dict[tuple, list[float]] = {}
+        cell_ctries: dict[tuple, list[str]]  = {}
+        for country, coord, score in zip(ctries, coords, scores):
+            key = (int(coord[0]), int(coord[1]))
+            cell_scores.setdefault(key, []).append(float(score))
+            cell_ctries.setdefault(key, []).append(country)
+        return cell_scores, cell_ctries
+
+    cs_with, cc_with = build_cells(countries_with, som_coords_with, pc1_scores_with)
+    cs_no,   cc_no   = build_cells(countries_no,   som_coords_no,   pc1_scores_no)
+
+    flat = [s for g in list(cs_with.values()) + list(cs_no.values()) for s in g]
+    norm = plt.Normalize(vmin=min(flat), vmax=max(flat))
+    cmap = cm.RdBu_r
+
+    fig, axes = plt.subplots(1, 2, figsize=(grid_cols * 2.4 * 2 + 1, grid_rows * 2.4))
+
+    for ax, cell_scores, cell_ctries, title in [
+        (axes[0], cs_with, cc_with, f"Con {outlier}"),
+        (axes[1], cs_no,   cc_no,   f"Sin {outlier}"),
+    ]:
+        avg = {k: float(np.mean(v)) for k, v in cell_scores.items()}
+        ax.set_xlim(0, grid_cols)
+        ax.set_ylim(0, grid_rows)
+        ax.set_aspect("equal")
+        for r in range(grid_rows):
+            for c in range(grid_cols):
+                y = r
+                if (r, c) in cell_ctries:
+                    ax.add_patch(plt.Rectangle((c, y), 1, 1,
+                                               facecolor=cmap(norm(avg[(r, c)])),
+                                               edgecolor="gray", linewidth=0.7))
+                    ax.text(c + 0.5, y + 0.5, "\n".join(cell_ctries[(r, c)]),
+                            ha="center", va="center", fontsize=11)
+                else:
+                    ax.add_patch(plt.Rectangle((c, y), 1, 1,
+                                               facecolor="#e8e8e8", edgecolor="gray", linewidth=0.5))
+        ax.set_xticks(np.arange(grid_cols) + 0.5)
+        ax.set_xticklabels(range(grid_cols), fontsize=12)
+        ax.set_yticks(np.arange(grid_rows) + 0.5)
+        ax.set_yticklabels(range(grid_rows), fontsize=12)
+        ax.set_title(title, fontsize=14)
+
+    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=axes.tolist(), fraction=0.02, pad=0.02)
+    cbar.ax.tick_params(labelsize=12)
+    cbar.set_label("Score PC1 promedio", fontsize=13)
+    fig.suptitle("Kohonen — Resiliencia ante outliers", fontsize=15)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -467,6 +581,28 @@ def main() -> None:
                           som_cfg["grid_rows"], som_cfg["grid_cols"],
                           os.path.join(out, "2.1_kohonen_plain.png"),
                           highlight=_highlight, gradient=False)
+
+    # Section 2.2
+    _outlier = "Ukraine"
+    outlier_idx = countries.index(_outlier)
+    mask = np.array([i != outlier_idx for i in range(len(countries))])
+    countries_no = [c for i, c in enumerate(countries) if mask[i]]
+    X_no = X[mask]
+    print("Entrenando SOM sin outlier...")
+    som_no = train_som(X_no, som_cfg)
+    som_coords_no = som_no.predict(X_no)
+    _, pc1_scores_no = get_pc1(X_no)
+    if np.corrcoef(pc1_scores[mask], pc1_scores_no)[0, 1] < 0:
+        pc1_scores_no = -pc1_scores_no
+
+    plot_pca_outlier_comparison(countries, X, _outlier,
+                                os.path.join(out, "2.2_pca_outlier.png"))
+    plot_kohonen_outlier_comparison(
+        countries,    som_coords,    pc1_scores,
+        countries_no, som_coords_no, pc1_scores_no,
+        som_cfg["grid_rows"], som_cfg["grid_cols"], _outlier,
+        os.path.join(out, "2.2_kohonen_outlier.png"),
+    )
 
     print(f"\nGráficos guardados en {out}/")
 
