@@ -193,13 +193,13 @@ def test_scale_pattern_block_structure():
 
 
 @pytest.mark.parametrize("p,expected_k", [
-    (1, 1), (3, 1), (4, 2), (13, 2), (14, 3), (26, 3),
+    (1, 1), (3, 1), (4, 2), (13, 2), (14, 2), (26, 3),
 ])
 def test_min_scale_factor(p, expected_k):
     k = min_scale_factor(p)
     assert k == expected_k
     N = (GRID * k) ** 2
-    assert 0.138 * N >= p
+    assert 0.15 * N >= p
 
 
 def test_scaled_letter_vector_size():

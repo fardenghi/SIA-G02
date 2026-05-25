@@ -189,10 +189,10 @@ def plot_fixed_vs_adaptive(
     fig, ax = plt.subplots(figsize=(9, 4.5))
     ax.plot(f_curve["n_patterns"], f_curve["recall_accuracy"],
             marker="o", linewidth=2, color="#1E3A5F",
-            label="N fijo (5×5 = 25)")
+            label="N fijo")
     ax.plot(a_curve["n_patterns"], a_curve["recall_accuracy"],
             marker="s", linewidth=2, color="#2E8B57",
-            label="N adaptativo (k = ⌈√(p/(0.138·25))⌉)")
+            label="N adaptativo")
     ax.axvline(x=limit_fixed, color="red", linestyle="--", linewidth=1.5,
                label=f"Límite teórico N=25 (≈{limit_fixed:.2f})")
     ax.set_xlabel("Cantidad de patrones almacenados (p)")
