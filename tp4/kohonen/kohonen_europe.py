@@ -47,29 +47,74 @@ def build_assignments(countries: list[str], coords: np.ndarray) -> dict[tuple, l
     return assignments
 
 
+_COUNTRY_GROUPS = [
+    {
+        "label": "Desarrolladas",
+        "countries": {"Luxembourg", "Ireland", "Iceland"},
+        "color": "#FFBFBF",  # pastel red
+    },
+    {
+        "label": "Centroeuropa (Desarrollada)",
+        "countries": {"Czech Republic", "Slovenia", "Austria", "Denmark"},
+        "color": "#FFD9B3",  # pastel orange
+    },
+    {
+        "label": "Centroeuropa (Transición)",
+        "countries": {"Belgium", "Hungary", "Lithuania", "Slovakia", "Latvia"},
+        "color": "#FFF5B3",  # pastel yellow
+    },
+    {
+        "label": "Occidente/Nórdica Próspera",
+        "countries": {"Netherlands", "Switzerland", "Finland", "Norway", "Germany", "Sweden", "Italy"},
+        "color": "#B3D4F5",  # pastel blue
+    },
+    {
+        "label": "Este Emergente",
+        "countries": {"Ukraine", "Bulgaria", "Estonia", "Poland"},
+        "color": "#C2EBC2",  # pastel green
+    },
+]
+_DEFAULT_CELL_COLOR = "#E8E8E8"
+
+
+def _cell_color(countries_in_cell: list[str]) -> str:
+    counts: dict[int, int] = {}
+    for country in countries_in_cell:
+        for i, g in enumerate(_COUNTRY_GROUPS):
+            if country in g["countries"]:
+                counts[i] = counts.get(i, 0) + 1
+                break
+    if not counts:
+        return _DEFAULT_CELL_COLOR
+    # tie-break: prefer the group with lowest index (order in _COUNTRY_GROUPS)
+    return _COUNTRY_GROUPS[min(counts, key=lambda i: (-counts[i], i))]["color"]
+
+
 def plot_country_map(
     assignments: dict[tuple, list[str]],
     grid_rows: int,
     grid_cols: int,
     path: str,
 ) -> None:
+    from matplotlib.patches import Rectangle
+
     fig, ax = plt.subplots(figsize=(grid_cols * 2, grid_rows * 2))
     ax.set_xlim(0, grid_cols)
     ax.set_ylim(0, grid_rows)
     ax.set_xticks(range(grid_cols))
     ax.set_yticks(range(grid_rows))
-    ax.grid(True, color="gray", linewidth=0.5)
+    ax.grid(True, color="gray", linewidth=0.5, zorder=1)
     ax.set_xticklabels([str(c) for c in range(grid_cols)])
     ax.set_yticklabels([str(r) for r in range(grid_rows)])
-
     ax.tick_params(axis="both", labelsize=14)
+
     for (r, c), countries in assignments.items():
-        y = r
-        text = "\n".join(countries)
+        color = _cell_color(countries)
+        ax.add_patch(Rectangle((c, r), 1, 1, facecolor=color, edgecolor="none", zorder=0))
         ax.text(
-            c + 0.5, y + 0.5, text,
-            ha="center", va="center", fontsize=15,
-            bbox=dict(boxstyle="round,pad=0.35", facecolor="steelblue", alpha=0.3),
+            c + 0.5, r + 0.5, "\n".join(countries),
+            ha="center", va="center", fontsize=15, zorder=2,
+            bbox=dict(boxstyle="round,pad=0.3", facecolor=color, edgecolor="none", alpha=0.85),
         )
 
     ax.set_title("Mapa de países — Red de Kohonen", fontsize=18)
