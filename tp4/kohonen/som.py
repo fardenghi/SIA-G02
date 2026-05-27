@@ -80,13 +80,14 @@ class SOM:
             dists.append(d)
         return float(np.mean(dists))
 
-    def train(self, X: np.ndarray) -> list[float]:
+    def train(self, X: np.ndarray, record_te: bool = False):
         # inicialización con muestras aleatorias del dataset
         n_neurons = self.grid_rows * self.grid_cols
         sample_idx = self._rng.choice(len(X), size=n_neurons, replace=True)
         self.weights = X[sample_idx].reshape(self.grid_rows, self.grid_cols, self.input_dim).copy()
 
-        history = []
+        qe_history: list[float] = []
+        te_history: list[float] = []
         T = self.epochs
         for t in range(T):
             lr_t = self._decay(self.lr, t, T, self.lr_decay)
@@ -100,10 +101,25 @@ class SOM:
                 h = self._neighborhood(bmu, sigma_t, self.neighborhood_fn)  # (R, C)
                 delta = lr_t * h[:, :, np.newaxis] * (x - self.weights)
                 self.weights += delta
-            
-            # Record quantization error at the end of each epoch
-            history.append(self.get_quantization_error(X))
-        return history
+
+            qe_history.append(self.get_quantization_error(X))
+            if record_te:
+                te_history.append(self.get_topological_error(X))
+
+        if record_te:
+            return qe_history, te_history
+        return qe_history
+
+    def get_topological_error(self, X: np.ndarray) -> float:
+        errors = 0
+        for x in X:
+            dists = np.linalg.norm(self.weights - x, axis=2).ravel()  # (R*C,)
+            top2 = np.argpartition(dists, kth=1)[:2]
+            r1, c1 = divmod(int(top2[0]), self.grid_cols)
+            r2, c2 = divmod(int(top2[1]), self.grid_cols)
+            if max(abs(r1 - r2), abs(c1 - c2)) > 1:
+                errors += 1
+        return errors / len(X)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         coords = np.array([self._find_bmu(x) for x in X])

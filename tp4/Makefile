@@ -3,6 +3,7 @@ PYTEST   := uv run pytest
 
 # --- Kohonen ---
 KOHONEN_CONFIG ?= configs/kohonen_europe.json
+RADIUS_STUDY_CONFIG ?= configs/kohonen_radius_study.json
 
 # --- Oja ---
 OJA_CONFIG ?= configs/oja_europe.json
@@ -16,10 +17,11 @@ LET_END         ?= Z
 # --- Analysis ---
 MIDDLE_THRESHOLD ?= 0.5
 
-.PHONY: all kohonen convergence pca pca-plots pca-boxplots oja hopfield hopfield-alphabet \
+.PHONY: all kohonen convergence kohonen-radius-study pca pca-plots pca-boxplots oja hopfield hopfield-alphabet \
 	hopfield-orthogonality hopfield-capacity hopfield-capacity-adaptive \
 	compare standardization analysis \
-	test clean clean-kohonen clean-convergence clean-pca clean-oja clean-hopfield clean-analysis help
+	test clean clean-kohonen clean-convergence clean-pca clean-oja clean-hopfield clean-analysis \
+	clean-radius-study help
 
 all: kohonen pca oja hopfield
 
@@ -28,6 +30,9 @@ kohonen:
 
 convergence:
 	$(PYTHON) -m kohonen.convergence_analysis
+
+kohonen-radius-study:
+	$(PYTHON) -m kohonen.kohonen_radius_study --config $(RADIUS_STUDY_CONFIG)
 
 pca: pca-plots pca-boxplots
 	$(PYTHON) -m pca_test.pca
@@ -91,6 +96,9 @@ clean-analysis:
 clean-convergence:
 	rm -rf output/convergence
 
+clean-radius-study:
+	rm -rf output/kohonen_radius_study
+
 clean: clean-kohonen clean-convergence clean-pca clean-oja clean-hopfield clean-analysis
 
 help:
@@ -115,6 +123,7 @@ help:
 	@echo "  make all                                  Corre kohonen + pca + oja + hopfield"
 	@echo "  make test                                 Corre la suite de tests"
 	@echo "  make convergence                          Genera los gráficos minimalistas de convergencia"
+	@echo "  make kohonen-radius-study                 Estudio TE vs QE para distintos radios iniciales"
 	@echo "  make clean-kohonen                        Borra output/kohonen/"
 	@echo "  make clean-convergence                    Borra output/convergence/"
 	@echo "  make clean-pca                            Borra pca_test/plots/ y CSVs generados"
