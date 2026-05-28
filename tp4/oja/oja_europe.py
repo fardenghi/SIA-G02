@@ -121,6 +121,99 @@ def plot_convergence(
     plt.close(fig)
 
 
+def plot_scores_comparison(
+    countries: list[str],
+    oja_scores: np.ndarray,
+    sk_scores: np.ndarray,
+    path: str,
+) -> None:
+    fig, ax = plt.subplots(figsize=(8, 8))
+    
+    # Scatter plot
+    ax.scatter(sk_scores, oja_scores, color="steelblue", edgecolors="black", s=50, zorder=3, label="Países")
+    
+    # Label each point with the country name
+    for i, country in enumerate(countries):
+        ax.annotate(
+            country,
+            (sk_scores[i], oja_scores[i]),
+            xytext=(5, 5),
+            textcoords="offset points",
+            fontsize=8,
+            alpha=0.85
+        )
+        
+    # Find min and max for the y=x line
+    all_scores = np.concatenate([oja_scores, sk_scores])
+    min_val = float(np.min(all_scores)) - 0.2
+    max_val = float(np.max(all_scores)) + 0.2
+    
+    # Plot y=x line
+    ax.plot([min_val, max_val], [min_val, max_val], color="crimson", linestyle="--", linewidth=1.5, label="y = x (Identidad)", zorder=2)
+    
+    ax.set_xlim(min_val, max_val)
+    ax.set_ylim(min_val, max_val)
+    ax.set_xlabel("Score PC1 (sklearn PCA)", fontsize=11)
+    ax.set_ylabel("Score PC1 (Oja)", fontsize=11)
+    ax.set_title("Comparación de Scores PC1 — Oja vs sklearn PCA", fontsize=12, fontweight="bold", pad=15)
+    ax.grid(True, linestyle=":", alpha=0.6)
+    ax.legend(loc="upper left")
+    
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def plot_lr_convergence_experiment(
+    X: np.ndarray,
+    sk_w: np.ndarray,
+    epochs: int,
+    seed: int,
+    path: str,
+) -> None:
+    lrs = [0.001, 0.01, 0.1, 0.5, 1.0, 5.0]
+    colors = ["#9B59B6", "#3498DB", "#2ECC71", "#F1C40F", "#E67E22", "#E74C3C"]
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), dpi=150)
+    
+    for lr, color in zip(lrs, colors):
+        net = OjaNetwork(input_dim=X.shape[1], lr=lr, epochs=epochs, seed=seed)
+        net.train(X)
+        
+        # Calculate history
+        history = [h / np.linalg.norm(h) for h in net.history]
+        history = [h if np.dot(h, sk_w) >= 0 else -h for h in history]
+        diffs = [float(np.linalg.norm(h - sk_w)) for h in history]
+        cosines = [float(np.dot(h, sk_w)) for h in history]
+        
+        ax1.plot(diffs, color=color, linewidth=1.5, alpha=0.9, label=f"lr = {lr}")
+        ax2.plot(cosines, color=color, linewidth=1.5, alpha=0.9, label=f"lr = {lr}")
+        
+    # Style Left Ax
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    ax1.set_xlabel("Época", fontsize=10)
+    ax1.set_ylabel("‖w_oja − w_sklearn‖", fontsize=10)
+    ax1.set_title("Distancia al autovector de sklearn", fontsize=11, fontweight="bold")
+    ax1.grid(True, linestyle=":", alpha=0.4)
+    
+    # Style Right Ax
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.axhline(1.0, color="black", linewidth=0.8, linestyle="--", alpha=0.5)
+    ax2.set_xlabel("Época", fontsize=10)
+    ax2.set_ylabel("cos(w_oja, w_sklearn)", fontsize=10)
+    ax2.set_title("Similitud coseno con sklearn", fontsize=11, fontweight="bold")
+    ax2.grid(True, linestyle=":", alpha=0.4)
+    
+    # Minimalist legend
+    ax2.legend(frameon=False, loc="center right", fontsize=9)
+    
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
 def print_comparison(
     feature_names: list[str],
     oja_w: np.ndarray,
@@ -180,6 +273,8 @@ def main():
     plot_loadings(feature_names, oja_w, sk_w, os.path.join(out, "loadings.png"))
     plot_country_scores(countries, oja_scores, os.path.join(out, "country_scores.png"))
     plot_convergence(net.history, sk_w, os.path.join(out, "convergence.png"))
+    plot_scores_comparison(countries, oja_scores, sk_scores, os.path.join(out, "scores_comparison.png"))
+    plot_lr_convergence_experiment(X, sk_w, cfg["epochs"], cfg["seed"], os.path.join(out, "lr_convergence.png"))
 
     print(f"\nGráficos guardados en {out}/")
 
