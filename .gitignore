@@ -216,4 +216,6 @@ tp1/results/*
 
 openspec/*
 .claude/
+.antigravitycli
 
+plots

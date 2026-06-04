@@ -8,11 +8,11 @@ on:
 
 jobs:
   pytest:
-    name: pytest (tp3)
+    name: pytest (tp4)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: tp3
+        working-directory: tp4
 
     steps:
       - name: Checkout
@@ -30,4 +30,4 @@ jobs:
         run: uv sync --dev
 
       - name: Run pytest
-        run: uv run pytest
+        run: uv run pytest -v
