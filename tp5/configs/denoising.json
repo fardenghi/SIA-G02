@@ -1,0 +1,26 @@
+{
+  "name": "denoising",
+  "data": { "font_path": "font/font.h", "subset": null },
+  "architecture": {
+    "encoder_layers": [35, 25, 15, 8, 2],
+    "activation": "tanh",
+    "output_activation": "sigmoid",
+    "init": "xavier_normal"
+  },
+  "training": {
+    "optimizer": "adam",
+    "loss": "bce",
+    "epochs": 20000,
+    "lr": 1e-3,
+    "restarts": 10,
+    "seed": 42,
+    "log_every": 200
+  },
+  "denoising": {
+    "enabled": true,
+    "noise_type": "salt_pepper",
+    "level": 0.1,
+    "sweep_levels": [0.05, 0.1, 0.2, 0.3]
+  },
+  "output": { "metrics_csv": "out/denoising/metrics.csv", "plots_dir": "out/plots" }
+}
