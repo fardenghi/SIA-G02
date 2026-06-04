@@ -54,3 +54,14 @@ def test_ships_all_five_named_configs():
     for n in names:
         cfg = load_config(f"configs/{n}.json")
         assert cfg.name == n
+
+
+def test_1a2_progression_configs_load():
+    import glob
+
+    paths = sorted(glob.glob("configs/1a2/*.json"))
+    assert len(paths) == 6
+    for p in paths:
+        cfg = load_config(p)
+        assert cfg.architecture.encoder_layers[-1] == 2  # latente 2D fijo en 1a
+        assert cfg.training.stop_at is None  # corren los restarts completos

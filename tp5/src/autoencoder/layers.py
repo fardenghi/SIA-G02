@@ -24,6 +24,8 @@ def _tanh_grad(z, a):
 
 
 def _sigmoid(z):
+    # Estable numéricamente: evita overflow de exp para |z| grande (p. ej. tras relu).
+    z = np.clip(z, -500.0, 500.0)
     return 1.0 / (1.0 + np.exp(-z))
 
 

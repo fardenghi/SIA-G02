@@ -92,6 +92,10 @@ exactos** (`max_pixel_error = 0`). En uso normal `stop_at: 0` corta apenas se lo
 | `deep`       | **0** (32/32)   | —                 | —               | red más profunda, también 32/32      |
 | `wide_relu`  | 3               | —                 | —               | `35-20-2` relu/mse: cuello demasiado abrupto |
 
+> La **progresión completa de la búsqueda 1a2** (de la config ingenua que no aprende
+> hasta las de menor error) está en [`configs/1a2/`](configs/1a2/README.md), con sus
+> configs ejecutables y la tabla de robustez por diseño.
+
 **Lectura del barrido (1a2):**
 
 - **Optimizador (Adam vs L-BFGS):** ambos llegan a 32/32, pero L-BFGS-B cae en mínimos

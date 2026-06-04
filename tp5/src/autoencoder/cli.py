@@ -78,7 +78,9 @@ def run(config_path: str) -> dict:
 
     # Visualizaciones (1a3 latente, reconstrucción, 1a4 letra nueva)
     Z = best_net.encode(X)
-    viz.plot_latent_scatter(Z, labels, path=plots_dir / "latent_scatter.png")
+    # El scatter 2D (1a3) solo aplica con latente de 2 dimensiones.
+    if best_net.latent_dim == 2:
+        viz.plot_latent_scatter(Z, labels, path=plots_dir / "latent_scatter.png")
     viz.plot_reconstruction(X, recon, labels, path=plots_dir / "reconstruction.png")
 
     # Letra nueva: interpolación entre dos códigos latentes -> decode -> threshold
