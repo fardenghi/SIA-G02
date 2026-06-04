@@ -1,0 +1,206 @@
+# Configuración por defecto del algoritmo genético
+# Estos valores pueden ser sobreescritos por argumentos CLI
+
+# Imagen
+image:
+  # Ruta a la imagen objetivo (requerido en CLI)
+  target_path: null
+
+# Parámetros del genotipo
+genotype:
+  # Familia de formas por individuo: triangle | ellipse
+  shape_type: triangle
+  # Cantidad de genes por individuo (triángulos o elipses según shape_type)
+  num_triangles: 50
+  # Rango de valores para el canal alfa (0.0 - 1.0)
+  alpha_min: 0.1
+  alpha_max: 0.8
+
+# Parámetros del algoritmo genético
+genetic:
+  # Tamaño de la población
+  population_size: 100
+  # Número máximo de generaciones
+  max_generations: 1000
+  # Umbral de fitness para parada temprana. Depende del método de fitness:
+  #   linear             → 1 - MSE/65025  ∈ [0,1]  ej: 0.92 ≈ error promedio ~67/canal
+  #   rmse               → 1 - sqrt(MSE)/255 ∈ [0,1]
+  #   inverse_normalized → 1 / (1 + MSE/65025) ∈ (0.5,1]
+  #   exponential        → exp(-NMSE/scale) ∈ (0,1]
+  #   inverse_mse        → 1 / (1 + MSE)  ∈ (0,0.003]  (NO recomendado)
+  #   null = sin parada temprana, corre hasta max_generations
+  fitness_threshold: null
+  
+  # Curriculum Learning: Transición Dinámica de Fitness
+  # Si el aprendizaje se estanca, transiciona cíclicamente entre estos métodos (ej. base -> "ssim" -> "detail_weighted" -> base)
+  # null = deshabilitado. Puede ser un string o una lista de strings.
+  transition_methods: null
+  # Umbral mínimo de mejora esperado entre generaciones para no considerarlo estancamiento
+  stagnation_threshold: 0.00005
+  # Cantidad máxima de generaciones consecutivas por debajo del umbral antes de cambiar la métrica
+  max_patience: 50
+  
+  # Sembrado inteligente de la población inicial (Grid Seeding).
+  # Fracción [0.0, 1.0] de la población que se pre-inicializa con una aproximación
+  # cubista de la imagen objetivo (grilla de triángulos con color promedio por celda).
+  # El resto (1 - seed_ratio) se inicializa de forma aleatoria para garantizar diversidad genética.
+  # Recomendación: 0.0 = 100% aleatorio (clásico). 0.1 = 10% seeded + 90% aleatorio (Regla del 10%).
+  # Evitar valores > 0.5 para no degradar a un Hill Climber por falta de diversidad.
+  seed_ratio: 0.1
+  
+# Fitness
+fitness:
+  # Función de fitness:
+  #   linear             → 1 - MSE/65025           [0, 1]  recomendado, lineal
+  #   rmse               → 1 - sqrt(MSE)/255        [0, 1]  penaliza menos errores grandes
+  #   inverse_normalized → 1 / (1 + MSE/65025)      (0.5, 1]  más discriminativo cerca de 1
+  #   exponential        → exp(-MSE_norm / scale)   (0, 1]  escala configurable
+  #   inverse_mse        → 1 / (1 + MSE)            (0, 0.003]  NO recomendado
+  #   detail_weighted    → MSE ponderado por bordes  [0, 1]  upweightea regiones con detalle;
+  #                         útil cuando hay fondo liso + símbolo pequeño
+  #   composite          → α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss  [0, 1]
+  #                         combina estructura, color y bordes; recomendado para imágenes complejas
+  #   ssim               → Índice de Similitud Estructural puro [0, 1] evalúa percepción global
+  method: "linear"
+  # Escala para método exponencial (menor = curva más pronunciada)
+  exponential_scale: 0.1
+  # Peso base para regiones lisas en detail_weighted.
+  # 0.0 = solo pesan los bordes; 1.0 = equivalente a MSE uniforme.
+  # Recomendado: 0.2–0.4 para imágenes con fondo dominante + símbolo pequeño.
+  detail_weight_base: 0.3
+  # Pesos del fitness compuesto (method: "composite").
+  # Fitness = 1 - (α·(1−SSIM) + β·MSE_norm + γ·EdgeLoss) / (α+β+γ)
+  # Los pesos se normalizan automáticamente, no necesitan sumar 1.
+  composite_alpha: 0.5   # peso de (1 - SSIM): estructura global
+  composite_beta: 0.2    # peso de MSE normalizado: ajuste fino de color
+  composite_gamma: 0.3   # peso de EdgeLoss: alineación geométrica de bordes
+
+# Selección
+selection:
+  # Método: "elite", "tournament", "probabilistic_tournament", "roulette", "universal", "boltzmann", "rank" (alias: "ranking")
+  method: "tournament"
+  # Tamaño del torneo determinístico
+  tournament_size: 3
+  # Umbral para torneo probabilístico (0.5 - 1.0)
+  threshold: 0.75
+  # Parámetros de Boltzmann
+  boltzmann_t0: 100.0
+  boltzmann_tc: 1.0
+  boltzmann_k: 0.005
+
+# Cruza (Crossover)
+crossover:
+  # Método: "single_point", "two_point", "uniform", "annular", "spatial_zindex", "arithmetic"
+  method: "uniform"
+  # Probabilidad de cruza
+  probability: 0.8
+  # Cruza por fases: usa método temprano al inicio y cambia al tardío en switch_ratio * max_generations.
+  # Útil para explorar estructura temprano (one/two-point) y refinar al final (uniform).
+  phased:
+    enabled: true
+    # Si es null, toma el valor de crossover.method
+    early_method: "two_point"
+    late_method: "uniform"
+    # Fracción de avance [0,1] para cambiar de método (ej: 0.6 = 60% de generaciones)
+    switch_ratio: 0.6
+
+# Mutación
+mutation:
+  # Método: "single_gene"        → muta exactamente 1 gen
+  #         "limited_multigen"   → muta entre 1 y max_genes genes
+  #         "uniform_multigen"   → cada gen muta independientemente con gene_probability
+  #         "complete"           → muta todos los genes
+  #         "error_map_guided"   → sesga la mutación hacia genes en zonas con mayor error
+  method: "uniform_multigen"
+  # Probabilidad de mutar un individuo (Pm) — usado por single_gene, limited_multigen, complete
+  probability: 0.3
+  # Probabilidad de mutar cada gen — usado por uniform_multigen
+  gene_probability: 0.1
+  # Máximo de genes a mutar — usado por limited_multigen
+  max_genes: 3
+  # Magnitud máxima de perturbación en coordenadas (fracción del tamaño)
+  position_delta: 0.1
+  # Magnitud máxima de perturbación en color (0-255)
+  color_delta: 30
+  # Magnitud máxima de perturbación en alfa
+  alpha_delta: 0.1
+  # Fracción de mutaciones guiadas por error map (solo para error_map_guided).
+  # El resto (1 - guided_ratio) son mutaciones uniformes aleatorias para mantener diversidad.
+  # Rango: [0.0, 1.0]. Recomendado: 0.7–0.8.
+  guided_ratio: 0.75
+  # Probabilidad de mutar cada float individual dentro de un triángulo seleccionado.
+  # 1.0 = todos los campos mutan siempre (comportamiento original).
+  # < 1.0 = per-float: cada coordenada, canal de color y alfa decide independientemente.
+  # Recomendado: 0.3–0.5 para exploración fina; 1.0 para máxima perturbación.
+  field_probability: 0.4
+
+  # Sigma adaptativo: escala los deltas según el progreso real del fitness.
+  # Si hay estancamiento → reduce los deltas (refina).
+  # Si hay mejoras reales → los recupera (explora).
+  adaptive_sigma_enabled: true
+  # Ventana de generaciones a observar para detectar estancamiento
+  adaptive_sigma_window: 30
+  # Mejora mínima en la ventana para no considerarse estancamiento
+  adaptive_sigma_min_improvement: 0.0001
+  # Factor de decaimiento cuando hay estancamiento (< 1)
+  adaptive_sigma_decay_factor: 0.9
+  # Factor de recuperación cuando hay mejoras (> 1)
+  adaptive_sigma_recovery_factor: 1.1
+  # Escala mínima permitida (piso de refinamiento)
+  adaptive_sigma_scale_min: 0.1
+  # Escala máxima permitida y valor inicial (techo de exploración)
+  adaptive_sigma_scale_max: 1.0
+
+# Supervivencia
+survival:
+  # Estrategia: "additive" (padres + hijos compiten) o "exclusive" (hijos tienen prioridad)
+  method: "additive"
+  # Método de selección para elegir sobrevivientes
+  selection_method: "elite"
+  # Ratio de hijos a generar: K = N * offspring_ratio (1.0 = misma cantidad, 1.5 = 50% más)
+  offspring_ratio: 1.0
+  # Cantidad de individuos élite que pasan sin modificar a la siguiente generación.
+  # 0 = desactivado. Recomendado: 1–5% de population_size (ej: 1–5 para pop=100).
+  elite_count: 8
+
+# Salida y visualización
+output:
+  # Directorio de salida
+  directory: "output"
+  # Guardar imagen cada N generaciones (0 = solo al final)
+  save_interval: 100
+  # Mostrar progreso en consola cada N generaciones
+  log_interval: 10
+  # Exportar datos geométricos a JSON.
+  # Siempre genera shapes.json y, en modo triangle, también triangles.json legacy.
+  export_triangles: true
+  # Generar gráfico de evolución del fitness
+  plot_fitness: true
+  # Exportar métricas por generación a CSV (pandas) — útil para comparar corridas
+  export_metrics_csv: true
+  # Exportar enumeración geométrica a CSV.
+  # Siempre genera shapes.csv y, en modo triangle, también triangles.csv legacy.
+  export_triangles_csv: false
+
+# Modelo de Islas (IMGA)
+# Ejecuta K subpoblaciones en paralelo con migración periódica en anillo.
+# Ref: "A Parallel Island Genetic Algorithm for Triangle-based Image Reconstruction"
+island:
+  # true = activar modelo de islas. false = modo single-population clásico.
+  enabled: false
+  # Cantidad de islas (K). Cada una tiene population_size individuos.
+  num_islands: 4
+  # Tamaño de migración (M): cada isla envía M mejores + M peores al vecino.
+  migration_size: 5
+  # Intervalo de migración (T): migrar cada T generaciones.
+  migration_interval: 10
+  # Topología de migración. Por ahora solo "ring".
+  topology: "ring"
+  # true = multiprocessing (un proceso por isla). false = secuencial.
+  parallel: true
+
+# Backend de renderizado
+rendering:
+  # "cpu" = Pillow (siempre disponible, default)
+  # "gpu" = moderngl/OpenGL (requiere: pip install moderngl  o  uv sync --extra gpu)
+  backend: "gpu"

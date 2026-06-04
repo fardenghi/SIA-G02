@@ -1,0 +1,27 @@
+{
+  "architecture": [784, 512, 10],
+  "activation": "tanh",
+  "output_activation": "tanh",
+  "loss": "mse",
+  "weight_init": "xavier",
+  "optimizer": "rmsprop",
+  "lr": 0.001,
+  "weight_decay": 0.0005,
+  "lr_scheduler": {
+    "type": "step_decay",
+    "decay_rate": 0.5,
+    "step_size": 80,
+    "lr_min": 1e-5
+  },
+  "epochs": 600,
+  "batch_size": 64,
+  "val_split": 0.15,
+  "patience": 120,
+  "min_delta": 0.0005,
+  "seed": 42,
+  "data_augmentation": true,
+  "aug_rotation_deg": 10,
+  "aug_scale_range": [0.9, 1.1],
+  "save_model": "outputs/ej3_more_digits/models/best_ej2_opt.npz",
+  "export_metrics": "outputs/ej3_more_digits/metrics/best_ej2_opt.csv"
+}
