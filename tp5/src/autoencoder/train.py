@@ -163,9 +163,15 @@ def train_multi_restart(
     denoising: dict | None = None,
     log_every: int = 100,
     verbose: bool = True,
+    stop_at: int | None = 0,
 ):
     """Entrena `restarts` modelos con semillas distintas; conserva el de menor
     `max_pixel_error`. Devuelve `(mejor_red, mejor_tracker, resumen_df)`.
+
+    `stop_at`: si un restart alcanza `max_pixel_error <= stop_at`, se abortan los
+    restarts restantes (ya se encontró un modelo suficientemente bueno). Con
+    `stop_at=0` (default) corta apenas un modelo reconstruye los 32/32 sin error;
+    `None` desactiva el corte y corre los `restarts` completos.
     """
     base_rng = np.random.default_rng(seed)
     seeds = base_rng.integers(0, 2**31 - 1, size=restarts)
@@ -201,8 +207,14 @@ def train_multi_restart(
             best_mpe = final["max_pixel_error"]
             best_net = net
             best_tracker = tracker
-            if best_mpe == 0:
-                pass  # seguimos para llenar el resumen, pero ya es óptimo
+
+        # Corte temprano: si ya alcanzamos el umbral objetivo, no seguimos.
+        if stop_at is not None and best_mpe <= stop_at:
+            if verbose:
+                print(f"  -> corte temprano en restart {r}: "
+                      f"max_pixel_error={best_mpe} <= stop_at={stop_at} "
+                      f"({r + 1}/{len(seeds)} restarts ejecutados)")
+            break
 
     summary = pd.DataFrame(summary_rows)
     return best_net, best_tracker, summary

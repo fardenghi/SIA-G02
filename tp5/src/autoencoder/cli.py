@@ -61,6 +61,7 @@ def run(config_path: str) -> dict:
         seed=cfg.training.seed,
         denoising=denoising,
         log_every=cfg.training.log_every,
+        stop_at=cfg.training.stop_at,
     )
 
     # Métricas a CSV

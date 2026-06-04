@@ -46,7 +46,8 @@ patrones se reconstruyen exactamente.
                     "activation": "tanh", "output_activation": "sigmoid",
                     "init": "xavier_normal" },
   "training":     { "optimizer": "adam", "loss": "bce", "epochs": 20000,
-                    "lr": 1e-3, "restarts": 20, "seed": 42, "log_every": 200 },
+                    "lr": 1e-3, "restarts": 20, "seed": 42, "log_every": 200,
+                    "stop_at": 0 },
   "denoising":    { "enabled": false, "noise_type": "salt_pepper", "level": 0.1,
                     "sweep_levels": [0.05, 0.1, 0.2, 0.3] },
   "output":       { "metrics_csv": "out/base_adam/metrics.csv",
@@ -61,6 +62,10 @@ patrones se reconstruyen exactamente.
 - **`init`** ∈ `xavier_uniform|xavier_normal|he_uniform|he_normal|normal|uniform`.
 - **`optimizer`** ∈ `adam|lbfgs` (L-BFGS-B vía scipy con gradiente propio; **Powell no se
   usa**). **`loss`** ∈ `bce|mse`.
+- **`restarts`**: cantidad de reentrenamientos con semillas distintas; se conserva el de
+  menor `max_pixel_error`. **`stop_at`**: corta los restarts apenas un modelo alcanza
+  `max_pixel_error <= stop_at` (default `0`, es decir 32/32 exacto); poné `null` para
+  correr siempre los `restarts` completos (útil para el barrido estadístico del informe).
 - Combinaciones subóptimas (p. ej. `bce` con salida no-`sigmoid`, `relu`+`xavier`) emiten
   un **warning** y continúan: permiten estudiar el efecto en el informe.
 
@@ -74,8 +79,10 @@ patrones se reconstruyen exactamente.
 
 ## Resultados (objetivo: `max_pixel_error <= 1` sobre los 32 patrones)
 
-Con multi-restart (20 semillas, 20000 épocas), las configuraciones tanh/sigmoid alcanzan
-**32/32 patrones exactos** (`max_pixel_error = 0`):
+Con multi-restart (20 semillas, 20000 épocas, `stop_at: null` para forzar las 20 y poder
+comparar la robustez), las configuraciones tanh/sigmoid alcanzan **32/32 patrones
+exactos** (`max_pixel_error = 0`). En uso normal `stop_at: 0` corta apenas se logra el
+32/32, así que para un experimento exitoso suele bastar **1 restart**:
 
 | Config       | Mejor `max_pix` | Restarts con ≤1px | `max_pix` medio | Observación                          |
 |--------------|-----------------|-------------------|-----------------|--------------------------------------|

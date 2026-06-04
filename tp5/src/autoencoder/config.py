@@ -47,6 +47,7 @@ class TrainingConfig:
     restarts: int = 20
     seed: int = 42
     log_every: int = 100
+    stop_at: int | None = 0
 
 
 @dataclass
@@ -120,7 +121,11 @@ def load_config(path: str | Path) -> Config:
 
     train_raw = raw.get("training", {})
     _unknown_keys(train_raw, {"optimizer", "loss", "epochs", "lr", "restarts",
-                              "seed", "log_every"}, "training")
+                              "seed", "log_every", "stop_at"}, "training")
+    stop_at_raw = train_raw.get("stop_at", 0)
+    stop_at = None if stop_at_raw is None else int(stop_at_raw)
+    if stop_at is not None and stop_at < 0:
+        raise ConfigError("'training.stop_at' debe ser >= 0 o null")
     training = TrainingConfig(
         optimizer=train_raw.get("optimizer", "adam"),
         loss=train_raw.get("loss", "bce"),
@@ -129,6 +134,7 @@ def load_config(path: str | Path) -> Config:
         restarts=int(train_raw.get("restarts", 20)),
         seed=int(train_raw.get("seed", 42)),
         log_every=int(train_raw.get("log_every", 100)),
+        stop_at=stop_at,
     )
     _require_in(training.optimizer, VALID_OPTIMIZERS, "training.optimizer")
     _require_in(training.loss, VALID_LOSSES, "training.loss")
