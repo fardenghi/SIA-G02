@@ -26,8 +26,10 @@ def run(config_path: str) -> dict:
     plots_dir = Path(cfg.output.plots_dir) / cfg.name
 
     print(f"== Experimento: {cfg.name} ==")
+    latent_act = cfg.architecture.latent_activation or cfg.architecture.activation
     print(f"  arquitectura: {cfg.architecture.encoder_layers} "
-          f"act={cfg.architecture.activation}/{cfg.architecture.output_activation} "
+          f"act={cfg.architecture.activation} latente={latent_act} "
+          f"salida={cfg.architecture.output_activation} "
           f"init={cfg.architecture.init}")
     print(f"  training: {cfg.training.optimizer} loss={cfg.training.loss} "
           f"epochs={cfg.training.epochs} restarts={cfg.training.restarts}")
@@ -39,7 +41,8 @@ def run(config_path: str) -> dict:
 
     # Coherencia (warnings, no errores)
     validate_coherence(cfg.training.loss, cfg.architecture.output_activation,
-                       cfg.architecture.activation, cfg.architecture.init)
+                       cfg.architecture.activation, cfg.architecture.init,
+                       latent_activation=cfg.architecture.latent_activation)
 
     # Entrenamiento multi-restart
     denoising = {
@@ -62,6 +65,9 @@ def run(config_path: str) -> dict:
         denoising=denoising,
         log_every=cfg.training.log_every,
         stop_at=cfg.training.stop_at,
+        latent_activation=cfg.architecture.latent_activation,
+        lr_schedule=cfg.training.lr_schedule,
+        lr_min=cfg.training.lr_min,
     )
 
     # Métricas a CSV

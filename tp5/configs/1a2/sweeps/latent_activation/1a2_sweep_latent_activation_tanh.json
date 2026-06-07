@@ -1,0 +1,35 @@
+{
+  "name": "1a2_sweep_latent_activation_tanh",
+  "data": {
+    "font_path": "font/font.h",
+    "subset": null
+  },
+  "architecture": {
+    "encoder_layers": [
+      35,
+      20,
+      2
+    ],
+    "activation": "relu",
+    "output_activation": "sigmoid",
+    "init": "normal",
+    "latent_activation": "tanh"
+  },
+  "training": {
+    "optimizer": "adam",
+    "loss": "mse",
+    "epochs": 15000,
+    "lr": 0.001,
+    "restarts": 12,
+    "seed": 42,
+    "log_every": 300,
+    "stop_at": null
+  },
+  "denoising": {
+    "enabled": false
+  },
+  "output": {
+    "metrics_csv": "out/1a2/sweeps/latent_activation/1a2_sweep_latent_activation_tanh/metrics.csv",
+    "plots_dir": "out/1a2/sweeps/latent_activation/plots"
+  }
+}

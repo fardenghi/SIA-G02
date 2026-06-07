@@ -24,6 +24,7 @@ class Autoencoder:
         output_activation: str = "sigmoid",
         init: str = "xavier_normal",
         seed: int | None = None,
+        latent_activation: str | None = None,
     ):
         if len(encoder_layers) < 2:
             raise ValueError("encoder_layers debe tener al menos entrada y latente")
@@ -31,16 +32,26 @@ class Autoencoder:
         self.decoder_sizes = list(reversed(encoder_layers))
         self.activation = activation
         self.output_activation = output_activation
+        # Activación de la capa latente (cuello). Por defecto sigue a la de ocultas
+        # (retrocompatibilidad); el default teórico para un AE es 'linear' (cuello sin
+        # no-linealidad: representación sin acotar, conexión con PCA, y la cabeza de
+        # media en VAE también es lineal).
+        self.latent_activation = latent_activation or activation
         self.init = init
         self.input_dim = encoder_layers[0]
         self.latent_dim = encoder_layers[-1]
 
         rng = np.random.default_rng(seed)
 
-        # Encoder: todas las capas usan la activación de ocultas.
+        # Encoder: ocultas con `activation`; la capa latente (última) con
+        # `latent_activation`. El orden de creación de capas no cambia, así que con
+        # el default los pesos iniciales son idénticos a los de antes.
         self.encoder: list[Dense] = []
-        for n_in, n_out in zip(self.encoder_sizes[:-1], self.encoder_sizes[1:]):
-            self.encoder.append(Dense(n_in, n_out, activation, init, rng))
+        encoder_pairs = list(zip(self.encoder_sizes[:-1], self.encoder_sizes[1:]))
+        for idx, (n_in, n_out) in enumerate(encoder_pairs):
+            is_latent = idx == len(encoder_pairs) - 1
+            act = self.latent_activation if is_latent else activation
+            self.encoder.append(Dense(n_in, n_out, act, init, rng))
 
         # Decoder: ocultas con `activation`, la última capa con `output_activation`.
         self.decoder: list[Dense] = []

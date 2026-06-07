@@ -48,12 +48,19 @@ def get_loss(name: str):
 
 
 def validate_coherence(loss: str, output_activation: str, activation: str,
-                       init: str) -> list[str]:
+                       init: str, latent_activation: str | None = None) -> list[str]:
     """Valida combinaciones loss↔activación↔init y emite warnings (no errores).
 
     Devuelve la lista de mensajes emitidos (útil para tests).
     """
     messages: list[str] = []
+
+    if latent_activation in ("relu", "sigmoid"):
+        messages.append(
+            f"latent_activation='{latent_activation}' acota/descentra el cuello "
+            "(relu lo colapsa a >=0, sigmoid a [0,1]); para un latente sin restringir "
+            "se sugiere 'linear' (o 'tanh' acotado y centrado)."
+        )
 
     if loss == "bce" and output_activation != "sigmoid":
         messages.append(

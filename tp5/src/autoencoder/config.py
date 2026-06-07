@@ -17,10 +17,14 @@ class ConfigError(ValueError):
 
 VALID_ACTIVATIONS = {"tanh", "relu", "sigmoid"}
 VALID_OUTPUT_ACTIVATIONS = {"sigmoid", "tanh", "linear"}
+# El cuello admite además 'linear' (cuello sin no-linealidad, default teórico de un AE).
+VALID_LATENT_ACTIVATIONS = VALID_ACTIVATIONS | {"linear"}
 VALID_INITS = {"xavier_uniform", "xavier_normal", "he_uniform", "he_normal",
                "normal", "uniform"}
 VALID_OPTIMIZERS = {"adam", "lbfgs"}
 VALID_LOSSES = {"bce", "mse"}
+# Schedulers de learning rate (solo aplican a Adam; L-BFGS ignora el lr). None = constante.
+VALID_LR_SCHEDULES = {"cosine"}
 VALID_NOISE = {"salt_pepper", "bit_flip"}
 
 
@@ -36,6 +40,9 @@ class ArchitectureConfig:
     activation: str = "tanh"
     output_activation: str = "sigmoid"
     init: str = "xavier_normal"
+    # None -> el cuello sigue a `activation` (retrocompatible). 'linear' para cuello
+    # sin no-linealidad (default teórico).
+    latent_activation: str | None = None
 
 
 @dataclass
@@ -48,6 +55,8 @@ class TrainingConfig:
     seed: int = 42
     log_every: int = 100
     stop_at: int | None = 0
+    lr_schedule: str | None = None  # None = lr constante; 'cosine' = annealing (solo Adam)
+    lr_min: float = 0.0  # lr final del scheduler
 
 
 @dataclass
@@ -98,7 +107,7 @@ def load_config(path: str | Path) -> Config:
 
     arch_raw = raw.get("architecture", {})
     _unknown_keys(arch_raw, {"encoder_layers", "activation", "output_activation",
-                             "init"}, "architecture")
+                             "init", "latent_activation"}, "architecture")
     if "encoder_layers" not in arch_raw:
         raise ConfigError("Falta 'architecture.encoder_layers'")
     encoder_layers = arch_raw["encoder_layers"]
@@ -113,15 +122,20 @@ def load_config(path: str | Path) -> Config:
         activation=arch_raw.get("activation", "tanh"),
         output_activation=arch_raw.get("output_activation", "sigmoid"),
         init=arch_raw.get("init", "xavier_normal"),
+        latent_activation=arch_raw.get("latent_activation", None),
     )
     _require_in(architecture.activation, VALID_ACTIVATIONS, "architecture.activation")
     _require_in(architecture.output_activation, VALID_OUTPUT_ACTIVATIONS,
                 "architecture.output_activation")
     _require_in(architecture.init, VALID_INITS, "architecture.init")
+    if architecture.latent_activation is not None:
+        _require_in(architecture.latent_activation, VALID_LATENT_ACTIVATIONS,
+                    "architecture.latent_activation")
 
     train_raw = raw.get("training", {})
     _unknown_keys(train_raw, {"optimizer", "loss", "epochs", "lr", "restarts",
-                              "seed", "log_every", "stop_at"}, "training")
+                              "seed", "log_every", "stop_at", "lr_schedule",
+                              "lr_min"}, "training")
     stop_at_raw = train_raw.get("stop_at", 0)
     stop_at = None if stop_at_raw is None else int(stop_at_raw)
     if stop_at is not None and stop_at < 0:
@@ -135,6 +149,8 @@ def load_config(path: str | Path) -> Config:
         seed=int(train_raw.get("seed", 42)),
         log_every=int(train_raw.get("log_every", 100)),
         stop_at=stop_at,
+        lr_schedule=train_raw.get("lr_schedule", None),
+        lr_min=float(train_raw.get("lr_min", 0.0)),
     )
     _require_in(training.optimizer, VALID_OPTIMIZERS, "training.optimizer")
     _require_in(training.loss, VALID_LOSSES, "training.loss")
@@ -142,6 +158,10 @@ def load_config(path: str | Path) -> Config:
         raise ConfigError("'training.epochs' debe ser > 0")
     if training.restarts <= 0:
         raise ConfigError("'training.restarts' debe ser > 0")
+    if training.lr_schedule is not None:
+        _require_in(training.lr_schedule, VALID_LR_SCHEDULES, "training.lr_schedule")
+    if training.lr_min < 0:
+        raise ConfigError("'training.lr_min' debe ser >= 0")
 
     data_raw = raw.get("data", {})
     _unknown_keys(data_raw, {"font_path", "subset"}, "data")

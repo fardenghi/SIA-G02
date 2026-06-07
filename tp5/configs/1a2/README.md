@@ -1,49 +1,65 @@
-# 1a2 — Búsqueda de configuraciones (arquitectura × optimizador × init × loss)
+# 1a2 — Progresión de configuraciones (arquitectura × init × optimizador)
 
-Esta carpeta documenta la **progresión de configuraciones probadas** para el punto 1a2,
-hasta encontrar las que reconstruyen los 32 caracteres con el **error de píxeles más
-bajo**. El cuello latente se mantiene fijo en **2 dimensiones** (objetivo de 1a); lo que
-se varía es activación, pérdida, inicialización, profundidad y optimizador.
+Esta carpeta documenta la **progresión de configuraciones** del punto 1a2 hasta la que
+reconstruye los 32 caracteres con el **error de píxeles más bajo y de forma más robusta**.
 
-Cada config se corre con `restarts = 12`, `epochs = 15000`, `seed = 42`, `stop_at = null`
-(se ejecutan los 12 restarts para poder medir la **robustez**, no sólo el mejor caso).
-Las métricas reportadas salen de `out/1a2/<name>/metrics_restarts.csv`.
+El punto de partida **no** es un contraejemplo: la combinación pérdida/activación ya queda
+fijada **por coherencia teórica** (ver más abajo), así que la búsqueda se concentra en lo que
+realmente mueve el resultado con el cuello latente fijo en **2 dimensiones**: **profundidad,
+inicialización y optimizador**.
+
+## Base fija (igual en todas las configs)
+
+| Parámetro | Valor | Motivo |
+|---|---|---|
+| `loss` | **`bce`** | píxeles binarios {0,1} → verosimilitud Bernoulli; gradiente que no se desvanece |
+| `output_activation` | **`sigmoid`** | salida en (0,1) = probabilidad de píxel; **obligatorio con BCE** |
+| `activation` (oculta) | **`tanh`** | acotada y centrada; coherente con salida sigmoide |
+| `latent_activation` | **`linear`** | cuello sin acotar (default teórico del AE; conexión con PCA) |
+
+> La elección de `bce` + `sigmoid` se justifica con el **gradiente** (no hace falta una corrida
+> para mostrarlo): con salida sigmoide, `∂L/∂z = (ŷ−y)·σ'(z)` para MSE — y `σ'(z)=σ(z)(1−σ(z))`
+> se anula al saturar, así que el gradiente desaparece — mientras que BCE cancela ese factor y
+> queda `∂L/∂z = ŷ−y`. Por eso toda la progresión usa BCE/sigmoid de entrada.
+
+Cada config corre con `epochs = 15000`, `seed = 42`, `stop_at = null` (se ejecutan todos los
+restarts para medir **robustez**, no sólo el mejor caso). Las métricas salen de
+`out/1a2/<name>/metrics_restarts.csv`.
 
 ```bash
-uv run autoencoder --config configs/1a2/04_deep_xavier_bce_base.json
+uv run autoencoder --config configs/1a2/02_deep.json
 ```
 
 ## Progresión y resultados
 
-| # | Config | Arquitectura | act / loss / init / optim | best `max_pix` | éxito (≤1px) | `max_pix` medio |
-|---|--------|--------------|---------------------------|----------------|--------------|-----------------|
-| 01 | `shallow_normal_mse_relu` | `35-20-2`         | relu / mse / normal / adam        | **24** | 0/12  | 28.83 |
-| 02 | `shallow_xavier_bce`      | `35-20-2`         | tanh / bce / xavier_normal / adam | **0**  | 12/12 | 0.00  |
-| 03 | `deep_naive_init`         | `35-25-15-8-2`    | tanh / bce / normal / adam        | **0**  | 9/12  | 0.83  |
-| 04 | `deep_xavier_bce_base`    | `35-25-15-8-2`    | tanh / bce / xavier_normal / adam | **0**  | 12/12 | 0.08  |
-| 05 | `deeper_xavier_bce`       | `35-30-20-12-6-2` | tanh / bce / xavier_normal / adam | **0**  | 10/12 | 0.42  |
-| 06 | `deep_xavier_bce_lbfgs`   | `35-25-15-8-2`    | tanh / bce / xavier_normal / lbfgs| **0**  | 6/12  | 4.00  |
+| # | Config | Qué varía | Arquitectura | init / optim | best `max_px` | éxito (≤1px) | `max_px` medio |
+|---|--------|-----------|--------------|--------------|---------------|--------------|----------------|
+| 01 | `base_shallow`     | punto de partida coherente   | `35-20-2`         | xavier / adam        | **0** | 11/12 | 0.33 |
+| 02 | `deep`             | + profundidad                | `35-25-15-8-2`    | xavier / adam        | **0** | 11/12 | 0.25 |
+| 03 | `deeper`           | profundidad extra            | `35-30-20-12-6-2` | xavier / adam        | **0** | 11/12 | 0.58 |
+| 04 | `deep_normal_init` | efecto de la init            | `35-25-15-8-2`    | **normal** / adam    | **0** | 11/12 | 0.17 |
+| 05 | `deep_lbfgs`       | efecto del optimizador       | `35-25-15-8-2`    | xavier / **lbfgs**   | **0** | 9/12  | 2.08 |
+| 06 | `best`             | mejor combinación (×20+cos.) | `35-25-15-8-2`    | xavier / adam        | **0** | 19/20 | 0.15 |
 
 ## Lectura de la búsqueda
 
-1. **01 — punto de partida ingenuo:** `relu` + `mse` + init `normal` en una red chata
-   **no logra aprender** (mejor reconstrucción 24 px de error, 0/12 restarts cumplen el
-   objetivo). Combinación de salida/pérdida/init incoherente → satura.
-2. **02 — corregir activación + pérdida + init:** pasar a `tanh`/`sigmoid` + `bce` +
-   `xavier_normal` hace que **incluso una red chata** `35-20-2` reconstruya 32/32 en
-   **todos** los restarts (12/12). Es el salto cualitativo de la búsqueda.
-3. **03 — el efecto de la init:** la misma red profunda con init `normal` llega a 0 pero
-   es **menos robusta** (9/12); la inicialización escalada importa para la estabilidad.
-4. **04 — config base (ganadora):** red profunda `35-25-15-8-2` con `xavier_normal` →
-   **12/12** y `max_pix` medio 0.08, el más bajo. Es la configuración de referencia.
-5. **05 — más profundidad no ayuda:** `35-30-20-12-6-2` también llega a 0 pero es algo
-   menos robusta (10/12) y tiene más parámetros: profundidad extra sin ganancia.
-6. **06 — el optimizador:** mismo diseño con **L-BFGS-B** alcanza 0 pero cae en mínimos
-   locales mucho más seguido (6/12, `max_pix` medio 4.0). Adam es claramente más estable
-   para este problema.
+1. **01 — base chata ya resuelve:** fijada la coherencia, incluso `35-20-2` reconstruye los
+   32/32 caracteres (0 px) en casi todos los restarts. El problema base es *fácil* una vez
+   elegidas bien pérdida/activación.
+2. **02 — profundidad ayuda al promedio:** la red profunda `35-25-15-8-2` baja el `max_px`
+   medio (0.25 vs 0.33) manteniendo 0 px y 11/12.
+3. **03 — más profundidad no compensa:** `35-30-20-12-6-2` llega a 0 px pero con `max_px`
+   medio más alto (0.58) y más parámetros: profundidad extra sin ganancia (rendimientos
+   decrecientes).
+4. **04 — la init pesa poco acá:** la misma red con init `normal` rinde igual o mejor
+   (0.17) que con `xavier_normal`. Con el cuello **lineal** la init escalada deja de ser
+   determinante para la robustez.
+5. **05 — el optimizador sí importa:** con **L-BFGS** la red alcanza 0 px pero cae en mínimos
+   locales más seguido (9/12, `max_px` medio 2.08). **Adam es claramente más estable.**
+6. **06 — mejor configuración:** red profunda + **Adam con schedule coseno** y más restarts
+   (20) da la corrida más robusta: 19/20 (95%) y el `max_px` medio más bajo (0.15).
 
-**Conclusión:** las configuraciones de **menor error** son `02_shallow_xavier_bce` y
-`04_deep_xavier_bce_base` (ambas 12/12, `max_pix` medio ≈ 0) — es decir
-`tanh`/`sigmoid` + `bce` + `xavier_normal` + `adam`. El driver dominante del error no es
-la profundidad sino la **coherencia activación/pérdida/init** y la elección de
-**optimizador**.
+**Conclusión:** fijadas pérdida/activación por coherencia, el problema se resuelve siempre
+(0 px); el driver del resto es la **robustez**, gobernada por el **optimizador** (Adam ≫ L-BFGS)
+y, en menor medida, por una profundidad moderada. La profundidad excesiva y la init escalada
+aportan poco con el cuello lineal.

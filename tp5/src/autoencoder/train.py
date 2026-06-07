@@ -87,6 +87,8 @@ def train_once(
     lr: float = 1e-3,
     tracker: MetricsTracker | None = None,
     log_every: int = 100,
+    lr_schedule: str | None = None,
+    lr_min: float = 0.0,
 ) -> dict:
     """Entrena `net` in-place sobre el par `(X_input, X_target)` en full-batch.
 
@@ -104,7 +106,12 @@ def train_once(
     if optimizer == "adam":
         opt = Adam(lr=lr)
         params = net.get_params()
+        denom = max(1, epochs - 1)
         for epoch in range(epochs):
+            # Scheduler de lr (solo Adam). Cosine annealing de `lr` a `lr_min`.
+            if lr_schedule == "cosine":
+                opt.lr = lr_min + 0.5 * (lr - lr_min) * (
+                    1.0 + np.cos(np.pi * epoch / denom))
             net.set_params(params)
             out = net.forward(X_input)
             net.backward(loss_grad(out, X_target))
@@ -164,6 +171,9 @@ def train_multi_restart(
     log_every: int = 100,
     verbose: bool = True,
     stop_at: int | None = 0,
+    latent_activation: str | None = None,
+    lr_schedule: str | None = None,
+    lr_min: float = 0.0,
 ):
     """Entrena `restarts` modelos con semillas distintas; conserva el de menor
     `max_pixel_error`. Devuelve `(mejor_red, mejor_tracker, resumen_df)`.
@@ -183,7 +193,8 @@ def train_multi_restart(
 
     for r, s in enumerate(seeds):
         s = int(s)
-        net = Autoencoder(encoder_layers, activation, output_activation, init, seed=s)
+        net = Autoencoder(encoder_layers, activation, output_activation, init, seed=s,
+                          latent_activation=latent_activation)
 
         # Entrada/objetivo: con denoising, entrada ruidosa y objetivo limpio.
         if denoising and denoising.get("enabled"):
@@ -196,7 +207,8 @@ def train_multi_restart(
 
         tracker = MetricsTracker(run_label=f"{optimizer}_r{r}")
         final = train_once(net, X_input, X_target, loss, optimizer, epochs, lr,
-                           tracker=tracker, log_every=log_every)
+                           tracker=tracker, log_every=log_every,
+                           lr_schedule=lr_schedule, lr_min=lr_min)
         summary_rows.append({"restart": r, "seed": s, **final})
         if verbose:
             print(f"  restart {r:2d} (seed {s}): "

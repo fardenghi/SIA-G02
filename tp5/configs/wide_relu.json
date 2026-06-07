@@ -5,7 +5,8 @@
     "encoder_layers": [35, 20, 2],
     "activation": "relu",
     "output_activation": "sigmoid",
-    "init": "he_normal"
+    "init": "he_normal",
+    "latent_activation": "linear"
   },
   "training": {
     "optimizer": "adam",

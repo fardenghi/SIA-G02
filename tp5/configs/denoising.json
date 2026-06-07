@@ -5,7 +5,8 @@
     "encoder_layers": [35, 25, 15, 8, 2],
     "activation": "tanh",
     "output_activation": "sigmoid",
-    "init": "xavier_normal"
+    "init": "xavier_normal",
+    "latent_activation": "linear"
   },
   "training": {
     "optimizer": "adam",
