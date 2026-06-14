@@ -11,12 +11,12 @@ matemática NUEVA y propia del VAE es:
   - el backward que combina el gradiente de reconstrucción (que llega a `z` por el decoder)
     con el de la KL (que llega directo a las cabezas), respetando la reparametrización.
 
-La pérdida total es el ELBO negativo `recon + β·KL`. Tanto el término de reconstrucción
-como la KL se promedian por el tamaño del batch para que `β` controle el balance de forma
-estable e independiente de `N`. Convención de normalización:
-
-  - reconstrucción: `losses` ya divide por `y_pred.size` (= N·D), media sobre elementos;
-  - KL: se promedia por `N` (media de la KL por muestra, sumada sobre las dims latentes).
+La pérdida total es el ELBO negativo `recon + β·KL` en convención **canónica** ("nats por
+muestra"): la reconstrucción se suma sobre los `D` píxeles y la KL sobre las dims latentes,
+ambas promediadas por el batch. Así los dos términos quedan en la misma escala y `β=1` es el
+VAE estándar (`β>1` regulariza más, *β-VAE*). Como `losses` divide por `y_pred.size` (= N·D,
+media por elemento), se **reescala la reconstrucción por `input_dim` (D)** para recuperar la
+suma por píxel; la KL se promedia por `N` (suma sobre las dims latentes).
 
 El backward queda verificado por gradient-check numérico (ver `tests/test_vae.py`).
 """
@@ -161,7 +161,9 @@ class VAE:
         if self._cache is None:
             raise RuntimeError("Llamá a forward(X) antes de elbo().")
         c = self._cache
-        recon = self._loss_value(c["x_hat"], c["X"])
+        # recon en "nats por muestra" (suma sobre los D píxeles, vía ×input_dim): misma
+        # escala que la KL (suma sobre dims latentes) -> β=1 es el ELBO canónico.
+        recon = self.input_dim * self._loss_value(c["x_hat"], c["X"])
         kl = self.kl_divergence(c["mu"], c["logvar"])
         return recon + beta * kl, recon, kl
 
@@ -181,7 +183,8 @@ class VAE:
         n = X.shape[0]
 
         # Reconstrucción: dL/dx_hat -> backprop por el decoder -> dL_recon/dz.
-        grad = self._loss_grad(x_hat, X)
+        # ×input_dim para que la recon esté en la misma escala que la KL (ver elbo()).
+        grad = self.input_dim * self._loss_grad(x_hat, X)
         for layer in reversed(self.decoder):
             grad = layer.backward(grad)
         dz = grad  # dL_recon/dz

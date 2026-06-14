@@ -247,31 +247,34 @@ generativo** (grilla de `z` decodificada, `manifold.png`), el **scatter de media
 - **`architecture.encoder_layers`** es el cuerpo del encoder (incluida la entrada, que debe
   ser `data.size²`); las cabezas `μ`/`logσ²` mapean el último oculto a `latent_dim`, y el
   decoder es el espejo automático. **`latent_dim`** típicamente `2` (habilita el manifold).
-- **`training.beta`** ≥ 0 (peso de la KL); **`beta_warmup`** sube `β` de 0 al objetivo en
-  esa cantidad de épocas. **`loss`** ∈ `bce|mse`.
+- **`training.beta`** ≥ 0 (peso de la KL; `β=1` = VAE canónico, `β>1` = β-VAE más
+  regularizado); **`beta_warmup`** sube `β` de 0 al objetivo en esa cantidad de épocas.
+  **`loss`** ∈ `bce|mse`.
 
 ### Resultados y el rol de β (posterior collapse)
 
-El balance `β` entre reconstrucción y KL es **el** parámetro crítico del VAE. Como la
-reconstrucción (`bce`) se promedia por píxel (÷ `N·784`) mientras que la KL se promedia por
-muestra (÷ `N`), la KL pesa de hecho ~784× más de lo que sugiere su coeficiente: un `β=1`
-equivale a un `β≈784` en la convención canónica del ELBO y **colapsa el latente** (la red lo
-ignora, `kl→0`, y reconstruye la "cara promedio" para todo). El `β` útil ronda `1/784`:
+El balance `β` entre reconstrucción y KL es **el** parámetro crítico del VAE. El ELBO usa la
+convención **canónica** ("nats por muestra"): la reconstrucción se **suma** sobre los 784
+píxeles y la KL sobre las dims latentes (por eso `recon` se reporta en cientos y la KL en
+unidades), de modo que **ambos términos quedan en la misma escala** y `β=1` es el VAE estándar.
+`β>1` regulariza más (*β-VAE*); solo un `β` enorme (~784) colapsa el latente (la red lo
+ignora, `kl→0`, y reconstruye la "cara promedio" para todo):
 
-| β      | recon (det.) | KL    | qué se observa                                  |
-|:------:|:------------:|:-----:|-------------------------------------------------|
-| 1.0    | 0.496        | ~0.00 | **colapso total**: misma imagen para toda entrada |
-| 0.03   | 0.469        | 0.59  | latente apenas usado                            |
-| **0.01** | **0.43**   | **3.1** | **balance**: reconstrucción variada + muestras coherentes |
-| 0.005  | 0.40         | 4.3   | recon más nítida, latente menos regularizado    |
-| 0.001  | 0.40         | 6.9   | latente ancho (peor matcheo con el prior)       |
+| β       | recon (det.) | KL   | qué se observa                                       |
+|:-------:|:------------:|:----:|------------------------------------------------------|
+| **1.0** | **~313**     | ~6.5 | **default (VAE vanilla)**: recon nítida + muestras diversas |
+| 8       | ~319         | 3.2  | más regularizado (latente más compacto)              |
+| 16      | ~337         | 1.8  | latente apenas usado                                 |
+| ~784    | colapso      | ~0.0 | **posterior collapse**: misma imagen para toda entrada |
 
-Con `β=0.01` (config `base`), la reconstrucción distingue clases (p. ej. `cool` conserva los
-anteojos), las **muestras del prior** salen variadas (caras, frutas, animales), el **manifold**
-varía de forma continua y los **clusters** del scatter de medias tienen sentido. La
-contrapartida: con latente 2D y emojis muy distintos en grises, las imágenes son
-inevitablemente **difusas** — el límite de información de comprimir 784 píxeles a 2 números.
-Si aparece colapso (`kl≈0`, muestras idénticas), bajá `β`, subí `beta_warmup` o sumá augment.
+Con `β=1` (config `base`, con augment: ELBO≈336, recon≈329, KL≈7), la reconstrucción distingue
+clases (p. ej. `cool` conserva los anteojos; `cry`/`rage` su boca), las **muestras del prior**
+salen variadas y reconocibles (caras, osos, pandas, frutas, una luna), el **manifold** varía de
+forma continua y los **clusters** del scatter de medias tienen sentido. La contrapartida: con
+latente 2D y emojis muy distintos en grises, las imágenes son inevitablemente **difusas** — el
+límite de información de comprimir 784 píxeles a 2 números. Subir `β` hacia ~8 compacta el
+latente (mejor matcheo con el prior) a cambio de algo más de difuminado; si aparece colapso
+(`kl≈0`, muestras idénticas), bajá `β`, subí `beta_warmup` o sumá augment.
 
 ## Tests
 
