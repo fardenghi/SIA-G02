@@ -1,4 +1,4 @@
-# TP5 — Ejercicio 1: Autoencoder
+# TP5 — Autoencoders y VAE
 
 Autoencoder MLP implementado **desde cero** con `numpy` (forward, backprop y gradientes
 analíticos propios) para aprender los 32 caracteres de `font/font.h` (5×7 → 35 píxeles
@@ -184,6 +184,72 @@ suave al subir el ruido (85% a 0.3) — muy por encima del comportamiento previo
 > reconstruyen limpio. El residuo a 0.3 (≈10 de 35 píxeles invertidos) está cerca del límite
 > de información de un latente 2D: con tanto ruido varios glifos se vuelven ambiguos.
 
+## Ejercicio 2 — Autoencoder Variacional (VAE)
+
+Extiende el autoencoder a un **VAE generativo** sobre un dataset nuevo de **emojis**. El VAE
+**reutiliza** las piezas validadas del Ej1 (`layers.Dense`, `optim.Adam`, las pérdidas
+`bce`/`mse` y el patrón de pack/unpack); lo nuevo, escrito desde cero y verificado por
+gradient-check, es la matemática variacional: cabezas `μ`/`logσ²`, reparametrización y KL.
+
+```bash
+uv run autoencoder-vae --config configs/vae/base.json
+```
+
+### 2a — Dataset de emojis
+
+`emoji_data.py` rasteriza un set curado de 32 emojis desde `NotoColorEmoji.ttf` (Pillow) a
+imágenes **28×28 en escala de grises** `[0,1]` (tinta=1, fondo=0), centradas por
+bounding-box. Con `data.augment.enabled` se expande el set con copias levemente
+rotadas/trasladadas/escaladas, lo que enriquece el latente y suaviza la generación (un set
+chico de emojis muy distintos tiende a formar clusters discretos).
+
+### 2b — Esquema variacional
+
+El encoder produce, en vez de un código fijo, una distribución `q(z|x) = N(μ, σ²)` vía dos
+**cabezas lineales** (`μ` y `logσ²`). El muestreo usa el **truco de reparametrización**
+`z = μ + e^{logσ²/2}·ε`, `ε ~ N(0, I)`, que lo hace diferenciable. La pérdida es el **ELBO
+negativo**:
+
+```
+L = recon(x, x̂) + β · KL(N(μ,σ) ‖ N(0, I))
+```
+
+El término KL regulariza el latente hacia el prior `N(0,I)`, dándole estructura continua
+(lo que un AE determinista no garantiza). `β` (con **warmup lineal** opcional, `beta_warmup`)
+balancea reconstrucción vs. regularización y mitiga el *posterior collapse*. El backward del
+ELBO está verificado por **gradient-check numérico** (diff relativa < 1e-5, BCE y MSE).
+
+### 2c — Generación
+
+Como el latente sigue el prior `N(0,I)`, se generan **muestras nuevas** muestreando
+`z ~ N(0,I)` y decodificando (`samples.png`). Con latente 2D se grafica además el **manifold
+generativo** (grilla de `z` decodificada, `manifold.png`), el **scatter de medias**
+(`latent_means.png`), la **interpolación** entre dos emojis (`interpolation.png`) y la
+**reconstrucción** (`reconstruction.png`).
+
+### Formato del config del VAE
+
+```json
+{
+  "name": "base",
+  "data":         { "size": 28, "subset": null,
+                    "augment": { "enabled": true, "n_aug": 8 } },
+  "architecture": { "encoder_layers": [784, 256, 64], "latent_dim": 2,
+                    "activation": "relu", "output_activation": "sigmoid",
+                    "init": "he_normal" },
+  "training":     { "loss": "bce", "epochs": 5000, "lr": 1e-3,
+                    "beta": 1.0, "beta_warmup": 1000, "seed": 0 },
+  "output":       { "metrics_csv": "out/vae_base/metrics.csv",
+                    "plots_dir": "out/plots" }
+}
+```
+
+- **`architecture.encoder_layers`** es el cuerpo del encoder (incluida la entrada, que debe
+  ser `data.size²`); las cabezas `μ`/`logσ²` mapean el último oculto a `latent_dim`, y el
+  decoder es el espejo automático. **`latent_dim`** típicamente `2` (habilita el manifold).
+- **`training.beta`** ≥ 0 (peso de la KL); **`beta_warmup`** sube `β` de 0 al objetivo en
+  esa cantidad de épocas. **`loss`** ∈ `bce|mse`.
+
 ## Tests
 
 ```bash
@@ -193,6 +259,9 @@ uv run pytest -q
 Cubre: parseo de `font.h` y desempaquetado de bits, gradient-check numérico (diff
 relativa < 1e-5) de la backprop para BCE y MSE, construcción por espejo, descenso de la
 pérdida con Adam, round-trip de pack/unpack de pesos, validación de config y denoising.
+Para el VAE: reparametrización, KL (valor y gradiente), **gradient-check del ELBO**,
+descenso del ELBO con Adam, `beta_schedule`, rasterizado/determinismo del dataset de emojis,
+validación del config del VAE y smoke de las visualizaciones.
 
 ## Estructura
 
@@ -207,5 +276,12 @@ src/autoencoder/
   config.py    # carga/validación del JSON
   viz.py       # scatter latente (1a3), letra nueva (1a4), heatmaps, denoising
   cli.py       # entrypoint: --config corre el experimento end-to-end
+  vae.py         # VAE: cabezas mu/logvar, reparametrización, KL, backward (Ej2)
+  emoji_data.py  # dataset de emojis (Pillow + Noto -> 28x28 grises) (Ej2a)
+  vae_train.py   # train_vae full-batch Adam, beta-warmup, tracker (Ej2b)
+  vae_config.py  # carga/validación del JSON del VAE
+  vae_viz.py     # manifold, muestras nuevas, scatter de medias, interpolación (Ej2c)
+  vae_cli.py     # entrypoint: autoencoder-vae corre el VAE end-to-end
 configs/        # base_adam, base_lbfgs, deep, wide_relu, naive_init, denoising
+  vae/          # configs del VAE (base)
 ```

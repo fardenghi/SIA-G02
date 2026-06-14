@@ -11,6 +11,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
+
+from . import vae_viz
 from .emoji_data import augment_dataset, load_emojis
 from .vae import VAE
 from .vae_config import load_vae_config
@@ -33,7 +36,6 @@ def run(config_path: str) -> dict:
     X, labels = load_emojis(size=cfg.data.size, subset=cfg.data.subset,
                             font_path=cfg.data.font_path)
     if cfg.data.augment.enabled:
-        import numpy as np
         X, labels = augment_dataset(
             X, labels, size=cfg.data.size, n_aug=cfg.data.augment.n_aug,
             rng=np.random.default_rng(cfg.data.augment.seed),
@@ -65,6 +67,24 @@ def run(config_path: str) -> dict:
     print(f"  -> ELBO={final['elbo']:.4f} recon={final['recon']:.4f} "
           f"kl={final['kl']:.4f} recon_det={final['recon_det']:.4f}")
     print(f"  -> métricas: {cfg.output.metrics_csv}")
+
+    # Visualizaciones y generación (Ej2c)
+    size = cfg.data.size
+    mu, _ = vae.encode(X)
+    # Reconstrucción determinista (z = μ).
+    x_hat = vae.decode(mu)
+    vae_viz.plot_reconstruction_gray(X, x_hat, labels, size=size, n=min(16, X.shape[0]),
+                                     path=plots_dir / "reconstruction.png")
+    vae_viz.plot_latent_means(mu, labels, path=plots_dir / "latent_means.png")
+    if vae.latent_dim == 2:
+        vae_viz.plot_latent_manifold(vae, size, path=plots_dir / "manifold.png")
+    # Muestras nuevas desde el prior (Ej2c).
+    rng = np.random.default_rng(cfg.training.seed)
+    vae_viz.plot_samples(vae, size, n=16, rng=rng, path=plots_dir / "samples.png")
+    # Interpolación entre dos emojis.
+    if X.shape[0] >= 2:
+        vae_viz.plot_interpolation(vae, X[0], X[X.shape[0] // 2], size,
+                                   path=plots_dir / "interpolation.png")
     print(f"  -> plots: {plots_dir}")
 
     return {"name": cfg.name, **final, "_vae": vae, "_X": X, "_labels": labels,
