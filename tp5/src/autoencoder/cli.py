@@ -15,6 +15,8 @@ from .config import load_config
 from .data import add_noise, labels_for_subset, load_font, select_subset
 from .losses import validate_coherence
 from .train import (
+    EVAL_REPEATS,
+    EVAL_SEED,
     evaluate_denoising,
     max_pixel_error,
     train_multi_restart,
@@ -27,6 +29,8 @@ def run(config_path: str) -> dict:
 
     print(f"== Experimento: {cfg.name} ==")
     latent_act = cfg.architecture.latent_activation or cfg.architecture.activation
+    if cfg.architecture.decoder_layers is not None:
+        print(f"  decoder asimétrico: {cfg.architecture.decoder_layers}")
     print(f"  arquitectura: {cfg.architecture.encoder_layers} "
           f"act={cfg.architecture.activation} latente={latent_act} "
           f"salida={cfg.architecture.output_activation} "
@@ -49,6 +53,10 @@ def run(config_path: str) -> dict:
         "enabled": cfg.denoising.enabled,
         "noise_type": cfg.denoising.noise_type,
         "level": cfg.denoising.level,
+        "resample_per_epoch": cfg.denoising.resample_per_epoch,
+        "train_level_range": cfg.denoising.train_level_range,
+        "replicas": cfg.denoising.replicas,
+        "sweep_levels": cfg.denoising.sweep_levels,
     }
     best_net, best_tracker, summary = train_multi_restart(
         X,
@@ -68,6 +76,8 @@ def run(config_path: str) -> dict:
         latent_activation=cfg.architecture.latent_activation,
         lr_schedule=cfg.training.lr_schedule,
         lr_min=cfg.training.lr_min,
+        select_by_denoising=cfg.denoising.enabled,
+        decoder_layers=cfg.architecture.decoder_layers,
     )
 
     # Métricas a CSV
@@ -105,19 +115,26 @@ def run(config_path: str) -> dict:
 
     # Denoising: barrido de niveles + visualización ruidoso->recon->limpio
     if cfg.denoising.enabled:
+        # Set de corrupciones FIJO (seed independiente del seed de entrenamiento,
+        # EVAL_REPEATS corrupciones por patrón por nivel): comparable entre runs.
         sweep = evaluate_denoising(
             best_net, X, cfg.denoising.noise_type,
-            levels=cfg.denoising.sweep_levels, seed=cfg.training.seed,
+            levels=cfg.denoising.sweep_levels, seed=EVAL_SEED, repeats=EVAL_REPEATS,
         )
         sweep_path = Path(cfg.output.metrics_csv).with_name("denoising_sweep.csv")
         sweep.to_csv(sweep_path, index=False)
         print(f"  -> denoising sweep:\n{sweep.to_string(index=False)}")
 
+        # Curva del estudio b2: error de píxeles y % de glifos perfectos por nivel.
+        viz.plot_denoise_sweep(sweep, path=plots_dir / "denoising_sweep.png")
+
+        # Tripletes ruidoso->recon->limpio a cada nivel del barrido.
         rng = np.random.default_rng(cfg.training.seed)
-        noisy = add_noise(X, cfg.denoising.noise_type, cfg.denoising.level, rng)
-        recon_noisy = best_net.forward(noisy)
-        viz.plot_denoise_triplet(noisy, recon_noisy, X, labels,
-                                 path=plots_dir / "denoising.png")
+        for level in cfg.denoising.sweep_levels:
+            noisy = add_noise(X, cfg.denoising.noise_type, level, rng)
+            recon_noisy = best_net.forward(noisy)
+            viz.plot_denoise_triplet(noisy, recon_noisy, X, labels,
+                                     path=plots_dir / f"denoising_l{level}.png")
         result["denoising_sweep"] = sweep.to_dict(orient="records")
 
     print(f"  -> plots: {plots_dir}")

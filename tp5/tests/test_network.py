@@ -73,6 +73,24 @@ def test_gradient_check_bce():
     assert rel < 1e-5, f"diff relativa {rel}"
 
 
+def test_gradient_check_leaky_relu():
+    rng = np.random.default_rng(13)
+    ae = Autoencoder([6, 4, 2], activation="leaky_relu", output_activation="sigmoid",
+                     init="he_normal", seed=13)
+    X = rng.random((5, 6))
+    Y = (rng.random((5, 6)) > 0.5).astype(float)
+
+    out = ae.forward(X)
+    ae.backward(losses.bce_grad(out, Y))
+    analytic = ae.get_grads()
+
+    numeric = _numeric_grad(ae, X, Y, losses.bce_value)
+    rel = np.linalg.norm(analytic - numeric) / (
+        np.linalg.norm(analytic) + np.linalg.norm(numeric) + 1e-12
+    )
+    assert rel < 1e-5, f"diff relativa {rel}"
+
+
 def test_gradient_check_mse():
     rng = np.random.default_rng(11)
     ae = Autoencoder([6, 5, 2], activation="tanh", output_activation="tanh",

@@ -90,6 +90,38 @@ def plot_reconstruction(X: np.ndarray, X_hat: np.ndarray, labels=None, path=None
     return fig
 
 
+def plot_denoise_sweep(sweep, path=None, title="Capacidad de denoising vs nivel de ruido"):
+    """Curvas del barrido de denoising: error de píxeles y % de glifos perfectos.
+
+    `sweep` es un DataFrame con columnas `level`, `max_pixel_error`, `mean_pixel_error`
+    y `perfect_pct` (lo que devuelve `train.evaluate_denoising`).
+    """
+    levels = np.asarray(sweep["level"], dtype=float)
+    fig, ax_err = plt.subplots(figsize=(7, 4.5))
+    ax_err.plot(levels, sweep["max_pixel_error"], "o-", color="tab:red", label="max pixel error")
+    ax_err.plot(levels, sweep["mean_pixel_error"], "s-", color="tab:orange", label="mean pixel error")
+    ax_err.set_xlabel("nivel de ruido")
+    ax_err.set_ylabel("error de píxeles")
+    ax_err.set_ylim(bottom=0)
+    ax_err.grid(True, alpha=0.3)
+
+    # Segundo eje: % de glifos reconstruidos perfecto.
+    ax_pct = ax_err.twinx()
+    ax_pct.plot(levels, sweep["perfect_pct"], "^--", color="tab:blue", label="% glifos perfectos")
+    ax_pct.set_ylabel("% glifos perfectos")
+    ax_pct.set_ylim(0, 100)
+
+    lines = ax_err.get_lines() + ax_pct.get_lines()
+    ax_err.legend(lines, [ln.get_label() for ln in lines], loc="upper left", fontsize=9)
+    ax_err.set_title(title)
+    fig.tight_layout()
+    if path is not None:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=120)
+        plt.close(fig)
+    return fig
+
+
 def plot_denoise_triplet(noisy, recon, clean, labels=None, path=None, n: int = 8):
     """Visualiza ruidoso → reconstruido → limpio por columna (8.4)."""
     noisy, recon, clean = map(np.asarray, (noisy, recon, clean))

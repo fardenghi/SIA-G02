@@ -15,7 +15,7 @@ class ConfigError(ValueError):
     """Error de configuración (clave faltante o valor fuera de dominio)."""
 
 
-VALID_ACTIVATIONS = {"tanh", "relu", "sigmoid"}
+VALID_ACTIVATIONS = {"tanh", "relu", "leaky_relu", "sigmoid"}
 VALID_OUTPUT_ACTIVATIONS = {"sigmoid", "tanh", "linear"}
 # El cuello admite además 'linear' (cuello sin no-linealidad, default teórico de un AE).
 VALID_LATENT_ACTIVATIONS = VALID_ACTIVATIONS | {"linear"}
@@ -43,6 +43,9 @@ class ArchitectureConfig:
     # None -> el cuello sigue a `activation` (retrocompatible). 'linear' para cuello
     # sin no-linealidad (default teórico).
     latent_activation: str | None = None
+    # None -> decoder espejo del encoder. Lista explícita (de dim latente a 35) para
+    # decoder asimétrico, p. ej. [2, 20, 30, 35].
+    decoder_layers: list[int] | None = None
 
 
 @dataclass
@@ -65,6 +68,14 @@ class DenoisingConfig:
     noise_type: str = "salt_pepper"
     level: float = 0.1
     sweep_levels: list[float] = field(default_factory=lambda: [0.05, 0.1, 0.2, 0.3])
+    # Corrupción online: ruido fresco por época (DAE estándar). False = una realización
+    # fija por restart (compatible con L-BFGS).
+    resample_per_epoch: bool = True
+    # Rango [min, max] de nivel de ruido sampleado por época en entrenamiento. None = usa
+    # `level` fijo.
+    train_level_range: list[float] | None = None
+    # Réplicas ruidosas por patrón por época (batch k*32, cada réplica con su nivel).
+    replicas: int = 1
 
 
 @dataclass
@@ -106,8 +117,9 @@ def load_config(path: str | Path) -> Config:
     raw = json.loads(path.read_text())
 
     arch_raw = raw.get("architecture", {})
-    _unknown_keys(arch_raw, {"encoder_layers", "activation", "output_activation",
-                             "init", "latent_activation"}, "architecture")
+    _unknown_keys(arch_raw, {"encoder_layers", "decoder_layers", "activation",
+                             "output_activation", "init", "latent_activation"},
+                  "architecture")
     if "encoder_layers" not in arch_raw:
         raise ConfigError("Falta 'architecture.encoder_layers'")
     encoder_layers = arch_raw["encoder_layers"]
@@ -117,12 +129,27 @@ def load_config(path: str | Path) -> Config:
     if encoder_layers[0] != 35:
         raise ConfigError("'architecture.encoder_layers[0]' debe ser 35 (dim de entrada)")
 
+    decoder_layers = arch_raw.get("decoder_layers", None)
+    if decoder_layers is not None:
+        if (not isinstance(decoder_layers, list) or len(decoder_layers) < 2
+                or not all(isinstance(n, int) and n > 0 for n in decoder_layers)):
+            raise ConfigError(
+                "'architecture.decoder_layers' debe ser lista de enteros > 0 o null")
+        if decoder_layers[0] != encoder_layers[-1]:
+            raise ConfigError(
+                "'architecture.decoder_layers[0]' debe igualar la dim latente "
+                f"(encoder_layers[-1] = {encoder_layers[-1]})")
+        if decoder_layers[-1] != encoder_layers[0]:
+            raise ConfigError(
+                "'architecture.decoder_layers[-1]' debe ser 35 (dim de salida)")
+
     architecture = ArchitectureConfig(
         encoder_layers=encoder_layers,
         activation=arch_raw.get("activation", "tanh"),
         output_activation=arch_raw.get("output_activation", "sigmoid"),
         init=arch_raw.get("init", "xavier_normal"),
         latent_activation=arch_raw.get("latent_activation", None),
+        decoder_layers=decoder_layers,
     )
     _require_in(architecture.activation, VALID_ACTIVATIONS, "architecture.activation")
     _require_in(architecture.output_activation, VALID_OUTPUT_ACTIVATIONS,
@@ -171,17 +198,40 @@ def load_config(path: str | Path) -> Config:
     )
 
     den_raw = raw.get("denoising", {})
-    _unknown_keys(den_raw, {"enabled", "noise_type", "level", "sweep_levels"},
+    _unknown_keys(den_raw, {"enabled", "noise_type", "level", "sweep_levels",
+                            "resample_per_epoch", "train_level_range", "replicas"},
                   "denoising")
+    train_level_range = den_raw.get("train_level_range", None)
     denoising = DenoisingConfig(
         enabled=bool(den_raw.get("enabled", False)),
         noise_type=den_raw.get("noise_type", "salt_pepper"),
         level=float(den_raw.get("level", 0.1)),
         sweep_levels=den_raw.get("sweep_levels", [0.05, 0.1, 0.2, 0.3]),
+        resample_per_epoch=bool(den_raw.get("resample_per_epoch", True)),
+        train_level_range=train_level_range,
+        replicas=int(den_raw.get("replicas", 1)),
     )
     _require_in(denoising.noise_type, VALID_NOISE, "denoising.noise_type")
     if not (0.0 <= denoising.level <= 1.0):
         raise ConfigError("'denoising.level' debe estar en [0, 1]")
+    if denoising.replicas < 1:
+        raise ConfigError("'denoising.replicas' debe ser >= 1")
+    if train_level_range is not None:
+        if (not isinstance(train_level_range, list) or len(train_level_range) != 2
+                or not all(isinstance(v, (int, float)) for v in train_level_range)):
+            raise ConfigError(
+                "'denoising.train_level_range' debe ser [min, max] o null")
+        lo, hi = train_level_range
+        if not (0.0 <= lo <= hi <= 1.0):
+            raise ConfigError(
+                "'denoising.train_level_range' debe cumplir 0 <= min <= max <= 1")
+    # Corrupción online -> objetivo estocástico, incompatible con L-BFGS.
+    if (denoising.enabled and denoising.resample_per_epoch
+            and training.optimizer == "lbfgs"):
+        raise ConfigError(
+            "denoising.resample_per_epoch=true requiere training.optimizer='adam' "
+            "(la corrupción online vuelve el objetivo estocástico, incompatible con "
+            "L-BFGS). Usá adam o poné resample_per_epoch=false.")
 
     out_raw = raw.get("output", {})
     _unknown_keys(out_raw, {"metrics_csv", "plots_dir"}, "output")

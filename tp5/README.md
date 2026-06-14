@@ -34,7 +34,7 @@ patrones se reconstruyen exactamente.
 | `deep`            | `35-30-20-12-6-2`       | tanh / sigmoid  | xavier_normal  | adam   | bce  |
 | `wide_relu`       | `35-20-2`               | relu / sigmoid  | he_normal      | adam   | mse  |
 | `naive_init`      | `35-25-15-8-2`          | tanh / sigmoid  | normal         | adam   | bce  |
-| `denoising`       | `35-25-15-8-2`          | tanh / sigmoid  | xavier_normal  | adam   | bce  |
+| `denoising`       | `35-29-22-15-8-2`       | tanh / sigmoid  | xavier_normal  | adam   | bce  |
 
 ### Formato del config
 
@@ -75,7 +75,9 @@ patrones se reconstruyen exactamente.
 - `metrics_restarts.csv`: métricas finales de cada restart.
 - `plots/<name>/`: `latent_scatter.png` (1a3), `new_letter.png` (1a4, interpolación en el
   latente → decode → umbral), `reconstruction.png` (entrada vs reconstrucción) y, con
-  denoising, `denoising.png` (ruidoso → reconstruido → limpio) + `denoising_sweep.csv`.
+  denoising, `denoising_l<nivel>.png` (ruidoso → reconstruido → limpio a cada nivel del
+  barrido), `denoising_sweep.png` (curvas de error y % de glifos perfectos vs nivel) +
+  `denoising_sweep.csv`.
 
 ## Resultados (objetivo: `max_pixel_error <= 1` sobre los 32 patrones)
 
@@ -116,8 +118,71 @@ uv run autoencoder --config configs/denoising.json
 ```
 
 Entrena `X̃ → X` (entrada corrompida, objetivo limpio) y evalúa la capacidad de denoising
-barriendo niveles de ruido (`0.05/0.1/0.2/0.3`), reportando el error de reconstrucción
-contra los patrones limpios en `denoising_sweep.csv`.
+barriendo niveles de ruido (`0.05/0.1/0.2/0.3`), reportando por nivel el error de píxeles
+(`max`/`mean`) y el **% de glifos reconstruidos perfecto** (0 píxeles de error) en
+`denoising_sweep.csv` / `denoising_sweep.png`, más los tripletes ruidoso→reconstruido→limpio
+`denoising_l<nivel>.png`.
+
+**El espacio latente es de 2 dimensiones**, igual que en 1a. La capacidad para denoisear
+**no** se gana ensanchando el cuello, sino con tres palancas a latente 2 fijo:
+
+1. **Corrupción online por época** (`denoising.resample_per_epoch: true`): cada época de
+   Adam ve una realización de ruido *fresca* sobre los glifos limpios, así la red aprende
+   la *operación* de denoising en vez de memorizar un patrón de ruido fijo. (Vuelve el
+   objetivo estocástico → requiere Adam; con `lbfgs` el config falla con un error claro.)
+2. **Nivel de ruido mixto** (`denoising.train_level_range: [0.0, 0.3]`): el nivel se
+   samplea uniforme por época, así la red es robusta en todo el barrido y no solo cerca de
+   un nivel fijo.
+3. **Arquitectura profunda hacia el cuello 2D** (`encoder_layers: [35, 29, 22, 15, 8, 2]`):
+   los valores intermedios son capas *ocultas*, no el latente — la capacidad viene de la
+   profundidad/ancho del encoder y su decoder espejo, con el latente fijo en 2.
+4. **Selección del restart por denoising**: con denoising habilitado, la mayoría de los
+   restarts reconstruyen el set limpio igual de bien (`max_pix = 0`) pero denoisean
+   distinto. En vez de quedarse con el primero, el sistema elige entre ellos el que maximiza
+   el **% de glifos perfectos** del barrido (mejora gratis, sin reentrenar).
+
+### Búsqueda de arquitectura (latente 2 fijo)
+
+Comparando arquitecturas con el latente **siempre en 2** (Adam, BCE/sigmoid, schedule
+coseno, corrupción online `[0, 0.3]`), una rampa profunda hacia el cuello mejora claramente
+el denoising frente al cuello abrupto o la rampa corta:
+
+| Arquitectura (latente 2) | mejor `max_pix` limpio | `mean_pix`@0.3 | % perfectos @0.1 | % perfectos (prom.) |
+|--------------------------|:----------------------:|:--------------:|:----------------:|:-------------------:|
+| `35-20-2`                | 2                      | 3.43           | 61.9             | 53.4                |
+| `35-25-15-8-2`           | 1                      | 2.08           | 86.1             | 78.8                |
+| `35-30-15-2`             | 0                      | 2.03           | 95.6             | 86.8                |
+| `35-30-20-10-2`          | 0                      | 1.88           | 96.4             | 89.1                |
+| **`35-28-20-12-2`**      | **0**                  | **1.78**       | **97.7**         | **89.0**            |
+
+El cuello abrupto `35-20-2` (comprimir 35→2 de golpe) es el peor; agregar profundidad sube
+el % de glifos perfectos. La config final lleva esa rampa un paso más allá
+(`35-29-22-15-8-2`): más profundidad da más restarts que reconstruyen limpio y mejor
+denoising a ruido alto.
+
+### Resultado de `configs/denoising.json` (latente 2)
+
+Con la config final (60000 épocas, 10 restarts, schedule coseno, selección por denoising),
+**los 10/10 restarts reconstruyen los 32/32 glifos limpios exactos** (`max_pix = 0`) y el
+barrido de denoising da:
+
+| nivel de ruido | `max_pix` | `mean_pix` | % glifos perfectos |
+|:--------------:|:---------:|:----------:|:------------------:|
+| 0.05           | 0.4       | 0.01       | 99.4               |
+| 0.10           | 2.4       | 0.08       | 98.8               |
+| 0.20           | 7.4       | 0.28       | 95.6               |
+| 0.30           | 11.6      | 0.94       | 85.0               |
+
+A niveles bajos/medios (0.05–0.1) recupera ~99% de los glifos perfecto, y degrada de forma
+suave al subir el ruido (85% a 0.3) — muy por encima del comportamiento previo
+(`max_pix ~10–23` ya a niveles bajos) **sin tocar la dimensión del latente**.
+
+> **Sobre las épocas:** subir de 15k a ~40–60k mejora el barrido, pero más allá los
+> rendimientos son decrecientes — 60k da prácticamente lo mismo que 500k a una fracción del
+> costo (~2 min vs ~17 min). Ampliar `train_level_range` por encima de `[0, 0.3]` (el rango
+> de evaluación) **no** ayuda: empeora levemente todos los niveles y reduce los restarts que
+> reconstruyen limpio. El residuo a 0.3 (≈10 de 35 píxeles invertidos) está cerca del límite
+> de información de un latente 2D: con tanto ruido varios glifos se vuelven ambiguos.
 
 ## Tests
 

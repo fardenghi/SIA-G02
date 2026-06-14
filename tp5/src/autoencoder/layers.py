@@ -41,6 +41,18 @@ def _relu_grad(z, a):
     return (z > 0.0).astype(z.dtype)
 
 
+# Pendiente del tramo negativo de leaky_relu (valor estándar).
+LEAKY_RELU_SLOPE = 0.01
+
+
+def _leaky_relu(z):
+    return np.where(z > 0.0, z, LEAKY_RELU_SLOPE * z)
+
+
+def _leaky_relu_grad(z, a):
+    return np.where(z > 0.0, 1.0, LEAKY_RELU_SLOPE)
+
+
 def _linear(z):
     return z
 
@@ -53,6 +65,7 @@ ACTIVATIONS = {
     "tanh": (_tanh, _tanh_grad),
     "sigmoid": (_sigmoid, _sigmoid_grad),
     "relu": (_relu, _relu_grad),
+    "leaky_relu": (_leaky_relu, _leaky_relu_grad),
     "linear": (_linear, _linear_grad),
 }
 

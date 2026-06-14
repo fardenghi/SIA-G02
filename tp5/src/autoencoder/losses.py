@@ -72,10 +72,10 @@ def validate_coherence(loss: str, output_activation: str, activation: str,
             "MSE con salida 'linear' no acota la salida a [0,1]; la métrica de píxeles "
             "usa umbral 0.5 igualmente."
         )
-    if activation == "relu" and init.startswith("xavier"):
+    if activation in ("relu", "leaky_relu") and init.startswith("xavier"):
         messages.append(
-            "Activación 'relu' con init 'xavier'; se sugiere una init 'he' para mantener "
-            "la varianza."
+            f"Activación '{activation}' con init 'xavier'; se sugiere una init 'he' "
+            "para mantener la varianza."
         )
     if activation in ("tanh", "sigmoid") and init.startswith("he"):
         messages.append(

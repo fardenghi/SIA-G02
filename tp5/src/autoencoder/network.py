@@ -1,9 +1,10 @@
 """Autoencoder MLP construido por espejo desde `encoder_layers`.
 
 `encoder_layers = [35, 25, 15, 8, 2]` define el encoder (capas densas 35→25→15→8→2)
-y el decoder se construye como su espejo automático (2→8→15→25→35). Encoder y decoder
-quedan como listas separables, lo que habilita `encode`/`decode` explícitos y la futura
-extensión a VAE.
+y el decoder se construye como su espejo automático (2→8→15→25→35), salvo que se pase
+`decoder_layers` explícito (decoder asimétrico, p. ej. `[2, 20, 30, 35]`). Encoder y
+decoder quedan como listas separables, lo que habilita `encode`/`decode` explícitos y
+la futura extensión a VAE.
 
 Convención de backprop: la pérdida entrega `da = dL/d(salida activada)` y la red lo
 propaga capa por capa multiplicando por la derivada de cada activación.
@@ -25,11 +26,19 @@ class Autoencoder:
         init: str = "xavier_normal",
         seed: int | None = None,
         latent_activation: str | None = None,
+        decoder_layers: list[int] | None = None,
     ):
         if len(encoder_layers) < 2:
             raise ValueError("encoder_layers debe tener al menos entrada y latente")
         self.encoder_sizes = list(encoder_layers)
-        self.decoder_sizes = list(reversed(encoder_layers))
+        self.decoder_sizes = (list(decoder_layers) if decoder_layers is not None
+                              else list(reversed(encoder_layers)))
+        if (self.decoder_sizes[0] != encoder_layers[-1]
+                or self.decoder_sizes[-1] != encoder_layers[0]):
+            raise ValueError(
+                "decoder_layers debe ir de la dim latente "
+                f"({encoder_layers[-1]}) a la dim de entrada ({encoder_layers[0]}); "
+                f"se recibió {self.decoder_sizes}")
         self.activation = activation
         self.output_activation = output_activation
         # Activación de la capa latente (cuello). Por defecto sigue a la de ocultas
