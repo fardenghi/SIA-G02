@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import vae_viz
+from . import vae_metrics_viz, vae_viz
 from .emoji_data import augment_dataset, load_emojis
 from .vae import VAE
 from .vae_config import load_vae_config
@@ -85,6 +85,15 @@ def run(config_path: str) -> dict:
     if X.shape[0] >= 2:
         vae_viz.plot_interpolation(vae, X[0], X[X.shape[0] // 2], size,
                                    path=plots_dir / "interpolation.png")
+
+    # Diagnósticos del encoder (métricas)
+    vae_metrics_viz.plot_training_curves(tracker.df,
+                                         path=plots_dir / "training_curves.png")
+    vae_metrics_viz.plot_kl_per_dim(vae, X, path=plots_dir / "kl_per_dim.png")
+    vae_metrics_viz.plot_posterior_stats(vae, X, path=plots_dir / "posterior_stats.png")
+    if vae.latent_dim == 2:
+        vae_metrics_viz.plot_aggregate_posterior(
+            vae, X, path=plots_dir / "aggregate_posterior.png")
     print(f"  -> plots: {plots_dir}")
 
     return {"name": cfg.name, **final, "_vae": vae, "_X": X, "_labels": labels,

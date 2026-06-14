@@ -227,6 +227,26 @@ generativo** (grilla de `z` decodificada, `manifold.png`), el **scatter de media
 (`latent_means.png`), la **interpolación** entre dos emojis (`interpolation.png`) y la
 **reconstrucción** (`reconstruction.png`).
 
+### Diagnósticos del encoder (métricas)
+
+Cada corrida genera además gráficos de las métricas para **validar el encoder**:
+
+- **`training_curves.png`**: ELBO/recon y KL vs época con el warmup de β — valida
+  convergencia y que la KL **no colapse a 0**.
+- **`kl_per_dim.png`**: KL aportada por cada dimensión latente — detecta dimensiones
+  "muertas" (sin usar).
+- **`posterior_stats.png`**: histogramas de μ y σ del posterior — sano = σ en (0,1), ni
+  colapso (σ→0) ni ignorar la entrada (σ→1, μ→0).
+- **`aggregate_posterior.png`**: scatter de los μ con los contornos del prior N(0,I) — si
+  q(z) matchea el prior, muestrear de N(0,I) genera bien.
+
+El barrido de β (ablación recon-vs-KL del README) se reproduce con un script aparte (entrena
+un modelo por β):
+
+```bash
+uv run python scripts/vae_beta_sweep.py
+```
+
 ### Formato del config del VAE
 
 ```json
@@ -307,7 +327,9 @@ src/autoencoder/
   vae_train.py   # train_vae full-batch Adam, beta-warmup, tracker (Ej2b)
   vae_config.py  # carga/validación del JSON del VAE
   vae_viz.py     # manifold, muestras nuevas, scatter de medias, interpolación (Ej2c)
+  vae_metrics_viz.py # diagnósticos del encoder: curvas, KL por dim, posterior vs prior
   vae_cli.py     # entrypoint: autoencoder-vae corre el VAE end-to-end
 configs/        # base_adam, base_lbfgs, deep, wide_relu, naive_init, denoising
   vae/          # configs del VAE (base)
+scripts/        # vae_beta_sweep.py (ablación recon-vs-KL del VAE)
 ```
