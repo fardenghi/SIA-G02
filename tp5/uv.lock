@@ -18,6 +18,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "pillow" },
     { name = "scipy" },
 ]
 
@@ -31,6 +32,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.7" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", specifier = ">=2.0" },
+    { name = "pillow", specifier = ">=10.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "scipy", specifier = ">=1.11" },
 ]
