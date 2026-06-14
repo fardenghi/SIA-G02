@@ -250,6 +250,29 @@ generativo** (grilla de `z` decodificada, `manifold.png`), el **scatter de media
 - **`training.beta`** ≥ 0 (peso de la KL); **`beta_warmup`** sube `β` de 0 al objetivo en
   esa cantidad de épocas. **`loss`** ∈ `bce|mse`.
 
+### Resultados y el rol de β (posterior collapse)
+
+El balance `β` entre reconstrucción y KL es **el** parámetro crítico del VAE. Como la
+reconstrucción (`bce`) se promedia por píxel (÷ `N·784`) mientras que la KL se promedia por
+muestra (÷ `N`), la KL pesa de hecho ~784× más de lo que sugiere su coeficiente: un `β=1`
+equivale a un `β≈784` en la convención canónica del ELBO y **colapsa el latente** (la red lo
+ignora, `kl→0`, y reconstruye la "cara promedio" para todo). El `β` útil ronda `1/784`:
+
+| β      | recon (det.) | KL    | qué se observa                                  |
+|:------:|:------------:|:-----:|-------------------------------------------------|
+| 1.0    | 0.496        | ~0.00 | **colapso total**: misma imagen para toda entrada |
+| 0.03   | 0.469        | 0.59  | latente apenas usado                            |
+| **0.01** | **0.43**   | **3.1** | **balance**: reconstrucción variada + muestras coherentes |
+| 0.005  | 0.40         | 4.3   | recon más nítida, latente menos regularizado    |
+| 0.001  | 0.40         | 6.9   | latente ancho (peor matcheo con el prior)       |
+
+Con `β=0.01` (config `base`), la reconstrucción distingue clases (p. ej. `cool` conserva los
+anteojos), las **muestras del prior** salen variadas (caras, frutas, animales), el **manifold**
+varía de forma continua y los **clusters** del scatter de medias tienen sentido. La
+contrapartida: con latente 2D y emojis muy distintos en grises, las imágenes son
+inevitablemente **difusas** — el límite de información de comprimir 784 píxeles a 2 números.
+Si aparece colapso (`kl≈0`, muestras idénticas), bajá `β`, subí `beta_warmup` o sumá augment.
+
 ## Tests
 
 ```bash

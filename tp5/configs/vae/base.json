@@ -16,7 +16,7 @@
     "loss": "bce",
     "epochs": 5000,
     "lr": 1e-3,
-    "beta": 1.0,
+    "beta": 0.01,
     "beta_warmup": 1000,
     "seed": 0,
     "log_every": 100
