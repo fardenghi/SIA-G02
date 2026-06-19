@@ -210,3 +210,34 @@ def plot_beta_sweep(df, path=None, title="Barrido de β: recon vs KL"):
     fig.tight_layout()
     _save(fig, path)
     return fig
+
+
+def plot_latent_sweep(df, path=None, title="Barrido de latent_dim: recon vs unidades activas"):
+    """Recon (det) y nº de unidades activas vs `latent_dim` (escala log₂).
+
+    Responde "¿cuántas dimensiones efectivas piden los emojis?": la recon mejora al subir el
+    latente y luego satura, mientras las unidades activas se estabilizan en la dimensionalidad
+    intrínseca. `df` con columnas `latent_dim`, `recon`, `active_units` (lo que produce
+    `scripts/vae_latent_sweep.py`).
+    """
+    from matplotlib.ticker import ScalarFormatter
+
+    ld = np.asarray(df["latent_dim"], dtype=float)
+    fig, ax_recon = plt.subplots(figsize=(7, 4.5))
+    ax_recon.plot(ld, df["recon"], "o-", color="tab:green", label="reconstrucción (det)")
+    ax_recon.set_xscale("log", base=2)
+    ax_recon.set_xticks(ld)
+    ax_recon.xaxis.set_major_formatter(ScalarFormatter())
+    ax_recon.set_xlabel("latent_dim (escala log₂)")
+    ax_recon.set_ylabel("reconstrucción (nats/muestra)", color="tab:green")
+    ax_recon.grid(True, alpha=0.3)
+    ax_act = ax_recon.twinx()
+    ax_act.plot(ld, df["active_units"], "s--", color="tab:blue", label="unidades activas")
+    ax_act.set_ylabel("nº unidades activas", color="tab:blue")
+    ax_act.set_ylim(bottom=0)
+    lines = ax_recon.get_lines() + ax_act.get_lines()
+    ax_recon.legend(lines, [ln.get_label() for ln in lines], loc="center right", fontsize=9)
+    ax_recon.set_title(title)
+    fig.tight_layout()
+    _save(fig, path)
+    return fig

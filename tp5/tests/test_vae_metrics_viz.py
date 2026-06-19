@@ -128,3 +128,12 @@ def test_plot_kl_per_dim_high_latent_creates_file(tmp_path):
     p = tmp_path / "kld_hi.png"
     vae_metrics_viz.plot_kl_per_dim(_vae(latent=16), _data(), path=p)
     assert p.exists() and p.stat().st_size > 0
+
+
+def test_plot_latent_sweep_creates_file(tmp_path):
+    df = pd.DataFrame({"latent_dim": [2, 4, 8, 16, 32],
+                       "recon": [320, 280, 250, 240, 238],
+                       "active_units": [2, 4, 6, 7, 7]})
+    p = tmp_path / "latent_sweep.png"
+    vae_metrics_viz.plot_latent_sweep(df, path=p)
+    assert p.exists() and p.stat().st_size > 0
