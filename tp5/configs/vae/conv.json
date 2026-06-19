@@ -16,7 +16,7 @@
   },
   "training": {
     "loss": "bce",
-    "epochs": 5000,
+    "epochs": 2000,
     "lr": 1e-3,
     "beta": 1.0,
     "beta_warmup": 1000,
