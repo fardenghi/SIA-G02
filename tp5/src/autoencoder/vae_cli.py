@@ -75,7 +75,15 @@ def run(config_path: str) -> dict:
     x_hat = vae.decode(mu)
     vae_viz.plot_reconstruction_gray(X, x_hat, labels, size=size, n=min(16, X.shape[0]),
                                      path=plots_dir / "reconstruction.png")
-    vae_viz.plot_latent_means(mu, labels, path=plots_dir / "latent_means.png")
+    if vae.latent_dim > 2:
+        # Latente >2D: proyectar las medias a sus 2 componentes principales para el scatter.
+        proj, var_ratio = vae_metrics_viz.project_pca(mu, k=2)
+        pct = 100.0 * float(var_ratio.sum())
+        vae_viz.plot_latent_means(
+            proj, labels, path=plots_dir / "latent_means.png",
+            title=f"Espacio latente del VAE (proyección PCA, var explicada {pct:.0f}%)")
+    else:
+        vae_viz.plot_latent_means(mu, labels, path=plots_dir / "latent_means.png")
     if vae.latent_dim == 2:
         vae_viz.plot_latent_manifold(vae, size, path=plots_dir / "manifold.png")
     # Muestras nuevas desde el prior (Ej2c).

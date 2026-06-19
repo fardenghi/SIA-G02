@@ -77,3 +77,54 @@ def test_plot_beta_sweep_creates_file(tmp_path):
     p = tmp_path / "sweep.png"
     vae_metrics_viz.plot_beta_sweep(df, path=p)
     assert p.exists() and p.stat().st_size > 0
+
+
+def test_project_pca_shape():
+    mu = np.random.default_rng(2).normal(size=(20, 8))
+    proj, var_ratio = vae_metrics_viz.project_pca(mu, k=2)
+    assert proj.shape == (20, 2)
+    assert var_ratio.shape == (2,)
+
+
+def test_project_pca_components_ordered_by_variance():
+    mu = np.random.default_rng(3).normal(size=(50, 5))
+    _, var_ratio = vae_metrics_viz.project_pca(mu, k=5)
+    # Componentes ordenados por varianza explicada decreciente, sumando ~1.
+    assert np.all(np.diff(var_ratio) <= 1e-12)
+    assert var_ratio.sum() == pytest.approx(1.0, rel=1e-9)
+
+
+def test_project_pca_full_is_invertible():
+    rng = np.random.default_rng(4)
+    mu = rng.normal(size=(30, 6))
+    mean = mu.mean(axis=0)
+    centered = mu - mean
+    _, s, vt = np.linalg.svd(centered, full_matrices=False)
+    proj, _ = vae_metrics_viz.project_pca(mu, k=6)
+    # Con todos los componentes la reconstrucción recupera μ: proj @ Vt + media == μ.
+    recon = proj @ vt + mean
+    assert np.allclose(recon, mu, atol=1e-8)
+
+
+def test_active_units_counts_dims_over_threshold():
+    # Caso sintético: dejar μ/logvar conocidos para controlar la KL por dim.
+    vae = _vae(latent=4)
+    X = _data()
+
+    class _FakeEnc:
+        # KL por dim ≈ [0.0, ~grande, 0.0, ~grande] con un μ controlado y σ=1 (logvar=0).
+        def __call__(self, _X):
+            n = _X.shape[0]
+            mu = np.tile(np.array([0.0, 2.0, 0.0, 1.5]), (n, 1))
+            logvar = np.zeros((n, 4))
+            return mu, logvar
+
+    vae.encode = _FakeEnc()
+    # KL = 0.5*mu^2 con logvar=0: dims activas son las de mu != 0 (umbral 0.1).
+    assert vae_metrics_viz.active_units(vae, X, threshold=0.1) == 2
+
+
+def test_plot_kl_per_dim_high_latent_creates_file(tmp_path):
+    p = tmp_path / "kld_hi.png"
+    vae_metrics_viz.plot_kl_per_dim(_vae(latent=16), _data(), path=p)
+    assert p.exists() and p.stat().st_size > 0

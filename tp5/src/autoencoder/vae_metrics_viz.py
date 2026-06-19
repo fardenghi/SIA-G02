@@ -40,6 +40,37 @@ def kl_per_dim(vae: VAE, X: np.ndarray) -> np.ndarray:
     return kld.mean(axis=0)
 
 
+def active_units(vae: VAE, X: np.ndarray, threshold: float = 0.1) -> int:
+    """Cuenta las dimensiones latentes "activas": KL media por dim > `threshold` (nats).
+
+    Es el conteo del pruning automático del VAE: con `latent_dim` grande, varias dims
+    colapsan a KL≈0 (el encoder no las usa) y solo unas pocas quedan activas. Ese número es
+    una estimación de la dimensionalidad intrínseca que el dataset le pide al cuello latente.
+    """
+    return int((kl_per_dim(vae, X) > threshold).sum())
+
+
+def project_pca(mu: np.ndarray, k: int = 2):
+    """Proyecta `μ` (N, L) a sus `k` componentes principales (PCA desde cero con SVD).
+
+    Devuelve `(proj, var_ratio)` donde `proj` es (N, k) y `var_ratio` es la fracción de
+    varianza explicada por cada uno de los `k` componentes (ordenados de mayor a menor).
+    Con `k == L` la proyección es invertible: `proj @ Vt + media == μ`.
+    """
+    mu = np.asarray(mu, dtype=float)
+    mean = mu.mean(axis=0)
+    centered = mu - mean
+    # SVD del centrado: las filas de Vt son los componentes principales (autovectores de la
+    # covarianza), con valores singulares S en orden decreciente.
+    _, s, vt = np.linalg.svd(centered, full_matrices=False)
+    variance = s**2
+    total = variance.sum()
+    var_ratio = variance / total if total > 0 else np.zeros_like(variance)
+    k = min(k, vt.shape[0])
+    proj = centered @ vt[:k].T  # (N, k)
+    return proj, var_ratio[:k]
+
+
 def plot_training_curves(df, path=None, title="Curvas de entrenamiento del VAE"):
     """ELBO/recon (arriba) y KL/β (abajo) vs época, desde el DataFrame del tracker."""
     epochs = np.asarray(df["epoch"], dtype=float)
@@ -70,17 +101,33 @@ def plot_training_curves(df, path=None, title="Curvas de entrenamiento del VAE")
     return fig
 
 
-def plot_kl_per_dim(vae: VAE, X: np.ndarray, path=None,
+def plot_kl_per_dim(vae: VAE, X: np.ndarray, path=None, threshold: float = 0.1,
                     title="KL por dimensión latente (uso del cuello)"):
-    """Barras de KL por dimensión: detecta dimensiones latentes muertas."""
+    """Barras de KL por dimensión, ordenadas de mayor a menor, con umbral de unidad activa.
+
+    Con `latent_dim > 2` es la figura estrella: muestra el pruning automático del VAE. Las
+    dims sobre `threshold` (nats) se pintan llenas (activas); las que colapsaron a KL≈0, en
+    gris. El título anota cuántas quedaron activas.
+    """
     kld = kl_per_dim(vae, X)
-    fig, ax = plt.subplots(figsize=(5, 4))
+    order = np.argsort(kld)[::-1]  # de mayor a menor KL
+    kld_sorted = kld[order]
+    active = kld_sorted > threshold
+    n_active = int(active.sum())
+
+    fig, ax = plt.subplots(figsize=(max(5, 0.4 * len(kld) + 1), 4))
     dims = np.arange(len(kld))
-    ax.bar(dims, kld, color="tab:purple", alpha=0.8)
+    colors = np.where(active, "tab:purple", "lightgray")
+    ax.bar(dims, kld_sorted, color=colors, alpha=0.85)
     ax.set_xticks(dims)
-    ax.set_xticklabels([f"z{i + 1}" for i in dims])
+    ax.set_xticklabels([f"z{i + 1}" for i in order], rotation=90 if len(kld) > 12 else 0,
+                       fontsize=8 if len(kld) > 12 else 9)
+    ax.axhline(threshold, color="tab:red", ls="--", lw=1,
+               label=f"umbral unidad activa ({threshold:g} nats)")
     ax.set_ylabel("KL media")
-    ax.set_title(title)
+    ax.set_xlabel("dimensión latente (ordenada por KL)")
+    ax.set_title(f"{title}\n{n_active}/{len(kld)} dims activas")
+    ax.legend(loc="upper right", fontsize=9)
     ax.grid(True, axis="y", alpha=0.3)
     fig.tight_layout()
     _save(fig, path)
