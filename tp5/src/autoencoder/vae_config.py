@@ -52,12 +52,16 @@ class VAEDataConfig:
 
 @dataclass
 class VAEArchConfig:
+    kind: str = "mlp"  # "mlp" | "conv"
     encoder_layers: list[int] = field(default_factory=lambda: [784, 256, 64])
     latent_dim: int = 2
     activation: str = "relu"
     output_activation: str = "sigmoid"
     init: str = "xavier_normal"
     decoder_layers: list[int] | None = None
+    # Específicos de kind="conv" (ignorados para "mlp"):
+    conv_channels: list[int] = field(default_factory=lambda: [16, 32])
+    dense_hidden: int = 64
 
 
 @dataclass
@@ -122,42 +126,75 @@ def load_vae_config(path: str | Path) -> VAEConfig:
 
     # -- architecture --
     arch_raw = raw.get("architecture", {})
-    _unknown_keys(arch_raw, {"encoder_layers", "latent_dim", "activation",
-                             "output_activation", "init", "decoder_layers"},
-                  "architecture")
-    if "encoder_layers" not in arch_raw:
-        raise ConfigError("Falta 'architecture.encoder_layers'")
-    encoder_layers = arch_raw["encoder_layers"]
-    if (not isinstance(encoder_layers, list) or len(encoder_layers) < 1
-            or not all(isinstance(n, int) and n > 0 for n in encoder_layers)):
-        raise ConfigError("'architecture.encoder_layers' debe ser lista de enteros > 0")
-    if encoder_layers[0] != size * size:
+    _unknown_keys(arch_raw, {"kind", "encoder_layers", "latent_dim", "activation",
+                             "output_activation", "init", "decoder_layers",
+                             "conv_channels", "dense_hidden"}, "architecture")
+    kind = arch_raw.get("kind", "mlp")
+    if kind not in ("mlp", "conv"):
         raise ConfigError(
-            f"'architecture.encoder_layers[0]' debe ser {size * size} "
-            f"(= data.size² = {size}²), se recibió {encoder_layers[0]}")
+            f"'architecture.kind' inválido: {kind!r}. Permitidos: ['conv', 'mlp']")
+
     latent_dim = int(arch_raw.get("latent_dim", 2))
     if latent_dim < 1:
         raise ConfigError("'architecture.latent_dim' debe ser >= 1")
-    decoder_layers = arch_raw.get("decoder_layers", None)
-    if decoder_layers is not None:
-        if (not isinstance(decoder_layers, list) or len(decoder_layers) < 2
-                or not all(isinstance(n, int) and n > 0 for n in decoder_layers)):
+
+    # Defaults; cada rama valida lo que le corresponde.
+    encoder_layers = arch_raw.get("encoder_layers", [size * size, 256, 64])
+    decoder_layers = None
+    conv_channels = arch_raw.get("conv_channels", [16, 32])
+    dense_hidden = int(arch_raw.get("dense_hidden", 64))
+
+    if kind == "mlp":
+        if "encoder_layers" not in arch_raw:
+            raise ConfigError("Falta 'architecture.encoder_layers' (requerido para kind=mlp)")
+        if (not isinstance(encoder_layers, list) or len(encoder_layers) < 1
+                or not all(isinstance(n, int) and n > 0 for n in encoder_layers)):
+            raise ConfigError("'architecture.encoder_layers' debe ser lista de enteros > 0")
+        if encoder_layers[0] != size * size:
             raise ConfigError(
-                "'architecture.decoder_layers' debe ser lista de enteros > 0 o null")
-        if decoder_layers[0] != latent_dim:
+                f"'architecture.encoder_layers[0]' debe ser {size * size} "
+                f"(= data.size² = {size}²), se recibió {encoder_layers[0]}")
+        decoder_layers = arch_raw.get("decoder_layers", None)
+        if decoder_layers is not None:
+            if (not isinstance(decoder_layers, list) or len(decoder_layers) < 2
+                    or not all(isinstance(n, int) and n > 0 for n in decoder_layers)):
+                raise ConfigError(
+                    "'architecture.decoder_layers' debe ser lista de enteros > 0 o null")
+            if decoder_layers[0] != latent_dim:
+                raise ConfigError(
+                    "'architecture.decoder_layers[0]' debe igualar latent_dim "
+                    f"({latent_dim})")
+            if decoder_layers[-1] != size * size:
+                raise ConfigError(
+                    f"'architecture.decoder_layers[-1]' debe ser {size * size} (dim de salida)")
+    else:  # kind == "conv"
+        if "decoder_layers" in arch_raw:
+            raise ConfigError("'architecture.decoder_layers' no aplica a kind=conv")
+        if (not isinstance(conv_channels, list) or len(conv_channels) < 1
+                or not all(isinstance(c, int) and c > 0 for c in conv_channels)):
             raise ConfigError(
-                "'architecture.decoder_layers[0]' debe igualar latent_dim "
-                f"({latent_dim})")
-        if decoder_layers[-1] != size * size:
+                "'architecture.conv_channels' debe ser lista no vacía de enteros > 0")
+        if dense_hidden <= 0:
+            raise ConfigError("'architecture.dense_hidden' debe ser > 0")
+        # Compatibilidad espacial: size/2ⁿ·2ⁿ debe recuperar size (n = nº de convs stride-2).
+        feat = size
+        for _ in conv_channels:
+            feat = (feat + 2 * 1 - 3) // 2 + 1  # conv_out_size con k3, s2, p1
+        if feat * (2 ** len(conv_channels)) != size:
             raise ConfigError(
-                f"'architecture.decoder_layers[-1]' debe ser {size * size} (dim de salida)")
+                f"'data.size'={size} incompatible con {len(conv_channels)} capas conv: "
+                f"el decoder produce {feat * (2 ** len(conv_channels))}≠{size}")
+
     architecture = VAEArchConfig(
+        kind=kind,
         encoder_layers=encoder_layers,
         latent_dim=latent_dim,
         activation=arch_raw.get("activation", "relu"),
         output_activation=arch_raw.get("output_activation", "sigmoid"),
         init=arch_raw.get("init", "xavier_normal"),
         decoder_layers=decoder_layers,
+        conv_channels=conv_channels,
+        dense_hidden=dense_hidden,
     )
     _require_in(architecture.activation, VALID_ACTIVATIONS, "architecture.activation")
     _require_in(architecture.output_activation, VALID_OUTPUT_ACTIVATIONS,

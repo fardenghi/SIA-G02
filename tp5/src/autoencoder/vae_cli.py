@@ -14,20 +14,49 @@ from pathlib import Path
 import numpy as np
 
 from . import vae_metrics_viz, vae_viz
+from .conv_vae import ConvVAE
 from .emoji_data import augment_dataset, load_emojis
 from .vae import VAE
 from .vae_config import load_vae_config
 from .vae_train import VAEMetricsTracker, train_vae
 
 
+def build_model(cfg):
+    """Construye el modelo según `architecture.kind` (mlp → VAE, conv → ConvVAE).
+
+    Ambos exponen la misma interfaz (encode/decode/forward/elbo/backward/sample_prior/…),
+    así que el resto del pipeline (entrenamiento, viz, diagnósticos) es idéntico.
+    """
+    arch = cfg.architecture
+    if arch.kind == "conv":
+        return ConvVAE(
+            size=cfg.data.size, latent_dim=arch.latent_dim,
+            conv_channels=arch.conv_channels, dense_hidden=arch.dense_hidden,
+            activation=arch.activation, output_activation=arch.output_activation,
+            init=arch.init, loss=cfg.training.loss, seed=cfg.training.seed,
+        )
+    return VAE(
+        encoder_layers=arch.encoder_layers, latent_dim=arch.latent_dim,
+        activation=arch.activation, output_activation=arch.output_activation,
+        init=arch.init, loss=cfg.training.loss, seed=cfg.training.seed,
+        decoder_layers=arch.decoder_layers,
+    )
+
+
 def run(config_path: str) -> dict:
     cfg = load_vae_config(config_path)
     plots_dir = Path(cfg.output.plots_dir) / cfg.name
 
+    arch = cfg.architecture
     print(f"== VAE: {cfg.name} ==")
-    print(f"  arquitectura: encoder {cfg.architecture.encoder_layers} "
-          f"latent={cfg.architecture.latent_dim} act={cfg.architecture.activation} "
-          f"salida={cfg.architecture.output_activation} init={cfg.architecture.init}")
+    if arch.kind == "conv":
+        print(f"  arquitectura: conv canales={arch.conv_channels} "
+              f"dense={arch.dense_hidden} latent={arch.latent_dim} "
+              f"act={arch.activation} salida={arch.output_activation} init={arch.init}")
+    else:
+        print(f"  arquitectura: mlp encoder {arch.encoder_layers} "
+              f"latent={arch.latent_dim} act={arch.activation} "
+              f"salida={arch.output_activation} init={arch.init}")
     print(f"  training: loss={cfg.training.loss} epochs={cfg.training.epochs} "
           f"lr={cfg.training.lr} beta={cfg.training.beta} "
           f"warmup={cfg.training.beta_warmup}")
@@ -44,17 +73,8 @@ def run(config_path: str) -> dict:
     print(f"  dataset: {X.shape[0]} muestras de {X.shape[1]} px "
           f"({cfg.data.size}×{cfg.data.size})")
 
-    # Modelo (Ej2b)
-    vae = VAE(
-        encoder_layers=cfg.architecture.encoder_layers,
-        latent_dim=cfg.architecture.latent_dim,
-        activation=cfg.architecture.activation,
-        output_activation=cfg.architecture.output_activation,
-        init=cfg.architecture.init,
-        loss=cfg.training.loss,
-        seed=cfg.training.seed,
-        decoder_layers=cfg.architecture.decoder_layers,
-    )
+    # Modelo (Ej2b) — mlp o conv según architecture.kind
+    vae = build_model(cfg)
 
     # Entrenamiento
     tracker = VAEMetricsTracker(run_label=cfg.name)

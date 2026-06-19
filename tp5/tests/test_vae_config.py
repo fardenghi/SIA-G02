@@ -97,3 +97,60 @@ def test_decoder_layers_validation(tmp_path):
     obj["architecture"]["decoder_layers"] = [2, 64, 100]
     with pytest.raises(ConfigError):
         load_vae_config(_write(tmp_path, obj))
+
+
+# ----------------------------------------------------- kind: "conv" (Iteración 2)
+
+CONV_BASE = {
+    "data": {"size": 28},
+    "architecture": {"kind": "conv", "latent_dim": 2, "conv_channels": [16, 32],
+                     "dense_hidden": 64},
+    "training": {"loss": "bce", "epochs": 100, "lr": 1e-3},
+}
+
+
+def test_default_kind_is_mlp(tmp_path):
+    # Retrocompatibilidad: configs sin 'kind' siguen siendo mlp.
+    cfg = load_vae_config(_write(tmp_path, BASE))
+    assert cfg.architecture.kind == "mlp"
+
+
+def test_conv_kind_valid(tmp_path):
+    cfg = load_vae_config(_write(tmp_path, CONV_BASE))
+    assert cfg.architecture.kind == "conv"
+    assert cfg.architecture.conv_channels == [16, 32]
+    assert cfg.architecture.dense_hidden == 64
+
+
+def test_conv_does_not_require_encoder_layers(tmp_path):
+    # kind=conv no usa encoder_layers; debe cargar sin ellos.
+    cfg = load_vae_config(_write(tmp_path, CONV_BASE))
+    assert cfg.architecture.latent_dim == 2
+
+
+def test_invalid_kind_raises(tmp_path):
+    obj = json.loads(json.dumps(CONV_BASE))
+    obj["architecture"]["kind"] = "transformer"
+    with pytest.raises(ConfigError):
+        load_vae_config(_write(tmp_path, obj))
+
+
+def test_conv_incompatible_size_raises(tmp_path):
+    obj = json.loads(json.dumps(CONV_BASE))
+    obj["data"]["size"] = 10  # 10 → 5 → 3, 3·4 = 12 ≠ 10
+    with pytest.raises(ConfigError):
+        load_vae_config(_write(tmp_path, obj))
+
+
+def test_conv_decoder_layers_forbidden(tmp_path):
+    obj = json.loads(json.dumps(CONV_BASE))
+    obj["architecture"]["decoder_layers"] = [2, 64, 784]
+    with pytest.raises(ConfigError):
+        load_vae_config(_write(tmp_path, obj))
+
+
+def test_conv_bad_channels_raises(tmp_path):
+    obj = json.loads(json.dumps(CONV_BASE))
+    obj["architecture"]["conv_channels"] = [16, -1]
+    with pytest.raises(ConfigError):
+        load_vae_config(_write(tmp_path, obj))
