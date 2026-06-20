@@ -270,6 +270,10 @@ uv run python scripts/vae_beta_sweep.py
 - **`training.beta`** ≥ 0 (peso de la KL; `β=1` = VAE canónico, `β>1` = β-VAE más
   regularizado); **`beta_warmup`** sube `β` de 0 al objetivo en esa cantidad de épocas.
   **`loss`** ∈ `bce|mse`.
+- **`architecture.kind`** ∈ `mlp|conv` (default `mlp`, retrocompatible). Con `conv` el
+  encoder/decoder son convolucionales y se usan `conv_channels` (canales de las convs
+  stride-2, p. ej. `[16, 32]`) y `dense_hidden`; `encoder_layers` se ignora. Ver la sección
+  de iteraciones para la comparación MLP vs CNN.
 
 ### Resultados y el rol de β (posterior collapse)
 
@@ -295,6 +299,91 @@ latente 2D y emojis muy distintos en grises, las imágenes son inevitablemente *
 límite de información de comprimir 784 píxeles a 2 números. Subir `β` hacia ~8 compacta el
 latente (mejor matcheo con el prior) a cambio de algo más de difuminado; si aparece colapso
 (`kl≈0`, muestras idénticas), bajá `β`, subí `beta_warmup` o sumá augment.
+
+### Iteraciones de mejora: ¿el cuello es el latente o las *features*? (MLP vs CNN)
+
+La reconstrucción a latente 2 es **difusa**: ¿por comprimir demasiado (cuello latente) o por
+*features* pobres del MLP? Dos iteraciones diagnósticas lo responden. La arquitectura se
+conmuta **por config** (`architecture.kind: "mlp" | "conv"`), sin tocar código.
+
+#### Iteración 1 — Agrandar el latente
+
+Barrido `latent_dim ∈ {2,4,8,16,32}` (MLP, 32 emojis sin augment, β=1):
+
+| latent_dim | recon_det | unidades activas |
+|:----------:|:---------:|:----------------:|
+| 2  | 309.65 | 2  |
+| 4  | 308.74 | 4  |
+| 8  | 308.84 | 8  |
+| 16 | 309.10 | 13 |
+| 32 | 308.93 | 13 |
+
+**La reconstrucción es plana** (~309 ± 0.5 nats). El modelo activa más dimensiones cuando se
+las das (KL y unidades activas suben), pero la calidad de píxeles **no mejora**; las activas
+saturan en **~13** (la dimensionalidad intrínseca del set). → el **cuello latente no es el
+limitante**; lo son las *features*. Esto motiva probar convoluciones.
+
+Soporte de visualización para `latent_dim > 2`: `active_units(vae, X)` cuenta dims con KL sobre
+umbral, `kl_per_dim.png` las ordena y marca las activas, y `latent_means.png` proyecta los `μ` a
+2D por **PCA desde cero** (`project_pca`). Barrido: `scripts/vae_latent_sweep.py --kind mlp`.
+
+#### Iteración 2 — Encoder/decoder convolucional
+
+`ConvVAE` (`conv_vae.py`) implementa convoluciones **desde cero** (`conv.py`: `Conv2D` vía
+im2col/col2im, `Upsample2D` nearest — sin checkerboard —, `Flatten`/`Reshape`), con cada capa y
+el **ELBO completo** verificados por gradient-check. **No toca `vae.py`**: reutiliza
+`reparameterize`/`kl_divergence`/`losses` y expone la misma interfaz, así que todas las viz y
+diagnósticos funcionan igual.
+
+```bash
+uv run autoencoder-vae --config configs/vae/conv.json    # CNN end-to-end (figuras)
+uv run python scripts/vae_latent_sweep.py --kind conv    # barrido de latente CNN
+```
+
+**Cara a cara a latente 2** (augment on): MLP `recon_det 327.6` vs CNN `341.8` — la CNN **~14
+nats peor** y visualmente más borrosa (colapsa casi todos los emojis a un smiley genérico).
+
+**Barrido de latente, MLP vs CNN** (sin augment, 2000 épocas):
+
+| latent | MLP   | CNN   | gap (CNN−MLP) |
+|:------:|:-----:|:-----:|:-------------:|
+| 2  | 315.7 | 332.4 | +16.7 |
+| 4  | 309.3 | 320.6 | +11.3 |
+| 8  | 309.6 | 317.4 | +7.7  |
+| 16 | 309.9 | 317.3 | +7.4  |
+| 32 | 310.3 | 317.9 | +7.6  |
+
+La CNN **nunca cruza** al MLP: el gap cae de +16.7 (latente 2) a ~+7.5 (latente 8) y se **clava**
+ahí. Además, en latente 32 el MLP poda a 23 dims activas mientras la CNN mantiene las 32 (KL
+mayor): **codifica más y reconstruye peor → el cuello está en el decoder.**
+
+**Prueba de capacidad** (canales del decoder `[16,32]` → `[32,64]`):
+
+| latent | CNN `[16,32]` | CNN `[32,64]` | MLP   | gap restante |
+|:------:|:-------------:|:-------------:|:-----:|:------------:|
+| 8  | 317.4 | **313.1** | 309.6 | +3.5 |
+| 16 | 317.3 | **313.8** | 309.9 | +3.9 |
+
+Duplicar canales **cierra ~la mitad del gap** (+7.5 → +3.7) → el cuello del decoder era
+**mixto**: ~mitad **capacidad** (la cierra el ancho) y ~mitad **sesgo estructural** del
+upsample-nearest + pesos compartidos (que más canales no arreglan).
+
+**Generación (punto c).** Comparando `samples.png` del prior, el **MLP genera emojis
+reconocibles y diversos** (pandas con sus parches, corazones, gatos, smileys) tanto a latente 2
+como a latente 8; la **CNN produce manchones incoherentes** salvo cerca de la zona poblada de su
+latente — su posterior agregado **no cubre bien el prior `N(0,I)`**, así que la mayoría de los
+`z` muestreados caen en zonas que el decoder convoluciona como artefactos. El manifold 2D
+confirma un latente del MLP más organizado.
+
+#### Conclusión
+
+En las **tres** dimensiones evaluables —**reconstrucción**, **generación** (punto c) y
+**estructura del latente**— y en ambos latentes (2 y 8), el **MLP-VAE es el mejor modelo para
+este dataset.** El *prior* convolucional (pesos compartidos, invariancia a traslación,
+suavizado) es un **regularizador** que en 32 emojis chicos y centrados **cuesta más capacidad de
+memorización de la que aporta**; pagaría en **generalización a datos no vistos o imágenes
+naturales**, no en el recon/generación de este set fijo. La `ConvVAE` queda **implementada,
+validada y caracterizada**; se elige el MLP.
 
 ## Tests
 
@@ -323,13 +412,15 @@ src/autoencoder/
   viz.py       # scatter latente (1a3), letra nueva (1a4), heatmaps, denoising
   cli.py       # entrypoint: --config corre el experimento end-to-end
   vae.py         # VAE: cabezas mu/logvar, reparametrización, KL, backward (Ej2)
+  conv.py        # capas espaciales desde cero: Conv2D (im2col/col2im), Upsample2D, Flatten/Reshape
+  conv_vae.py    # ConvVAE: encoder/decoder convolucional, reutiliza reparam/KL del VAE (It.2)
   emoji_data.py  # dataset de emojis (Pillow + Noto -> 28x28 grises) (Ej2a)
   vae_train.py   # train_vae full-batch Adam, beta-warmup, tracker (Ej2b)
-  vae_config.py  # carga/validación del JSON del VAE
+  vae_config.py  # carga/validación del JSON del VAE (kind: mlp|conv)
   vae_viz.py     # manifold, muestras nuevas, scatter de medias, interpolación (Ej2c)
-  vae_metrics_viz.py # diagnósticos del encoder: curvas, KL por dim, posterior vs prior
-  vae_cli.py     # entrypoint: autoencoder-vae corre el VAE end-to-end
+  vae_metrics_viz.py # diagnósticos del encoder: curvas, KL por dim, PCA, posterior vs prior
+  vae_cli.py     # entrypoint: autoencoder-vae corre el VAE (mlp o conv) end-to-end
 configs/        # base_adam, base_lbfgs, deep, wide_relu, naive_init, denoising
-  vae/          # configs del VAE (base)
-scripts/        # vae_beta_sweep.py (ablación recon-vs-KL del VAE)
+  vae/          # configs del VAE: base, latent8/16 (mlp), conv (cnn)
+scripts/        # vae_beta_sweep.py (β), vae_latent_sweep.py (barrido de latente, --kind mlp|conv)
 ```
