@@ -114,8 +114,21 @@ def main(argv=None):
 
     fc = train("cnn", cnn, X, args)
     fm = train("mlp", mlp, X, args)
-    print(f"\nRESUMEN  CNN recon/px={fc['recon_det']/D:.4f}  MLP recon/px={fm['recon_det']/D:.4f}"
-          f"  gap(CNN-MLP)={ (fc['recon_det']-fm['recon_det'])/D:+.4f}", flush=True)
+    gap = (fc["recon_det"] - fm["recon_det"]) / D
+    summary = (
+        f"dataset: {X.shape[0]} caras+animales {S}×{S}\n"
+        f"config: latent={args.latent} channels={args.channels} dense={args.dense_hidden} "
+        f"beta={args.beta} epochs={args.epochs} batch={args.batch} (cosine LR)\n"
+        f"CNN: recon_det={fc['recon_det']:.1f} ({fc['recon_det']/D:.4f}/px) "
+        f"kl={fc['kl']:.2f} params={cnn.n_params}\n"
+        f"MLP: recon_det={fm['recon_det']:.1f} ({fm['recon_det']/D:.4f}/px) "
+        f"kl={fm['kl']:.2f} params={mlp.n_params}\n"
+        f"gap/px (CNN-MLP) = {gap:+.4f}   (<0 => la CNN gana)\n"
+        f"referencias gap/px: 32emojis +0.0100 | 1294 glifos/lat8 +0.0060 | "
+        f"512 glifos/lat64 -0.0054\n"
+    )
+    (OUT / "summary.txt").write_text(summary)
+    print("\n" + "=" * 60 + "\n" + summary + "=" * 60, flush=True)
 
 
 if __name__ == "__main__":
