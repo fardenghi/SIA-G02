@@ -419,6 +419,23 @@ resolución cambian el resultado porque tocan la *representación*, no la *natur
 resolución (125K→244K), así que su eficiencia de parámetros es real pero más matizada que "la
 conv se mantiene chica".
 
+**Más datos** (de 32 a **1294 glifos distintos**, mini-batch; `scripts/more_data_experiment.py`):
+
+| modelo | recon_det/px | parámetros |
+|:------:|:------------:|:----------:|
+| MLP | 0.397 | 437K     |
+| CNN | 0.403 | 125K     |
+
+Esta es **la única palanca que movió la aguja**: el gap por píxel bajó de **+0.0100 (32 emojis) a
++0.0060 (1294)**. Con tantas plantillas el MLP **ya no puede memorizarlas** en un latente 8, así
+que pierde su ventaja y las reconstrucciones de ambos se vuelven **comparables** (borrosas); en
+**generación**, las muestras de la CNN salen **más suaves y coherentes** (sin el ruido
+sal-y-pimienta del MLP). No llega a cruzar a 1294 glifos / latente 8 / 28px, pero la **tendencia
+es inequívoca**: más datos → la CNN cierra el gap, tal como predice la teoría (a escala MNIST la
+conv gana). Confirma que el factor que ataba el resultado era el **régimen de memorización**, no
+la representación. Habilitado por el soporte de **mini-batch** en `train_vae` (`batch_size`), que
+desacopla el costo de `N`.
+
 ## Tests
 
 ```bash
