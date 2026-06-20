@@ -53,8 +53,13 @@ def _load_font(font_path: str | Path = DEFAULT_FONT, strike: int = NOTO_STRIKE):
 
 
 def render_emoji(ch: str, size: int = 28, font_path: str | Path = DEFAULT_FONT,
-                 font=None) -> np.ndarray:
-    """Rasteriza un emoji a un vector de `size·size` en `[0,1]` (tinta=1, fondo=0)."""
+                 font=None, color: bool = False) -> np.ndarray:
+    """Rasteriza un emoji a un vector en `[0,1]`.
+
+    Grises (`color=False`): `(size·size,)` con tinta=1, fondo=0. Color (`color=True`): RGB
+    aplanado en orden canal-mayor `(3·size·size,)` con los colores reales sobre fondo blanco
+    (=1), compatible con `ConvVAE(in_channels=3)` (que reshapea a `(N, 3, size, size)`).
+    """
     from PIL import Image, ImageDraw
 
     font = font or _load_font(font_path)
@@ -64,31 +69,45 @@ def render_emoji(ch: str, size: int = 28, font_path: str | Path = DEFAULT_FONT,
     draw.text((_CANVAS // 2, _CANVAS // 2), ch, font=font,
               embedded_color=True, anchor="mm")
 
-    # Luminancia -> tinta (alto donde es oscuro sobre fondo blanco).
+    # Bounding-box de la tinta (por luminancia), compartido por ambos modos.
     ink = 255 - np.asarray(img.convert("L"), dtype=np.float64)
-
-    # Recorte por bounding-box de la tinta y encuadre cuadrado centrado.
     ys, xs = np.where(ink > _INK_THRESHOLD)
     if xs.size:
-        crop = ink[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+        y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
     else:
-        crop = ink
+        y0, y1, x0, x1 = 0, ink.shape[0], 0, ink.shape[1]
+
+    if color:
+        rgb = np.asarray(img.convert("RGB"), dtype=np.float64)  # (C, C, 3), fondo blanco=255
+        crop = rgb[y0:y1, x0:x1, :]
+        h, w = crop.shape[:2]
+        side = max(h, w)
+        square = np.full((side, side, 3), 255.0)  # encuadre cuadrado sobre fondo blanco
+        oy, ox = (side - h) // 2, (side - w) // 2
+        square[oy:oy + h, ox:ox + w, :] = crop
+        small = Image.fromarray(square.astype(np.uint8)).resize((size, size), Image.LANCZOS)
+        arr = np.asarray(small, dtype=np.float64) / 255.0  # (size, size, 3)
+        return arr.transpose(2, 0, 1).reshape(-1)  # canal-mayor: (3·size·size,)
+
+    # Grises: recorte de la tinta sobre fondo negro (=0).
+    crop = ink[y0:y1, x0:x1]
     h, w = crop.shape
     side = max(h, w)
     square = np.zeros((side, side), dtype=np.float64)
     square[(side - h) // 2:(side - h) // 2 + h,
            (side - w) // 2:(side - w) // 2 + w] = crop
-
     small = Image.fromarray(square.astype(np.uint8)).resize((size, size), Image.LANCZOS)
     return (np.asarray(small, dtype=np.float64) / 255.0).reshape(-1)
 
 
 def load_emojis(size: int = 28, subset: list[int] | None = None,
-                font_path: str | Path = DEFAULT_FONT) -> tuple[np.ndarray, list[str]]:
-    """Carga el dataset de emojis. Devuelve `(X, labels)` con `X` de forma `(N, size·size)`."""
+                font_path: str | Path = DEFAULT_FONT,
+                color: bool = False) -> tuple[np.ndarray, list[str]]:
+    """Carga el dataset de emojis. `X` de forma `(N, size·size)` o, con `color=True`,
+    `(N, 3·size·size)` (RGB canal-mayor)."""
     font = _load_font(font_path)
     items = EMOJIS if subset is None else [EMOJIS[i] for i in subset]
-    X = np.stack([render_emoji(ch, size, font=font) for ch, _ in items])
+    X = np.stack([render_emoji(ch, size, font=font, color=color) for ch, _ in items])
     labels = [label for _, label in items]
     return X, labels
 

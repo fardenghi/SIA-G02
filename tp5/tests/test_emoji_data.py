@@ -59,6 +59,21 @@ def test_render_emoji_single():
     assert vec.min() >= 0.0 and vec.max() <= 1.0
 
 
+def test_load_color_shape_and_range():
+    X, labels = emoji_data.load_emojis(size=28, color=True)
+    # RGB canal-mayor: 3·size·size por emoji.
+    assert X.shape == (len(emoji_data.EMOJIS), 3 * 28 * 28)
+    assert X.min() >= 0.0 and X.max() <= 1.0
+
+
+def test_color_has_chromatic_content():
+    # Al menos un emoji debe tener canales R y B distintos (color real, no gris).
+    X, labels = emoji_data.load_emojis(size=28, color=True)
+    rgb = X.reshape(len(X), 3, 28, 28)
+    max_rb_spread = np.abs(rgb[:, 0] - rgb[:, 2]).mean(axis=(1, 2)).max()
+    assert max_rb_spread > 0.1
+
+
 def test_missing_font_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         emoji_data.load_emojis(font_path=tmp_path / "no_existe.ttf")

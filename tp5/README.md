@@ -385,6 +385,26 @@ memorización de la que aporta**; pagaría en **generalización a datos no visto
 naturales**, no en el recon/generación de este set fijo. La `ConvVAE` queda **implementada,
 validada y caracterizada**; se elige el MLP.
 
+#### ¿Cambia con otro dataset? Prueba a color
+
+Para chequear si el veredicto depende del dataset, repetimos la comparación con los emojis en
+**color** (RGB, 3 canales) a latente 8 sin augment (`scripts/color_emoji_experiment.py`):
+
+| modelo | recon_det | parámetros |
+|:------:|:---------:|:----------:|
+| MLP | **679** | 1.24M     |
+| CNN | 728      | **126K**  |
+
+El **MLP reconstruye casi perfecto** (caras, bocas, lágrimas azules, cachetes rosados); la
+**CNN sale borrosa** aunque **acierta el color** y la forma gruesa. En generación, el mismo
+patrón que en grises. **El color no dio vuelta el resultado** — al contrario: agregó *más para
+memorizar* (3× valores), lo que favorece a la capacidad bruta del MLP, y el color **plano y
+uniforme** de los emojis no aporta la textura local que la convolución explotaría. El único
+punto a favor de la CNN: logra color + forma gruesa con **10× menos parámetros** (eficiencia, no
+calidad). Refuerza que la palanca no es el número de canales sino **el tamaño/centrado del
+dataset** (régimen de memorización); el prior convolucional pagaría con más datos o imágenes
+naturales, no acá.
+
 ## Tests
 
 ```bash
