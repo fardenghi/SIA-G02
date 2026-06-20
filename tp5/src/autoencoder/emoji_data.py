@@ -112,6 +112,45 @@ def load_emojis(size: int = 28, subset: list[int] | None = None,
     return X, labels
 
 
+# Rangos Unicode con la mayoría de los emojis pictográficos de NotoColorEmoji.
+_EMOJI_RANGES = [
+    (0x1F300, 0x1F5FF), (0x1F600, 0x1F64F), (0x1F680, 0x1F6FF),
+    (0x1F900, 0x1F9FF), (0x2600, 0x26FF), (0x2700, 0x27BF), (0x1FA70, 0x1FAFF),
+]
+
+
+def load_many_emojis(size: int = 28, max_n: int | None = None, color: bool = False,
+                     font_path: str | Path = DEFAULT_FONT) -> tuple[np.ndarray, list[str]]:
+    """Carga muchos glifos de emoji **distintos** rasterizando los rangos Unicode soportados.
+
+    Filtra codepoints no soportados (glifo vacío) y duplicados (mismo rasterizado). Para el
+    experimento de "más datos": permite pasar de 32 a ~1300 imágenes distintas. `max_n` corta
+    la cantidad. Etiquetas = codepoint en hex. La salida es determinista (orden de los rangos).
+    """
+    font = _load_font(font_path)
+    X: list[np.ndarray] = []
+    labels: list[str] = []
+    seen: set[int] = set()
+    for a, b in _EMOJI_RANGES:
+        for cp in range(a, b + 1):
+            ch = chr(cp)
+            try:
+                gray = render_emoji(ch, size, font=font)  # gris: filtra/deduplica
+            except Exception:
+                continue
+            if gray.mean() <= 0.01:  # glifo vacío (codepoint no soportado)
+                continue
+            key = hash(np.round(gray, 3).tobytes())
+            if key in seen:
+                continue
+            seen.add(key)
+            X.append(render_emoji(ch, size, font=font, color=True) if color else gray)
+            labels.append(f"U+{cp:04X}")
+            if max_n is not None and len(X) >= max_n:
+                return np.stack(X), labels
+    return np.stack(X), labels
+
+
 def augment_dataset(
     X: np.ndarray,
     labels: list[str],

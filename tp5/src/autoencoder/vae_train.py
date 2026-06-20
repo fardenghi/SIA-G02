@@ -71,24 +71,34 @@ def train_vae(
     tracker: VAEMetricsTracker | None = None,
     log_every: int = 100,
     rng: np.random.Generator | None = None,
+    batch_size: int | None = None,
 ) -> dict:
-    """Entrena `vae` in-place sobre `X` (full-batch, Adam). Devuelve métricas finales.
+    """Entrena `vae` in-place sobre `X` (Adam). Devuelve métricas finales.
 
     `beta`/`beta_warmup` controlan el peso de la KL (ver `beta_schedule`). El muestreo de
-    `ε` es estocástico por época con `rng` (determinista dada `seed`).
+    `ε` es estocástico por época con `rng` (determinista dada `seed`). Con `batch_size=None`
+    es full-batch (un paso por época); con `batch_size < N` hace mini-batch SGD (barajando
+    cada época), lo que desacopla el costo de `N` y hace tratables datasets grandes.
     """
     rng = rng or np.random.default_rng(seed)
     opt = Adam(lr=lr)
     params = vae.get_params()
+    n = X.shape[0]
+    bs = n if batch_size is None else min(batch_size, n)
 
     for epoch in range(epochs):
         b = beta_schedule(epoch, beta, beta_warmup)
-        vae.set_params(params)
-        eps = rng.standard_normal((X.shape[0], vae.latent_dim))
-        vae.forward(X, eps=eps)
-        total, recon, kl = vae.elbo(b)
-        vae.backward(b)
-        params = opt.step(params, vae.get_grads())
+        # Full-batch (bs==n): orden fijo y sin permutación -> mismo stream de rng que antes.
+        order = np.arange(n) if bs == n else rng.permutation(n)
+        total = recon = kl = 0.0
+        for start in range(0, n, bs):
+            idx = order[start:start + bs]
+            vae.set_params(params)
+            eps = rng.standard_normal((idx.size, vae.latent_dim))
+            vae.forward(X[idx], eps=eps)
+            total, recon, kl = vae.elbo(b)
+            vae.backward(b)
+            params = opt.step(params, vae.get_grads())
         if tracker is not None and (epoch % log_every == 0):
             tracker.log(epoch, total, recon, kl, b)
     vae.set_params(params)

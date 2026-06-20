@@ -85,3 +85,20 @@ def test_train_vae_deterministic_with_seed():
     f2 = train_vae(_small_vae(seed=8), X, epochs=100, lr=1e-3, seed=9)
     assert f1["elbo"] == pytest.approx(f2["elbo"])
     assert f1["recon_det"] == pytest.approx(f2["recon_det"])
+
+
+def test_train_vae_minibatch_reduces_reconstruction():
+    X = _synthetic(n=24)
+    vae = _small_vae(seed=2)
+    before = _eval_recon(vae, X)
+    final = train_vae(vae, X, epochs=300, lr=1e-2, beta=0.1, seed=3, batch_size=8)
+    assert final["recon_det"] < before
+
+
+def test_train_vae_fullbatch_batchsize_equals_none():
+    # batch_size == N debe ser idéntico al full-batch por default (preserva el path viejo).
+    X = _synthetic(n=16)
+    f_none = train_vae(_small_vae(seed=8), X, epochs=80, lr=1e-3, seed=9)
+    f_full = train_vae(_small_vae(seed=8), X, epochs=80, lr=1e-3, seed=9, batch_size=16)
+    assert f_none["elbo"] == pytest.approx(f_full["elbo"])
+    assert f_none["recon_det"] == pytest.approx(f_full["recon_det"])

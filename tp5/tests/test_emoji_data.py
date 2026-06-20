@@ -74,6 +74,16 @@ def test_color_has_chromatic_content():
     assert max_rb_spread > 0.1
 
 
+def test_load_many_distinct_and_capped():
+    X, labels = emoji_data.load_many_emojis(size=20, max_n=50)
+    assert X.shape == (50, 20 * 20)
+    assert len(labels) == 50
+    assert np.all(X.mean(axis=1) > 0.01)  # ninguno vacío
+    dups = sum(np.array_equal(X[i], X[j])
+               for i in range(len(X)) for j in range(i + 1, len(X)))
+    assert dups == 0  # todos distintos
+
+
 def test_missing_font_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         emoji_data.load_emojis(font_path=tmp_path / "no_existe.ttf")
