@@ -385,7 +385,7 @@ memorización de la que aporta**; pagaría en **generalización a datos no visto
 naturales**, no en el recon/generación de este set fijo. La `ConvVAE` queda **implementada,
 validada y caracterizada**; se elige el MLP.
 
-#### ¿Cambia con otro dataset? Prueba a color
+#### ¿Cambia con otro dataset? Pruebas a color y a mayor resolución
 
 Para chequear si el veredicto depende del dataset, repetimos la comparación con los emojis en
 **color** (RGB, 3 canales) a latente 8 sin augment (`scripts/color_emoji_experiment.py`):
@@ -404,6 +404,20 @@ punto a favor de la CNN: logra color + forma gruesa con **10× menos parámetros
 calidad). Refuerza que la palanca no es el número de canales sino **el tamaño/centrado del
 dataset** (régimen de memorización); el prior convolucional pagaría con más datos o imágenes
 naturales, no acá.
+
+Lo mismo subiendo la **resolución** (40×40 en grises, `scripts/resolution_experiment.py`):
+
+| modelo | recon_det/px | parámetros |
+|:------:|:------------:|:----------:|
+| MLP | 0.386 | 855K     |
+| CNN | 0.396 | 244K     |
+
+El **gap por píxel es idéntico al de 28×28** (+0.0102 vs +0.0100): subir la resolución **no mueve
+el veredicto** (MLP nítido, CNN borroso; misma historia en generación). Ni el color ni la
+resolución cambian el resultado porque tocan la *representación*, no la *naturaleza de la tarea*
+(memorizar 32 plantillas centradas). Matiz: la `Dense` del cuello de la CNN también crece con la
+resolución (125K→244K), así que su eficiencia de parámetros es real pero más matizada que "la
+conv se mantiene chica".
 
 ## Tests
 
