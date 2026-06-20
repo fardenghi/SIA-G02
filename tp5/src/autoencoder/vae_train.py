@@ -8,6 +8,7 @@ estocástico del posterior es justamente lo que distingue al VAE), se evalúa el
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -72,6 +73,9 @@ def train_vae(
     log_every: int = 100,
     rng: np.random.Generator | None = None,
     batch_size: int | None = None,
+    lr_schedule: str = "constant",
+    callback: Callable[[int, object, dict], None] | None = None,
+    callback_every: int | None = None,
 ) -> dict:
     """Entrena `vae` in-place sobre `X` (Adam). Devuelve métricas finales.
 
@@ -79,14 +83,23 @@ def train_vae(
     `ε` es estocástico por época con `rng` (determinista dada `seed`). Con `batch_size=None`
     es full-batch (un paso por época); con `batch_size < N` hace mini-batch SGD (barajando
     cada época), lo que desacopla el costo de `N` y hace tratables datasets grandes.
+
+    `lr_schedule="cosine"` decae el LR de `lr` a ~0 (annealing, útil en corridas largas).
+    `callback(epoch, vae, metrics)` se llama cada `callback_every` épocas (default `log_every`)
+    con el `vae` ya actualizado: sirve para checkpointing y figuras de monitoreo.
     """
+    if lr_schedule not in ("constant", "cosine"):
+        raise ValueError(f"lr_schedule debe ser 'constant' o 'cosine', no {lr_schedule!r}")
     rng = rng or np.random.default_rng(seed)
     opt = Adam(lr=lr)
     params = vae.get_params()
     n = X.shape[0]
     bs = n if batch_size is None else min(batch_size, n)
+    cb_every = callback_every or log_every
 
     for epoch in range(epochs):
+        if lr_schedule == "cosine":
+            opt.lr = lr * 0.5 * (1.0 + np.cos(np.pi * epoch / max(1, epochs - 1)))
         b = beta_schedule(epoch, beta, beta_warmup)
         # Full-batch (bs==n): orden fijo y sin permutación -> mismo stream de rng que antes.
         order = np.arange(n) if bs == n else rng.permutation(n)
@@ -101,6 +114,9 @@ def train_vae(
             params = opt.step(params, vae.get_grads())
         if tracker is not None and (epoch % log_every == 0):
             tracker.log(epoch, total, recon, kl, b)
+        if callback is not None and (epoch % cb_every == 0):
+            vae.set_params(params)
+            callback(epoch, vae, {"elbo": total, "recon": recon, "kl": kl, "lr": opt.lr})
     vae.set_params(params)
 
     # Métricas finales: ELBO con β objetivo y reconstrucción determinista.

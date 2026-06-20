@@ -102,3 +102,25 @@ def test_train_vae_fullbatch_batchsize_equals_none():
     f_full = train_vae(_small_vae(seed=8), X, epochs=80, lr=1e-3, seed=9, batch_size=16)
     assert f_none["elbo"] == pytest.approx(f_full["elbo"])
     assert f_none["recon_det"] == pytest.approx(f_full["recon_det"])
+
+
+def test_train_vae_cosine_schedule_runs():
+    X = _synthetic()
+    vae = _small_vae(seed=2)
+    before = _eval_recon(vae, X)
+    final = train_vae(vae, X, epochs=300, lr=1e-2, beta=0.1, seed=3, lr_schedule="cosine")
+    assert final["recon_det"] < before
+
+
+def test_train_vae_callback_invoked():
+    X = _synthetic()
+    calls = []
+    train_vae(_small_vae(seed=4), X, epochs=20, lr=1e-3, seed=5,
+              callback=lambda e, m, met: calls.append((e, set(met))), callback_every=5)
+    assert [c[0] for c in calls] == [0, 5, 10, 15]
+    assert calls[0][1] == {"elbo", "recon", "kl", "lr"}
+
+
+def test_train_vae_invalid_lr_schedule():
+    with pytest.raises(ValueError):
+        train_vae(_small_vae(), _synthetic(), epochs=1, lr_schedule="exp")

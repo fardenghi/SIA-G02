@@ -84,6 +84,14 @@ def test_load_many_distinct_and_capped():
     assert dups == 0  # todos distintos
 
 
+def test_load_many_with_face_animal_ranges():
+    # Subconjunto homogéneo de caras+animales: no vacío y bastante más que los 32 curados.
+    X, labels = emoji_data.load_many_emojis(size=20, ranges=emoji_data.FACE_ANIMAL_RANGES)
+    assert X.shape[0] > 100
+    assert X.shape[1] == 20 * 20
+    assert np.all(X.mean(axis=1) > 0.01)
+
+
 def test_missing_font_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         emoji_data.load_emojis(font_path=tmp_path / "no_existe.ttf")

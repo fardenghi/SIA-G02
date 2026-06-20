@@ -118,8 +118,20 @@ _EMOJI_RANGES = [
     (0x1F900, 0x1F9FF), (0x2600, 0x26FF), (0x2700, 0x27BF), (0x1FA70, 0x1FAFF),
 ]
 
+# Subconjunto **homogéneo**: caras (smileys) + animales. Glifos redondos/centrados de
+# estructura similar -> mucho más fáciles de modelar nítido que el rejunte completo.
+FACE_ANIMAL_RANGES = [
+    (0x1F600, 0x1F64A),  # emoticones (caras); excluye gestos de manos 64B-64F
+    (0x1F910, 0x1F917),  # más caras (con barbijo, pensativa, etc.)
+    (0x1F920, 0x1F92F),  # caras (cowboy, payaso, explotando, etc.)
+    (0x1F970, 0x1F97A),  # más caras (con corazones, rogando, etc.)
+    (0x1F400, 0x1F43E),  # animales y naturaleza (incluye caras de animal)
+    (0x1F980, 0x1F9AE),  # animales suplementarios (cangrejo, dodo, etc.)
+]
+
 
 def load_many_emojis(size: int = 28, max_n: int | None = None, color: bool = False,
+                     ranges: list[tuple[int, int]] | None = None,
                      font_path: str | Path = DEFAULT_FONT) -> tuple[np.ndarray, list[str]]:
     """Carga muchos glifos de emoji **distintos** rasterizando los rangos Unicode soportados.
 
@@ -128,10 +140,11 @@ def load_many_emojis(size: int = 28, max_n: int | None = None, color: bool = Fal
     la cantidad. Etiquetas = codepoint en hex. La salida es determinista (orden de los rangos).
     """
     font = _load_font(font_path)
+    ranges = ranges if ranges is not None else _EMOJI_RANGES
     X: list[np.ndarray] = []
     labels: list[str] = []
     seen: set[int] = set()
-    for a, b in _EMOJI_RANGES:
+    for a, b in ranges:
         for cp in range(a, b + 1):
             ch = chr(cp)
             try:
