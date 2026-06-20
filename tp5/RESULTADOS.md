@@ -1,6 +1,6 @@
 # Resultados — Iteraciones del VAE (TP5 Ej2)
 
-Conclusiones empíricas de las dos iteraciones de mejora trazadas en [ROADMAP.md](ROADMAP.md).
+Conclusiones empíricas de las dos iteraciones de mejora del VAE (latente y convoluciones).
 Ambas están **completas y cerradas**. Las figuras viven en `out/` (no versionado); acá van los
 números y la interpretación.
 
