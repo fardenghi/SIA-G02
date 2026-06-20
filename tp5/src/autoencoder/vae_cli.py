@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from . import vae_metrics_viz, vae_viz
+from .aggregate_prior import AggregatePrior
 from .conv_vae import ConvVAE
 from .emoji_data import augment_dataset, load_emojis
 from .vae import VAE
@@ -106,9 +107,18 @@ def run(config_path: str) -> dict:
         vae_viz.plot_latent_means(mu, labels, path=plots_dir / "latent_means.png")
     if vae.latent_dim == 2:
         vae_viz.plot_latent_manifold(vae, size, path=plots_dir / "manifold.png")
-    # Muestras nuevas desde el prior (Ej2c).
+    # Muestras nuevas (Ej2c). El prior se elige por config: N(0,I) habitual o el posterior
+    # agregado (GMM, ex-post density estimation) para mejorar la generación en latente alto.
     rng = np.random.default_rng(cfg.training.seed)
-    vae_viz.plot_samples(vae, size, n=16, rng=rng, path=plots_dir / "samples.png")
+    if cfg.generation.prior == "gmm":
+        agg = AggregatePrior.fit(mu, kind="gmm", k=cfg.generation.gmm_k, seed=cfg.training.seed)
+        prior_fn = agg.sample
+        samples_title = f"Muestras del posterior agregado (GMM k={cfg.generation.gmm_k})"
+    else:
+        prior_fn = None
+        samples_title = "Muestras nuevas del prior z ~ N(0, I)"
+    vae_viz.plot_samples(vae, size, n=16, rng=rng, path=plots_dir / "samples.png",
+                         title=samples_title, prior=prior_fn)
     # Interpolación entre dos emojis.
     if X.shape[0] >= 2:
         vae_viz.plot_interpolation(vae, X[0], X[X.shape[0] // 2], size,

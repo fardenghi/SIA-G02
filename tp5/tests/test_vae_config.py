@@ -38,6 +38,34 @@ def test_defaults_applied(tmp_path):
     assert cfg.architecture.output_activation == "sigmoid"
 
 
+def test_generation_defaults_to_gaussian(tmp_path):
+    cfg = load_vae_config(_write(tmp_path, BASE))
+    assert cfg.generation.prior == "gaussian"
+    assert cfg.generation.gmm_k == 8
+
+
+def test_generation_gmm_config(tmp_path):
+    obj = json.loads(json.dumps(BASE))
+    obj["generation"] = {"prior": "gmm", "gmm_k": 12}
+    cfg = load_vae_config(_write(tmp_path, obj))
+    assert cfg.generation.prior == "gmm"
+    assert cfg.generation.gmm_k == 12
+
+
+def test_generation_invalid_prior_raises(tmp_path):
+    obj = json.loads(json.dumps(BASE))
+    obj["generation"] = {"prior": "vampprior"}
+    with pytest.raises(ConfigError):
+        load_vae_config(_write(tmp_path, obj))
+
+
+def test_generation_unknown_key_raises(tmp_path):
+    obj = json.loads(json.dumps(BASE))
+    obj["generation"] = {"prior": "gmm", "temperature": 0.5}
+    with pytest.raises(ConfigError):
+        load_vae_config(_write(tmp_path, obj))
+
+
 def test_missing_encoder_layers_raises(tmp_path):
     obj = {"data": {"size": 28}, "architecture": {"latent_dim": 2}, "training": {}}
     with pytest.raises(ConfigError):

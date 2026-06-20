@@ -436,6 +436,90 @@ conv gana). Confirma que el factor que ataba el resultado era el **régimen de m
 la representación. Habilitado por el soporte de **mini-batch** en `train_vae` (`batch_size`), que
 desacopla el costo de `N`.
 
+**Corrida grande final** (red de alta capacidad + dataset homogéneo; `scripts/big_run.py`,
+`BIG_RUN.md`): 220 caras/animales 56×56, latente 48, canales `[32,64,128]`, dense 256, β=0.5,
+2000 épocas con cosine LR, mini-batch 64 (~5.8 h end-to-end).
+
+| modelo | recon_det/px | KL | parámetros |
+|:------:|:------------:|:--:|:----------:|
+| MLP | **0.3487** | 46.8 | 3.52M |
+| CNN | 0.3541 | 62.6 | **2.12M** |
+
+El gap quedó en **+0.0054/px: el MLP vuelve a ganar** por margen chico. Es el dato que **cierra
+el arco**: con **512** glifos el gap había cruzado a **−0.0054 (CNN ganaba)**, pero al bajar a
+**220** glifos homogéneos se invierte de nuevo — pocos glifos memorizables favorecen al MLP, que
+acá tiene **65% más parámetros**. La trayectoria de `recon` **se aplanó** (no es subentrenamiento:
+más épocas no ayudarían) y la **KL no colapsó** (latente sano, la CNN incluso codifica más). El
+único punto a favor de la CNN sigue siendo **eficiencia**: queda a +0.0054/px con **40% menos
+parámetros**. **Veredicto consolidado:** a la escala de este TP (decenas a cientos de plantillas
+centradas) el prior convolucional **no paga en calidad**, solo en eficiencia; pagaría con datos al
+nivel MNIST o imágenes naturales. **Se cierra el Ejercicio 2 con el MLP-VAE como modelo elegido.**
+
+> Nota sobre **generación**: en esta corrida *ambos* modelos generan pobre (la CNN manchones
+> suaves, el MLP siluetas con ruido sal-y-pimienta). No es un defecto de la CNN sino el efecto de
+> haber optimizado **reconstrucción** (latente 48 + β=0.5): un latente alto deja el prior `N(0,I)`
+> mayormente **vacío** respecto del posterior agregado, así que muestrear de él cae en zonas no
+> entrenadas. La calidad de muestreo es la línea de trabajo siguiente (latente bajo / β alto /
+> muestrear del posterior agregado).
+
+### Mejorar la generación (2c): el posterior agregado y el techo de nitidez
+
+La generación pobre del big_run abrió la última línea de trabajo: **mejorar las muestras** del
+MLP (el modelo elegido). El mecanismo del problema es exacto. Generar es `z ~ p(z) → decode`, y
+con el prior estándar `p(z)=N(0,I)` eso solo funciona si el **posterior agregado**
+`q(z)=⅟ₙ Σ q(z|xᵢ)` (la nube real de los `μ` del dataset) se le parece. En **latente alto** no:
+una muestra típica de `N(0,I)` en 48-D vive a radio ≈√48≈7, mientras los 220 glifos ocupan una
+variedad finísima → la mayoría de los `z` caen en zonas no entrenadas → manchones.
+
+**El arreglo (ex-post density estimation).** Sin reentrenar ni tocar el decoder: se ajusta una
+densidad a los `μ` del dataset y se muestrea de ahí. Implementado en `aggregate_prior.py` (numpy
+desde cero): una Gaussiana full-cov (capta media y correlaciones) y un **GMM de covarianza
+diagonal por EM** (capta la multimodalidad caras-vs-animales). Es un **tratamiento posterior**, no
+toca el entrenamiento; se elige por config (`generation.prior: "gaussian" | "gmm"`, default
+`gaussian` = el `N(0,I)` habitual). Sobre el checkpoint del big_run (latente 48), muestrear del
+GMM da **caras/gatos reconocibles** donde `N(0,I)` daba manchones (`scripts/sample_posterior.py`).
+
+**Dos barridos para encontrar el balance recon-vs-sample** (MLP, caras/animales, mismo setup que
+big_run). El diagnóstico clave es el **mismatch** posterior↔prior (`‖mean(μ)‖`, objetivo ≈0):
+
+Latente intermedio (`scripts/gmm_latent_experiment.py`):
+
+| latente | recon_det/px | KL | mismatch ‖mean‖ |
+|:-------:|:------------:|:--:|:---------------:|
+| 8  | 0.3485 | 25.2 | 1.17 |
+| 16 | 0.3484 | 36.2 | 1.01 |
+| 48 (big_run) | 0.3487 | 62.6 | 1.57 |
+
+β a latente 16 fijo (`scripts/beta_gmm_experiment.py`):
+
+| β | recon_det/px | KL | mismatch ‖mean‖ |
+|:----:|:------------:|:--:|:---------------:|
+| 0.25 | 0.3482 | 45.2 | 1.35 |
+| 0.5  | 0.3484 | 36.2 | 1.01 |
+| 1.0  | 0.3487 | 27.8 | **0.77** |
+
+**Tres hallazgos sólidos:**
+
+1. **La reconstrucción está topeada (`recon_det/px ≈ 0.348`), invariante al latente Y a β.** Bajar
+   el latente de 48 a 8 no la mueve; bajar β de 1.0 a 0.25 la mueve en la dirección esperada (β
+   bajo = más nítido) pero **0.0005/px, despreciable**. El cuello de nitidez **no** es la
+   regularización ni la dimensión latente: es la **capacidad del decoder MLP** (las *features*) a
+   esta escala. Es el techo de nitidez del VAE acá — para moverlo haría falta otra arquitectura,
+   no tuning. (Coherente con la Iteración 1: la recon ya era plana variando el latente.)
+2. **β gobierna el matcheo con el prior, no la nitidez.** El mismatch baja monótono al subir β
+   (1.35 → 1.01 → 0.77): la KL aprieta `q(z)→N(0,I)`. O sea β controla **qué tan bueno es el
+   sampling desde `N(0,I)`**, no la reconstrucción.
+3. **El GMM ex-post es la palanca robusta del sample.** Da generación coherente en **todos** los
+   latentes y **todos** los β —incluso a β=0.25, donde `N(0,I)` es más ruidoso—, porque se ajusta
+   a `q(z)` sea cual sea. **Desacopla la calidad del sample de β y del latente.**
+
+**Conclusión.** No hay que pelear con β para la nitidez (no la mueve) ni subirlo para el sample
+(el GMM se ocupa). Config recomendada: **β=1.0 + GMM** (latente mejor comportado, mismatch 0.77 ≈
+ideal, costo de recon nulo). La nitidez de reconstrucción es una **limitación inherente del VAE +
+decoder MLP** a esta escala, no de tuning; la **generación coherente** se consigue muestreando del
+posterior agregado (GMM), una corrección *ex-post* principista cuya versión integrada sería un
+**prior aprendido** (VampPrior / two-stage VAE) — trabajo futuro.
+
 ## Tests
 
 ```bash
@@ -447,7 +531,10 @@ relativa < 1e-5) de la backprop para BCE y MSE, construcción por espejo, descen
 pérdida con Adam, round-trip de pack/unpack de pesos, validación de config y denoising.
 Para el VAE: reparametrización, KL (valor y gradiente), **gradient-check del ELBO**,
 descenso del ELBO con Adam, `beta_schedule`, rasterizado/determinismo del dataset de emojis,
-validación del config del VAE y smoke de las visualizaciones.
+validación del config del VAE (incluida la sección `generation`) y smoke de las visualizaciones.
+Para el **posterior agregado** (`aggregate_prior.py`): shapes y determinismo del muestreo, que la
+Gaussiana recupera la media, que el GMM cae en los clusters (no en el hueco del prior) y el
+diagnóstico de mismatch ≈ 0 para `N(0,I)`.
 
 ## Estructura
 
@@ -466,12 +553,14 @@ src/autoencoder/
   conv.py        # capas espaciales desde cero: Conv2D (im2col/col2im), Upsample2D, Flatten/Reshape
   conv_vae.py    # ConvVAE: encoder/decoder convolucional, reutiliza reparam/KL del VAE (It.2)
   emoji_data.py  # dataset de emojis (Pillow + Noto -> 28x28 grises) (Ej2a)
-  vae_train.py   # train_vae full-batch Adam, beta-warmup, tracker (Ej2b)
-  vae_config.py  # carga/validación del JSON del VAE (kind: mlp|conv)
-  vae_viz.py     # manifold, muestras nuevas, scatter de medias, interpolación (Ej2c)
+  vae_train.py   # train_vae Adam, beta-warmup, mini-batch, cosine LR, callback (Ej2b)
+  vae_config.py  # carga/validación del JSON del VAE (kind: mlp|conv; generation: prior gaussian|gmm)
+  vae_viz.py     # manifold, muestras nuevas (prior N(0,I) o GMM), scatter de medias, interpolación (Ej2c)
   vae_metrics_viz.py # diagnósticos del encoder: curvas, KL por dim, PCA, posterior vs prior
+  aggregate_prior.py # densidad ex-post del posterior agregado: Gaussiana full-cov + GMM (EM) (Ej2c)
   vae_cli.py     # entrypoint: autoencoder-vae corre el VAE (mlp o conv) end-to-end
 configs/        # base_adam, base_lbfgs, deep, wide_relu, naive_init, denoising
-  vae/          # configs del VAE: base, latent8/16 (mlp), conv (cnn)
-scripts/        # vae_beta_sweep.py (β), vae_latent_sweep.py (barrido de latente, --kind mlp|conv)
+  vae/          # configs del VAE: base, latent8/16 (mlp), latent8_gmm (toggle GMM), conv (cnn)
+scripts/        # barridos: vae_beta_sweep, vae_latent_sweep, big_run (corrida grande),
+                # sample_posterior (GMM sobre checkpoint), gmm_latent_experiment, beta_gmm_experiment
 ```

@@ -76,6 +76,14 @@ class VAETrainConfig:
 
 
 @dataclass
+class VAEGenerationConfig:
+    """Cómo se muestrea `z` al generar (Ej2c). `prior="gaussian"` = `N(0,I)` habitual;
+    `prior="gmm"` ajusta un GMM al posterior agregado (ex-post density estimation)."""
+    prior: str = "gaussian"  # "gaussian" | "gmm"
+    gmm_k: int = 8
+
+
+@dataclass
 class VAEOutputConfig:
     metrics_csv: str = "out/vae/metrics.csv"
     plots_dir: str = "out/plots"
@@ -87,6 +95,7 @@ class VAEConfig:
     architecture: VAEArchConfig
     training: VAETrainConfig
     output: VAEOutputConfig
+    generation: VAEGenerationConfig = field(default_factory=VAEGenerationConfig)
     name: str = "vae"
 
 
@@ -224,6 +233,19 @@ def load_vae_config(path: str | Path) -> VAEConfig:
     if training.beta_warmup < 0:
         raise ConfigError("'training.beta_warmup' debe ser >= 0")
 
+    # -- generation --
+    gen_raw = raw.get("generation", {})
+    _unknown_keys(gen_raw, {"prior", "gmm_k"}, "generation")
+    generation = VAEGenerationConfig(
+        prior=gen_raw.get("prior", "gaussian"),
+        gmm_k=int(gen_raw.get("gmm_k", 8)),
+    )
+    if generation.prior not in ("gaussian", "gmm"):
+        raise ConfigError(
+            f"'generation.prior' inválido: {generation.prior!r}. Permitidos: ['gaussian', 'gmm']")
+    if generation.gmm_k < 1:
+        raise ConfigError("'generation.gmm_k' debe ser >= 1")
+
     # -- output --
     out_raw = raw.get("output", {})
     _unknown_keys(out_raw, {"metrics_csv", "plots_dir"}, "output")
@@ -237,5 +259,6 @@ def load_vae_config(path: str | Path) -> VAEConfig:
         architecture=architecture,
         training=training,
         output=output,
+        generation=generation,
         name=raw.get("name", path.stem),
     )

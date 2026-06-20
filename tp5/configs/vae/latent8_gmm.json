@@ -1,0 +1,32 @@
+{
+  "name": "latent8_gmm",
+  "data": {
+    "size": 28,
+    "subset": null,
+    "augment": { "enabled": true, "n_aug": 8, "max_rot": 12, "max_shift": 2, "max_zoom": 0.1, "seed": 0 }
+  },
+  "architecture": {
+    "encoder_layers": [784, 256, 64],
+    "latent_dim": 8,
+    "activation": "relu",
+    "output_activation": "sigmoid",
+    "init": "he_normal"
+  },
+  "training": {
+    "loss": "bce",
+    "epochs": 5000,
+    "lr": 1e-3,
+    "beta": 1.0,
+    "beta_warmup": 1000,
+    "seed": 0,
+    "log_every": 100
+  },
+  "generation": {
+    "prior": "gmm",
+    "gmm_k": 8
+  },
+  "output": {
+    "metrics_csv": "out/vae_latent8_gmm/metrics.csv",
+    "plots_dir": "out/plots"
+  }
+}

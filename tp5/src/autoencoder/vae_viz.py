@@ -102,9 +102,13 @@ def plot_latent_manifold(vae: VAE, size: int, n: int = 15, span: float = 2.5, pa
 
 
 def plot_samples(vae: VAE, size: int, n: int = 16, rng=None, path=None,
-                 title="Muestras nuevas del prior z ~ N(0, I)"):
-    """Genera `n` muestras nuevas muestreando `z ~ N(0,I)` y decodificando (Ej2c)."""
-    z = vae.sample_prior(n, rng=rng)
+                 title="Muestras nuevas del prior z ~ N(0, I)", prior=None):
+    """Genera `n` muestras nuevas muestreando `z` y decodificando (Ej2c).
+
+    `prior` es un callable `(n, rng) -> z`; si es `None`, usa el prior `N(0,I)` del VAE
+    (`sample_prior`). Pasar un `AggregatePrior.sample` muestrea del posterior agregado."""
+    sampler = prior if prior is not None else vae.sample_prior
+    z = sampler(n, rng=rng)
     samples = vae.decode(z)
     return plot_image_grid(samples, size, ncols=min(8, n), path=path, suptitle=title)
 
