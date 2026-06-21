@@ -32,6 +32,7 @@ from autoencoder.emoji_data import (  # noqa: E402
     load_many_emojis,
 )
 from autoencoder.celeba_data import load_celeba  # noqa: E402
+from autoencoder.checkpoint import load_vae, make_sampler, save_vae  # noqa: E402
 from autoencoder.conv_vae import ConvVAE  # noqa: E402
 from autoencoder.emoji_multi_data import load_multi_emojis  # noqa: E402
 from autoencoder.mnist_data import load_mnist  # noqa: E402
@@ -131,7 +132,7 @@ def fit_stage2_sampler(vae1, X, latent2, epochs, seed, batch_size=None):
         z2 = rng.standard_normal((n, latent2))
         codes_hat = vae2.decode(z2) * cs + cm                # des-estandarizar
         return vae1.decode(codes_hat)                        # decode etapa 1
-    return sample, vae2
+    return sample, vae2, cm, cs                              # cm/cs: para persistir el checkpoint
 
 
 def plot_in_recon_samples(vae, X_show, size, rng, sample_fn, title, path, n=12):
@@ -147,6 +148,39 @@ def plot_in_recon_samples(vae, X_show, size, rng, sample_fn, title, path, n=12):
                               interpolation="nearest")
             axes[r, j].set_xticks([]); axes[r, j].set_yticks([])
         axes[r, 0].set_ylabel(name, rotation=0, ha="right", va="center", fontsize=10)
+    fig.suptitle(title)
+    fig.tight_layout(); fig.savefig(path, dpi=120); plt.close(fig)
+
+
+def plot_interpolation(vae, X, size, rng, n_pairs, n_steps, title, path):
+    """Interpolación lineal del latente de la etapa 1 entre dos imágenes reales.
+
+    Demuestra que el latente es un espacio continuo (sin "huecos"): codifica dos imágenes a
+    μ_a, μ_b, recorre z_t = (1-t)·μ_a + t·μ_b y decodifica cada paso. Si la transición es
+    suave (sin saltos ni basura intermedia) el decoder mapeó un manifold denso y conexo.
+    Para que la transición sea visible, la pareja de cada fila es el ANCLA y su código más
+    lejano (clases distintas garantizadas). Extremos t=0/t=1 = recon de las dos reales.
+    """
+    mu, _ = vae.encode(X)                                   # (N, L) códigos deterministas
+    n = mu.shape[0]
+    n_pairs = min(n_pairs, n // 2)
+    anchors = rng.choice(n, size=n_pairs, replace=False)
+    ts = np.linspace(0.0, 1.0, n_steps)
+    fig, axes = plt.subplots(n_pairs, n_steps, figsize=(n_steps * 1.0, n_pairs * 1.05))
+    if n_pairs == 1:
+        axes = axes[None, :]
+    for r, a in enumerate(anchors):
+        b = int(np.argmax(np.linalg.norm(mu - mu[a], axis=1)))   # código más lejano al ancla
+        za, zb = mu[a], mu[b]
+        zs = np.stack([(1.0 - t) * za + t * zb for t in ts])     # interpolación lineal
+        imgs = vae.decode(zs)                                    # (n_steps, D)
+        for c in range(n_steps):
+            axes[r, c].imshow(imgs[c].reshape(size, size), cmap="Greys", vmin=0, vmax=1,
+                              interpolation="nearest")
+            axes[r, c].set_xticks([]); axes[r, c].set_yticks([])
+        axes[r, 0].set_ylabel(f"{a}→{b}", rotation=0, ha="right", va="center", fontsize=8)
+    for c, t in enumerate(ts):
+        axes[0, c].set_title(f"{t:.1f}", fontsize=8)
     fig.suptitle(title)
     fig.tight_layout(); fig.savefig(path, dpi=120); plt.close(fig)
 
@@ -184,6 +218,16 @@ def main(argv=None):
     p.add_argument("--min-delta", type=float, default=1e-4,
                    help="mejora mínima de val para resetear la paciencia")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--interpolate", type=int, default=0,
+                   help="emite interpolation.png con N parejas (0=off): interpola linealmente "
+                        "el latente de la etapa 1 entre dos imágenes reales (demo de 'sin huecos')")
+    p.add_argument("--interp-steps", type=int, default=11,
+                   help="pasos t∈[0,1] de la interpolación (columnas de la figura)")
+    p.add_argument("--save-model", action="store_true",
+                   help="guarda model.npz (etapa1 + etapa2 + stats) en la carpeta del run")
+    p.add_argument("--load-model", default=None,
+                   help="carga un model.npz y NO reentrena: sólo emite plots (interpolar/decodificar "
+                        "puntos del latente al instante). Omite loss_curves (no hay historial)")
     args = p.parse_args(argv)
 
     D = args.size * args.size
@@ -197,6 +241,17 @@ def main(argv=None):
     print(f"dataset={args.dataset} ({n_distinct} glifos)  val-mode={args.val_mode}  "
           f"train={Xtr.shape[0]}  val={Xval.shape[0]}  {args.size}x{args.size}  "
           f"latente {args.latent}")
+
+    # ---- modo carga: reconstruir el modelo guardado y saltar el entrenamiento ----------- #
+    if args.load_model:
+        ck = load_vae(args.load_model)
+        vae = ck["vae1"]
+        sampler = make_sampler(ck)                          # prior -> imagen (two-stage)
+        es = None                                           # sin historial -> sin loss_curves
+        print(f"  modelo cargado de {args.load_model} (sin reentrenar)  "
+              f"recon train {recon_px(vae, Xtr):.4f} /px   val {recon_px(vae, Xval):.4f} /px")
+        _emit_plots(vae, es, Xtr, args, rng, sampler, out)
+        return
 
     # ---- entrenar con early stopping (independiente del tamaño del dataset) -------------- #
     if args.stage1 == "conv":
@@ -247,22 +302,42 @@ def main(argv=None):
     # ---- etapa 2 (two-stage): modela los códigos de la etapa 1 para generar ------------- #
     print(f"\n== ETAPA 2 (two-stage): VAE [{args.latent}, 64, 32] -> {args.latent2}  "
           f"({args.epochs2} ep) ==")
-    sampler, _ = fit_stage2_sampler(vae, Xtr, args.latent2, args.epochs2, args.seed,
-                                     batch_size=args.batch)
+    sampler, vae2, cm, cs = fit_stage2_sampler(vae, Xtr, args.latent2, args.epochs2, args.seed,
+                                               batch_size=args.batch)
 
-    # ---- los dos plots canónicos -------------------------------------------------------- #
-    plot_loss_curves(ep, tr, va, best_epoch, stopped, best_val,
-                     f"Train vs Val — {args.dataset} {args.val_mode} latente {args.latent} "
-                     f"({args.size}×{args.size}) — early stop @ {stopped}",
-                     out / "loss_curves.png")
+    # ---- persistir el modelo entrenado (etapa1 + etapa2 + stats) ------------------------ #
+    if args.save_model:
+        path = save_vae(out / "model.npz", vae, args.size, vae2=vae2, code_mean=cm, code_std=cs)
+        print(f"-> {path}  (modelo guardado: recargá con --load-model)")
+
+    _emit_plots(vae, es, Xtr, args, rng, sampler, out)
+
+
+def _emit_plots(vae, es, Xtr, args, rng, sampler, out):
+    """Emite los plots canónicos + interpolación. `es=None` (modo carga) omite loss_curves."""
+    if es is not None:                                      # sólo si hubo entrenamiento
+        ep = np.array(es.epochs); tr = np.array(es.train); va = np.array(es.val)
+        stopped = es.stopped_epoch if es.stopped_epoch >= 0 else int(ep[-1])
+        plot_loss_curves(ep, tr, va, es.best_epoch, stopped, es.best,
+                         f"Train vs Val — {args.dataset} {args.val_mode} latente {args.latent} "
+                         f"({args.size}×{args.size}) — early stop @ {stopped}",
+                         out / "loss_curves.png")
+        print(f"-> {out}/loss_curves.png")
     plot_in_recon_samples(
         vae, Xtr, args.size, rng, sampler,
         f"VAE — {args.dataset} latente {args.latent} h[{args.hidden}] "
         f"({args.size}×{args.size}), recon TRAIN + samples two-stage (L2={args.latent2})",
         out / "in_recon_samples.png")
-
-    print(f"\n-> {out}/loss_curves.png")
     print(f"-> {out}/in_recon_samples.png")
+
+    # ---- interpolación lineal del latente (demo de continuidad / 'sin huecos') ---------- #
+    if args.interpolate > 0:
+        plot_interpolation(
+            vae, Xtr, args.size, rng, args.interpolate, args.interp_steps,
+            f"Interpolación lineal del latente (etapa 1) — {args.dataset} latente {args.latent} "
+            f"({args.size}×{args.size}) — extremos = recon de 2 reales",
+            out / "interpolation.png")
+        print(f"-> {out}/interpolation.png")
 
 
 if __name__ == "__main__":
