@@ -55,6 +55,61 @@ class VAEMetricsTracker:
         self.df.to_csv(path, index=False)
 
 
+class EarlyStopping:
+    """Early stopping por paciencia sobre una métrica de validación (callback de `train_vae`).
+
+    Es **independiente del tamaño del dataset**: el criterio no es un número fijo de épocas
+    sino relativo —se detiene cuando la val deja de mejorar (en más de `min_delta`) durante
+    `patience` evaluaciones seguidas—. Con datos chicos la val sube antes → corta antes; con
+    muchos datos mejora más tiempo → corta después. Guarda los pesos del mejor val y los
+    restaura con `restore()`, así los plots/finales reflejan el modelo óptimo y no el
+    sobreajustado. Registra `epochs`/`train`/`val` para la curva.
+
+    Uso:
+        es = EarlyStopping(val_fn=lambda m: recon_px(m, Xval),
+                           train_fn=lambda m: recon_px(m, Xtr), patience=10)
+        train_vae(vae, Xtr, ..., callback=es, callback_every=25)
+        es.restore(vae)        # deja en `vae` los pesos del mínimo de val
+    """
+
+    def __init__(self, val_fn, train_fn=None, patience: int = 10, min_delta: float = 1e-4):
+        self.val_fn = val_fn
+        self.train_fn = train_fn
+        self.patience = patience
+        self.min_delta = min_delta
+        self.best = float("inf")
+        self.best_epoch = -1
+        self.best_params = None
+        self.wait = 0
+        self.stopped_epoch = -1
+        self.epochs: list[int] = []
+        self.train: list[float] = []
+        self.val: list[float] = []
+
+    def __call__(self, epoch: int, vae: VAE, metrics: dict) -> bool:
+        v = float(self.val_fn(vae))
+        self.epochs.append(epoch)
+        self.val.append(v)
+        if self.train_fn is not None:
+            self.train.append(float(self.train_fn(vae)))
+        if v < self.best - self.min_delta:
+            self.best = v
+            self.best_epoch = epoch
+            self.best_params = vae.get_params().copy()
+            self.wait = 0
+        else:
+            self.wait += 1
+        if self.wait >= self.patience:
+            self.stopped_epoch = epoch
+            return True
+        return False
+
+    def restore(self, vae: VAE) -> None:
+        """Carga en `vae` los pesos del mejor val (no-op si nunca mejoró)."""
+        if self.best_params is not None:
+            vae.set_params(self.best_params)
+
+
 def _eval_recon(vae: VAE, X: np.ndarray) -> float:
     """Reconstrucción determinista (z = μ, ε=0): aísla la calidad de reconstrucción."""
     vae.forward(X, eps=np.zeros((X.shape[0], vae.latent_dim)))
@@ -116,7 +171,9 @@ def train_vae(
             tracker.log(epoch, total, recon, kl, b)
         if callback is not None and (epoch % cb_every == 0):
             vae.set_params(params)
-            callback(epoch, vae, {"elbo": total, "recon": recon, "kl": kl, "lr": opt.lr})
+            # Si el callback devuelve truthy (p. ej. EarlyStopping) se corta el entrenamiento.
+            if callback(epoch, vae, {"elbo": total, "recon": recon, "kl": kl, "lr": opt.lr}):
+                break
     vae.set_params(params)
 
     # Métricas finales: ELBO con β objetivo y reconstrucción determinista.
