@@ -65,18 +65,26 @@ class EarlyStopping:
     restaura con `restore()`, así los plots/finales reflejan el modelo óptimo y no el
     sobreajustado. Registra `epochs`/`train`/`val` para la curva.
 
+    `start_epoch` evita seleccionar/cortar **antes** de que termine el warmup de β: si no, como
+    la val (recon) mejora con β bajo, el "óptimo" caería a mitad del warmup → se restauraría un
+    modelo sub-regularizado (β incompleto), malo para la generación. Las evaluaciones previas a
+    `start_epoch` se registran para la curva pero no cuentan para best/paciencia.
+
     Uso:
         es = EarlyStopping(val_fn=lambda m: recon_px(m, Xval),
-                           train_fn=lambda m: recon_px(m, Xtr), patience=10)
+                           train_fn=lambda m: recon_px(m, Xtr), patience=10,
+                           start_epoch=beta_warmup)
         train_vae(vae, Xtr, ..., callback=es, callback_every=25)
         es.restore(vae)        # deja en `vae` los pesos del mínimo de val
     """
 
-    def __init__(self, val_fn, train_fn=None, patience: int = 10, min_delta: float = 1e-4):
+    def __init__(self, val_fn, train_fn=None, patience: int = 10, min_delta: float = 1e-4,
+                 start_epoch: int = 0):
         self.val_fn = val_fn
         self.train_fn = train_fn
         self.patience = patience
         self.min_delta = min_delta
+        self.start_epoch = start_epoch
         self.best = float("inf")
         self.best_epoch = -1
         self.best_params = None
@@ -92,6 +100,8 @@ class EarlyStopping:
         self.val.append(v)
         if self.train_fn is not None:
             self.train.append(float(self.train_fn(vae)))
+        if epoch < self.start_epoch:        # durante el warmup: solo registrar la curva
+            return False
         if v < self.best - self.min_delta:
             self.best = v
             self.best_epoch = epoch

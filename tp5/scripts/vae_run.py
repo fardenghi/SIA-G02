@@ -33,6 +33,7 @@ from autoencoder.emoji_data import (  # noqa: E402
 )
 from autoencoder.celeba_data import load_celeba  # noqa: E402
 from autoencoder.conv_vae import ConvVAE  # noqa: E402
+from autoencoder.emoji_multi_data import load_multi_emojis  # noqa: E402
 from autoencoder.mnist_data import load_mnist  # noqa: E402
 from autoencoder.vae import VAE  # noqa: E402
 from autoencoder.vae_train import EarlyStopping, train_vae  # noqa: E402
@@ -51,11 +52,13 @@ def recon_px(vae: VAE, data: np.ndarray) -> float:
 
 def split_data(args, rng):
     """Devuelve (Xtr, Xval, n_distinct). Sin fuga según `--val-mode` (ver docstring)."""
-    if args.dataset in ("mnist", "fashion", "celeba"):
+    if args.dataset in ("mnist", "fashion", "celeba", "emoji_multi"):
         # Datasets densos de muestras genuinamente distintas (no copias aumentadas) -> split
         # aleatorio simple, sin riesgo de fuga. n_aug se ignora (el dataset ya es denso).
         if args.dataset == "celeba":
             X_all, _ = load_celeba(n=args.max_n or 3000, size=args.size, seed=args.seed)
+        elif args.dataset == "emoji_multi":
+            X_all, _ = load_multi_emojis(size=args.size, seed=args.seed)
         else:
             digits = [int(d) for d in args.digits.split(",")] if args.digits else None
             X_all, _ = load_mnist(n=args.max_n, digits=digits, seed=args.seed, kind=args.dataset)
@@ -151,7 +154,8 @@ def plot_in_recon_samples(vae, X_show, size, rng, sample_fn, title, path, n=12):
 def main(argv=None):
     p = argparse.ArgumentParser(description="VAE base con train/val + plots canónicos")
     p.add_argument("--dataset",
-                   choices=["curated", "many", "faces", "mnist", "fashion", "celeba"],
+                   choices=["curated", "many", "faces", "mnist", "fashion", "celeba",
+                            "emoji_multi"],
                    default="many")
     p.add_argument("--digits", default=None,
                    help="MNIST/Fashion: subconjunto de clases, ej '0,1,8' (None = las 10)")
@@ -172,6 +176,9 @@ def main(argv=None):
     p.add_argument("--val-frac", type=float, default=0.2)
     p.add_argument("--max-n", type=int, default=None)
     p.add_argument("--beta", type=float, default=1.0)
+    p.add_argument("--beta-warmup", type=int, default=200,
+                   help="épocas de rampa lineal de β (FIJO, no atado a --epochs). El early stop "
+                        "no selecciona antes de terminarlo, para no restaurar un modelo sub-β")
     p.add_argument("--patience", type=int, default=10,
                    help="early stop: evaluaciones sin mejora antes de cortar (0=off)")
     p.add_argument("--min-delta", type=float, default=1e-4,
@@ -206,11 +213,14 @@ def main(argv=None):
               f"({vae.n_params} params)")
     # patience=0 desactiva el corte (paciencia infinita): corre las `epochs` completas.
     patience = args.patience if args.patience > 0 else args.epochs
+    # warmup de β FIJO (no atado al cap): así β llega al target temprano y el modelo entrena la
+    # mayor parte a β completo. El early stop no selecciona antes de terminarlo (start_epoch).
     es = EarlyStopping(val_fn=lambda m: recon_px(m, Xval),
                        train_fn=lambda m: recon_px(m, Xtr),
-                       patience=patience, min_delta=args.min_delta)
+                       patience=patience, min_delta=args.min_delta,
+                       start_epoch=args.beta_warmup)
     train_vae(vae, Xtr, epochs=args.epochs, lr=1e-3, beta=args.beta,
-              beta_warmup=args.epochs // 5, seed=args.seed, batch_size=args.batch,
+              beta_warmup=args.beta_warmup, seed=args.seed, batch_size=args.batch,
               callback=es, callback_every=args.eval_every)
     # Con early stopping (patience>0) restauramos el óptimo de val. Con --patience 0
     # conservamos los pesos FINALES (diagnóstico de capacidad: cuánto puede memorizar).
