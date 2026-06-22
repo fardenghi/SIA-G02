@@ -14,6 +14,7 @@ Formato (`fmt="vae-ckpt-1"`):
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -49,12 +50,17 @@ def _build_vae(z, suffix: str) -> VAE:
 
 
 def save_vae(path: str | Path, vae1: VAE, size: int, *, vae2: VAE | None = None,
-             code_mean: np.ndarray | None = None, code_std: np.ndarray | None = None) -> Path:
+             code_mean: np.ndarray | None = None, code_std: np.ndarray | None = None,
+             run_args: dict | None = None) -> Path:
     """Guarda el VAE (etapa 1) y, si se pasa, el modelo two-stage completo en un `.npz`.
 
     `size` es el lado en píxeles de la imagen (la entrada es `size*size`), para que el que carga
     sepa cómo reshapear sin adivinar. `vae2`/`code_mean`/`code_std` habilitan generar desde el
     prior (ver `make_sampler`); para sólo interpolar/decodificar alcanza con la etapa 1.
+
+    `run_args` (opcional): dict de la configuración de la corrida (dataset, seed, n_aug, ...),
+    serializado a JSON. Permite que el modo carga reconstruya el MISMO split y los títulos sin
+    que el usuario reescriba los flags (ver `load_vae` -> clave `run_args`).
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,6 +70,8 @@ def save_vae(path: str | Path, vae1: VAE, size: int, *, vae2: VAE | None = None,
         data.update(_vae_fields(vae2, "2"))
         data["code_mean"] = np.asarray(code_mean, dtype=np.float64)
         data["code_std"] = np.asarray(code_std, dtype=np.float64)
+    if run_args is not None:
+        data["run_args"] = np.str_(json.dumps(run_args))
     np.savez(path, **data)
     return path
 
@@ -83,6 +91,8 @@ def load_vae(path: str | Path) -> dict:
         ck["vae2"] = _build_vae(z, "2")
         ck["code_mean"] = z["code_mean"]
         ck["code_std"] = z["code_std"]
+    if "run_args" in z.files:
+        ck["run_args"] = json.loads(str(z["run_args"]))
     return ck
 
 
