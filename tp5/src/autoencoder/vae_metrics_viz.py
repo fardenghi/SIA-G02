@@ -29,6 +29,27 @@ def _save(fig, path):
         plt.close(fig)
 
 
+def as_image(flat: np.ndarray, size: int) -> np.ndarray:
+    """Reshapea un vector plano de píxeles a imagen: (size, size) gris o (size, size, 3) color.
+
+    Infiere los canales por la longitud (`len(flat) // size²`): 1 = gris, 3 = RGB (el dato a
+    color se aplana con orden H·W·C, ver `minecraft_data`). Sirve para datasets de 1 o 3 canales.
+    """
+    flat = np.asarray(flat, dtype=float)
+    c = flat.shape[-1] // (size * size)
+    return flat.reshape(size, size) if c == 1 else flat.reshape(size, size, c)
+
+
+def show_image(ax, flat: np.ndarray, size: int) -> None:
+    """`imshow` color-aware en `ax`: gris con cmap Greys, color como RGB recortado a [0,1]."""
+    img = as_image(flat, size)
+    if img.ndim == 2:
+        ax.imshow(img, cmap="Greys", vmin=0, vmax=1, interpolation="nearest")
+    else:
+        ax.imshow(np.clip(img, 0, 1), interpolation="nearest")
+    ax.set_xticks([]); ax.set_yticks([])
+
+
 def kl_per_dim(vae: VAE, X: np.ndarray) -> np.ndarray:
     """KL aportada por cada dimensión latente (media sobre el batch).
 
@@ -63,16 +84,18 @@ def ssim(recon: np.ndarray, target: np.ndarray, size: int, win: int = 7,
     """
     from scipy.ndimage import uniform_filter
 
-    a = np.asarray(recon, dtype=float).reshape(-1, size, size)
-    b = np.asarray(target, dtype=float).reshape(-1, size, size)
+    recon = np.asarray(recon, dtype=float)
+    target = np.asarray(target, dtype=float)
+    ch = recon.shape[-1] // (size * size)                      # 1 = gris, 3 = RGB
+    a = recon.reshape(-1, size, size, ch)
+    b = target.reshape(-1, size, size, ch)
     k1, k2 = 0.01, 0.03
     c1, c2 = (k1 * data_range) ** 2, (k2 * data_range) ** 2
     npts = win * win
     cov_norm = npts / (npts - 1)  # varianza insesgada (como skimage)
     pad = win // 2
-    out = np.empty(a.shape[0], dtype=float)
-    for i in range(a.shape[0]):
-        ai, bi = a[i], b[i]
+
+    def _ssim_chan(ai, bi):
         mu_a = uniform_filter(ai, win)
         mu_b = uniform_filter(bi, win)
         mu_a2, mu_b2, mu_ab = mu_a**2, mu_b**2, mu_a * mu_b
@@ -81,7 +104,13 @@ def ssim(recon: np.ndarray, target: np.ndarray, size: int, win: int = 7,
         cov_ab = cov_norm * (uniform_filter(ai * bi, win) - mu_ab)
         smap = ((2 * mu_ab + c1) * (2 * cov_ab + c2)) / (
             (mu_a2 + mu_b2 + c1) * (var_a + var_b + c2))
-        out[i] = smap[pad:-pad, pad:-pad].mean() if pad > 0 else smap.mean()
+        return smap[pad:-pad, pad:-pad].mean() if pad > 0 else smap.mean()
+
+    out = np.empty(a.shape[0], dtype=float)
+    for i in range(a.shape[0]):
+        # SSIM por canal y promedio (mismo criterio que skimage con channel_axis); en gris es
+        # un solo canal, así que el resultado es idéntico al de 1 canal.
+        out[i] = float(np.mean([_ssim_chan(a[i, :, :, k], b[i, :, :, k]) for k in range(ch)]))
     return out
 
 
@@ -105,13 +134,9 @@ def plot_sample_neighbors(samples: np.ndarray, X_train: np.ndarray, size: int, p
     if n == 1:
         axes = axes.reshape(2, 1)
     for j in range(n):
-        axes[0, j].imshow(samples[j].reshape(size, size), cmap="Greys", vmin=0, vmax=1,
-                          interpolation="nearest")
-        axes[1, j].imshow(nn[j].reshape(size, size), cmap="Greys", vmin=0, vmax=1,
-                          interpolation="nearest")
+        show_image(axes[0, j], samples[j], size)
+        show_image(axes[1, j], nn[j], size)
         axes[1, j].set_title(f"d={dists[j]:.2f}", fontsize=7)
-        for r in (0, 1):
-            axes[r, j].set_xticks([]); axes[r, j].set_yticks([])
     axes[0, 0].set_ylabel("sample", rotation=0, ha="right", va="center", fontsize=10)
     axes[1, 0].set_ylabel("vecino", rotation=0, ha="right", va="center", fontsize=10)
     fig.suptitle(f"{title}  (L2 media = {dists.mean():.2f})")

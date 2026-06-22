@@ -30,7 +30,7 @@ import numpy as np  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # para importar vae_run
 
 from autoencoder.checkpoint import load_vae  # noqa: E402
-from autoencoder.vae_metrics_viz import active_units  # noqa: E402
+from autoencoder.vae_metrics_viz import active_units, show_image  # noqa: E402
 from vae_run import fit_stage2_sampler, split_data  # noqa: E402
 
 
@@ -78,9 +78,7 @@ def main(argv=None):
     axes = np.atleast_2d(axes)
     for r, (L2, samples) in enumerate(sample_grids):
         for j in range(n):
-            axes[r, j].imshow(samples[j].reshape(size, size), cmap="Greys", vmin=0, vmax=1,
-                              interpolation="nearest")
-            axes[r, j].set_xticks([]); axes[r, j].set_yticks([])
+            show_image(axes[r, j], samples[j], size)           # color-aware (gris/RGB)
         axes[r, 0].set_ylabel(f"L2={L2}", rotation=0, ha="right", va="center", fontsize=10)
     fig.suptitle("Muestras generadas vs latent2 (etapa 1 fija) — afinan y saturan al subir L2")
     fig.tight_layout()

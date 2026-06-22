@@ -179,18 +179,11 @@ def plot_in_recon_samples(vae, X_show, size, rng, sample_fn, title, path, n=12):
     ins = X_show[:n]
     recon = vae.decode(vae.encode(ins)[0])
     samples = sample_fn(n, rng)
-    # Detectar si es color (size*size*3) o grises (size*size)
-    color = X_show.shape[1] == size * size * 3
-    def _reshape(vec):
-        return vec.reshape(size, size, 3).clip(0, 1) if color else vec.reshape(size, size)
     rows = [(ins, "in"), (recon, "recon"), (samples, "samples")]
     fig, axes = plt.subplots(3, n, figsize=(n * 1.1, 3 * 1.25))
     for r, (block, name) in enumerate(rows):
         for j in range(n):
-            img = _reshape(block[j])
-            kw = {} if color else {"cmap": "Greys", "vmin": 0, "vmax": 1}
-            axes[r, j].imshow(img, interpolation="nearest", **kw)
-            axes[r, j].set_xticks([]); axes[r, j].set_yticks([])
+            vae_metrics_viz.show_image(axes[r, j], block[j], size)  # color-aware (gris/RGB)
         axes[r, 0].set_ylabel(name, rotation=0, ha="right", va="center", fontsize=10)
     fig.suptitle(title)
     fig.tight_layout(); fig.savefig(path, dpi=120); plt.close(fig)
@@ -219,9 +212,7 @@ def plot_interpolation(vae, X, size, rng, n_pairs, n_steps, title, path):
         zs = np.stack([(1.0 - t) * za + t * zb for t in ts])     # interpolación lineal
         imgs = vae.decode(zs)                                    # (n_steps, D)
         for c in range(n_steps):
-            axes[r, c].imshow(imgs[c].reshape(size, size), cmap="Greys", vmin=0, vmax=1,
-                              interpolation="nearest")
-            axes[r, c].set_xticks([]); axes[r, c].set_yticks([])
+            vae_metrics_viz.show_image(axes[r, c], imgs[c], size)  # color-aware (gris/RGB)
         axes[r, 0].set_ylabel(f"{a}→{b}", rotation=0, ha="right", va="center", fontsize=8)
     for c, t in enumerate(ts):
         axes[0, c].set_title(f"{t:.1f}", fontsize=8)

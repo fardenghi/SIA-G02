@@ -162,3 +162,27 @@ def test_plot_sample_neighbors_creates_file(tmp_path):
     p = tmp_path / "nn.png"
     vae_metrics_viz.plot_sample_neighbors(samples, train, SIZE, path=p)
     assert p.exists() and p.stat().st_size > 0
+
+
+def test_as_image_infers_channels():
+    flat_gray = np.zeros(DIM)
+    flat_rgb = np.zeros(DIM * 3)
+    assert vae_metrics_viz.as_image(flat_gray, SIZE).shape == (SIZE, SIZE)
+    assert vae_metrics_viz.as_image(flat_rgb, SIZE).shape == (SIZE, SIZE, 3)
+
+
+def test_ssim_color_identical_is_one():
+    rng = np.random.default_rng(11)
+    X = rng.uniform(0, 1, size=(5, DIM * 3))   # 3 canales (RGB) aplanados H·W·C
+    s = vae_metrics_viz.ssim(X, X, SIZE)
+    assert s.shape == (5,)
+    assert np.allclose(s, 1.0, atol=1e-6)
+
+
+def test_plot_sample_neighbors_color_creates_file(tmp_path):
+    rng = np.random.default_rng(12)
+    samples = rng.uniform(0, 1, size=(3, DIM * 3))
+    train = rng.uniform(0, 1, size=(8, DIM * 3))
+    p = tmp_path / "nn_color.png"
+    vae_metrics_viz.plot_sample_neighbors(samples, train, SIZE, path=p)
+    assert p.exists() and p.stat().st_size > 0
