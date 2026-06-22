@@ -101,7 +101,8 @@ def split_data(args, rng):
                                       classic=(args.dataset == "minecraft-old"))
         else:
             digits = [int(d) for d in args.digits.split(",")] if args.digits else None
-            X_all, _ = load_mnist(n=args.max_n, digits=digits, seed=args.seed, kind=args.dataset)
+            X_all, _ = load_mnist(n=args.max_n, digits=digits, seed=args.seed, kind=args.dataset,
+                                  size=args.size)
         n_distinct = X_all.shape[0]
         perm = rng.permutation(n_distinct)
         n_val = max(1, int(round(args.val_frac * n_distinct)))

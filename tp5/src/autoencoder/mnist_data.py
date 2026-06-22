@@ -54,12 +54,16 @@ def _read_idx_labels(path: Path) -> np.ndarray:
 
 
 def load_mnist(n: int | None = None, digits: list[int] | None = None,
-               seed: int = 0, kind: str = "mnist") -> tuple[np.ndarray, list[str]]:
-    """Carga MNIST o Fashion-MNIST como (X, labels). X en [0,1], shape (N, 784), 28×28 gris.
+               seed: int = 0, kind: str = "mnist",
+               size: int | None = None) -> tuple[np.ndarray, list[str]]:
+    """Carga MNIST o Fashion-MNIST como (X, labels). X en [0,1], shape (N, size²), gris.
 
     `kind` ∈ {"mnist", "fashion"}. `n` submuestrea (para que el VAE numpy entrene en tiempo
     razonable). `digits` filtra a un subconjunto de clases (0-9; en fashion son tipos de prenda,
     p.ej. [0,1,8]=remera/pantalón/cartera). Barajado determinista.
+
+    `size` (opcional) redimensiona desde el nativo 28×28 con PIL BILINEAR; `None` o 28 lo deja
+    intacto. OJO: subir de 28 es interpolar (no agrega detalle real), solo da más píxeles.
     """
     X = _read_idx_images(_download(kind, _FILES["images"]))
     y = _read_idx_labels(_download(kind, _FILES["labels"]))
@@ -71,4 +75,12 @@ def load_mnist(n: int | None = None, digits: list[int] | None = None,
     if n is not None:
         perm = perm[:n]
     X, y = X[perm], y[perm]
+    if size is not None and size != 28:
+        from PIL import Image
+        imgs = X.reshape(-1, 28, 28)
+        X = np.stack([
+            np.asarray(Image.fromarray((im * 255).astype(np.uint8)).resize(
+                (size, size), Image.BILINEAR), dtype=np.float64).ravel() / 255.0
+            for im in imgs
+        ])
     return X, [str(int(d)) for d in y]
