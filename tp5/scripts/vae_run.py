@@ -1,8 +1,12 @@
-"""Runner canónico del VAE base: entrena con split train/val y emite SIEMPRE dos plots.
+"""Runner canónico del VAE base: entrena con split train/val y emite SIEMPRE los plots.
 
 Por convención del proyecto, toda corrida emite:
   - `in_recon_samples.png`: entrada / reconstrucción / muestras (muestreo del prior N(0,I)).
   - `loss_curves.png`: train vs val (recon BCE/px, determinista z=μ) con la época óptima.
+  - `kl_per_dim.png`: KL por dimensión latente (uso del cuello, dims muertas vs activas).
+  - `posterior_stats.png`: histogramas de μ y σ del posterior (colapso / ignorar la entrada).
+  - `nn_samples.png`: cada muestra del prior y su vecino real más cercano (memorización).
+Además imprime el SSIM medio de reconstrucción (train/val), complemento del BCE/px.
 
 Split train/val SIN fuga de datos (clave en este dataset de pocas plantillas + augment):
   - `--val-mode disjoint` (default): conjunto DISJUNTO de glifos para val (clases nunca vistas).
@@ -37,6 +41,7 @@ from autoencoder.conv_vae import ConvVAE  # noqa: E402
 from autoencoder.emoji_multi_data import load_multi_emojis  # noqa: E402
 from autoencoder.mnist_data import load_mnist  # noqa: E402
 from autoencoder.vae import VAE  # noqa: E402
+from autoencoder import vae_metrics_viz  # noqa: E402
 from autoencoder.vae_train import EarlyStopping, train_vae  # noqa: E402
 
 # Caras puras (sin animales/objetos): set grande PERO homogéneo. 110 glifos distintos —
@@ -49,6 +54,33 @@ def recon_px(vae: VAE, data: np.ndarray) -> float:
     """Recon determinista (z=μ) por píxel: BCE/px, comparable a `recon_det/px`."""
     mu, _ = vae.encode(data)
     return float(vae._loss_value(vae.decode(mu), data))
+
+
+def recon_ssim(vae: VAE, data: np.ndarray, size: int) -> float:
+    """SSIM medio de la reconstrucción determinista (z=μ): calidad estructural, ~1 = idéntica.
+
+    Complementa al BCE/px: el SSIM no arrastra el piso de entropía del gris, así que es la
+    métrica de recon más interpretable para el informe ("reconstruye bien" = SSIM alto)."""
+    recon = vae.decode(vae.encode(data)[0])
+    return float(vae_metrics_viz.ssim(recon, data, size).mean())
+
+
+# Familia de salida por dataset: UNA carpeta legible por dataset (no una por hiperparámetro).
+# Las variantes de emojis (curated/many/faces/emoji_multi) van todas a `emojis`.
+_DATASET_DIR = {"celeba": "celebA", "fashion": "fashion", "mnist": "mnist"}
+
+
+def output_dir(dataset: str, tag: str | None = None) -> Path:
+    """Carpeta `out/vae_run/<familia>` del dataset (celebA/emojis/fashion/mnist).
+
+    Una sola carpeta por dataset: corridas nuevas del mismo dataset SOBRESCRIBEN los plots, en
+    vez de generar una carpeta distinta por cada combinación de hiperparámetros. Pasá `tag` para
+    comparar configs sin pisarte: la salida va a `<familia>_<tag>` (p. ej. `fashion_L8`).
+    """
+    family = _DATASET_DIR.get(dataset, "emojis")
+    if tag:
+        family = f"{family}_{tag}"
+    return Path("out/vae_run") / family
 
 
 def split_data(args, rng):
@@ -218,24 +250,44 @@ def main(argv=None):
     p.add_argument("--min-delta", type=float, default=1e-4,
                    help="mejora mínima de val para resetear la paciencia")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--tag", default=None,
+                   help="sufijo opcional de la carpeta de salida (<familia>_<tag>): úsalo para "
+                        "comparar configs del mismo dataset sin sobrescribirte (p. ej. --tag L8)")
     p.add_argument("--interpolate", type=int, default=0,
                    help="emite interpolation.png con N parejas (0=off): interpola linealmente "
                         "el latente de la etapa 1 entre dos imágenes reales (demo de 'sin huecos')")
     p.add_argument("--interp-steps", type=int, default=11,
                    help="pasos t∈[0,1] de la interpolación (columnas de la figura)")
     p.add_argument("--save-model", action="store_true",
-                   help="guarda model.npz (etapa1 + etapa2 + stats) en la carpeta del run")
+                   help="guarda model.npz (etapa1 + etapa2 + stats + config de la corrida) en la "
+                        "carpeta del run")
     p.add_argument("--load-model", default=None,
-                   help="carga un model.npz y NO reentrena: sólo emite plots (interpolar/decodificar "
-                        "puntos del latente al instante). Omite loss_curves (no hay historial)")
+                   help="carga un model.npz y NO reentrena: sólo emite plots. La config guardada "
+                        "(dataset/seed/n_aug/...) MANDA, así que basta el path — el resto de los "
+                        "flags se ignoran. Omite loss_curves (no hay historial)")
     args = p.parse_args(argv)
+
+    # ---- modo carga: la config guardada en el checkpoint MANDA sobre los flags de CLI ----- #
+    # Cargamos el .npz primero: si trae `run_args`, esos valores reemplazan a los de la CLI
+    # (solo se preserva la ruta de carga), así el split y los títulos salen idénticos a los del
+    # entrenamiento sin reescribir un solo flag. Checkpoints viejos (sin run_args) usan la CLI.
+    ck = None
+    if args.load_model:
+        ck = load_vae(args.load_model)
+        if "run_args" in ck:
+            load_path = args.load_model
+            args = argparse.Namespace(**{**vars(args), **ck["run_args"]})
+            args.load_model, args.save_model = load_path, False
+            print(f"  config tomada del checkpoint: dataset={args.dataset} size={args.size} "
+                  f"latente={args.latent} seed={args.seed} n_aug={args.n_aug} "
+                  f"val_mode={args.val_mode}")
+        else:
+            print("  checkpoint sin run_args: uso los flags de CLI para el split")
 
     D = args.size * args.size
     hidden = [int(h) for h in args.hidden.split(",")]
     rng = np.random.default_rng(args.seed)
-    tag = (f"{args.dataset}_{args.val_mode}_{args.stage1}_L{args.latent}_{args.size}px"
-           f"_aug{args.n_aug}_h{'-'.join(map(str, hidden))}_b{args.beta}")
-    out = Path(f"out/vae_run/{tag}"); out.mkdir(parents=True, exist_ok=True)
+    out = output_dir(args.dataset, args.tag); out.mkdir(parents=True, exist_ok=True)
 
     Xtr, Xval, n_distinct = split_data(args, rng)
     print(f"dataset={args.dataset} ({n_distinct} glifos)  val-mode={args.val_mode}  "
@@ -244,12 +296,12 @@ def main(argv=None):
 
     # ---- modo carga: reconstruir el modelo guardado y saltar el entrenamiento ----------- #
     if args.load_model:
-        ck = load_vae(args.load_model)
         vae = ck["vae1"]
         sampler = make_sampler(ck)                          # prior -> imagen (two-stage)
         es = None                                           # sin historial -> sin loss_curves
         print(f"  modelo cargado de {args.load_model} (sin reentrenar)  "
-              f"recon train {recon_px(vae, Xtr):.4f} /px   val {recon_px(vae, Xval):.4f} /px")
+              f"recon train {recon_px(vae, Xtr):.4f} /px   val {recon_px(vae, Xval):.4f} /px   "
+              f"SSIM train {recon_ssim(vae, Xtr, args.size):.4f}")
         _emit_plots(vae, es, Xtr, args, rng, sampler, out)
         return
 
@@ -298,6 +350,8 @@ def main(argv=None):
     # val (generalizacion a glifos no vistos). La brecha es la generalizacion, no un bug.
     print(f"  recon (modelo restaurado): train {recon_px(vae, Xtr):.4f} /px   "
           f"val {recon_px(vae, Xval):.4f} /px")
+    print(f"  SSIM recon (z=μ):          train {recon_ssim(vae, Xtr, args.size):.4f}      "
+          f"val {recon_ssim(vae, Xval, args.size):.4f}   (1 = idéntica)")
 
     # ---- etapa 2 (two-stage): modela los códigos de la etapa 1 para generar ------------- #
     print(f"\n== ETAPA 2 (two-stage): VAE [{args.latent}, 64, 32] -> {args.latent2}  "
@@ -307,7 +361,11 @@ def main(argv=None):
 
     # ---- persistir el modelo entrenado (etapa1 + etapa2 + stats) ------------------------ #
     if args.save_model:
-        path = save_vae(out / "model.npz", vae, args.size, vae2=vae2, code_mean=cm, code_std=cs)
+        # Guardamos la config de la corrida (sin los flags de orquestación): el modo carga la
+        # usa para reconstruir el MISMO split y los títulos sin reescribir los flags.
+        run_args = {k: v for k, v in vars(args).items() if k not in ("load_model", "save_model")}
+        path = save_vae(out / "model.npz", vae, args.size, vae2=vae2, code_mean=cm, code_std=cs,
+                        run_args=run_args)
         print(f"-> {path}  (modelo guardado: recargá con --load-model)")
 
     _emit_plots(vae, es, Xtr, args, rng, sampler, out)
@@ -329,6 +387,18 @@ def _emit_plots(vae, es, Xtr, args, rng, sampler, out):
         f"({args.size}×{args.size}), recon TRAIN + samples two-stage (L2={args.latent2})",
         out / "in_recon_samples.png")
     print(f"-> {out}/in_recon_samples.png")
+
+    # ---- diagnóstico del posterior: uso del cuello y salud de q(z|x) -------------------- #
+    vae_metrics_viz.plot_kl_per_dim(vae, Xtr, path=out / "kl_per_dim.png")
+    print(f"-> {out}/kl_per_dim.png")
+    vae_metrics_viz.plot_posterior_stats(vae, Xtr, path=out / "posterior_stats.png")
+    print(f"-> {out}/posterior_stats.png")
+
+    # ---- memorización vs generación: cada sample del prior y su vecino real más cercano -- #
+    n_nn = min(12, Xtr.shape[0])
+    vae_metrics_viz.plot_sample_neighbors(
+        sampler(n_nn, rng), Xtr, args.size, path=out / "nn_samples.png")
+    print(f"-> {out}/nn_samples.png")
 
     # ---- interpolación lineal del latente (demo de continuidad / 'sin huecos') ---------- #
     if args.interpolate > 0:
