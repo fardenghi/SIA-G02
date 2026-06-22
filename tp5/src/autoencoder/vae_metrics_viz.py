@@ -50,6 +50,76 @@ def active_units(vae: VAE, X: np.ndarray, threshold: float = 0.1) -> int:
     return int((kl_per_dim(vae, X) > threshold).sum())
 
 
+def ssim(recon: np.ndarray, target: np.ndarray, size: int, win: int = 7,
+         data_range: float = 1.0) -> np.ndarray:
+    """SSIM por imagen entre `recon` y `target` (ambos (N, size*size), valores en [0,1]).
+
+    SSIM (índice de similitud estructural) mide la calidad percibida comparando luminancia,
+    contraste y estructura en ventanas locales — a diferencia del BCE/px, no le pesa el piso
+    de entropía del gris y vale ~1 cuando las imágenes coinciden estructuralmente. Usa una
+    ventana uniforme `win×win` (deslizante, vía `uniform_filter`) con la corrección insesgada
+    de varianza de skimage, y recorta el borde para no contaminar con efectos de contorno.
+    Devuelve un array (N,) con el SSIM medio de cada par; promedialo para el escalar del run.
+    """
+    from scipy.ndimage import uniform_filter
+
+    a = np.asarray(recon, dtype=float).reshape(-1, size, size)
+    b = np.asarray(target, dtype=float).reshape(-1, size, size)
+    k1, k2 = 0.01, 0.03
+    c1, c2 = (k1 * data_range) ** 2, (k2 * data_range) ** 2
+    npts = win * win
+    cov_norm = npts / (npts - 1)  # varianza insesgada (como skimage)
+    pad = win // 2
+    out = np.empty(a.shape[0], dtype=float)
+    for i in range(a.shape[0]):
+        ai, bi = a[i], b[i]
+        mu_a = uniform_filter(ai, win)
+        mu_b = uniform_filter(bi, win)
+        mu_a2, mu_b2, mu_ab = mu_a**2, mu_b**2, mu_a * mu_b
+        var_a = cov_norm * (uniform_filter(ai * ai, win) - mu_a2)
+        var_b = cov_norm * (uniform_filter(bi * bi, win) - mu_b2)
+        cov_ab = cov_norm * (uniform_filter(ai * bi, win) - mu_ab)
+        smap = ((2 * mu_ab + c1) * (2 * cov_ab + c2)) / (
+            (mu_a2 + mu_b2 + c1) * (var_a + var_b + c2))
+        out[i] = smap[pad:-pad, pad:-pad].mean() if pad > 0 else smap.mean()
+    return out
+
+
+def plot_sample_neighbors(samples: np.ndarray, X_train: np.ndarray, size: int, path=None,
+                          title="Muestras generadas vs vecino más cercano en train"):
+    """Cada muestra del prior arriba; debajo, el glifo de TRAIN más cercano (L2 en píxeles).
+
+    Diagnóstico de memorización: si cada sample es casi idéntico a su vecino, la red copia el
+    set; si difiere (mezcla rasgos de varios), generaliza. Anota la distancia L2 media por par.
+    """
+    samples = np.asarray(samples, dtype=float)
+    X_train = np.asarray(X_train, dtype=float)
+    n = samples.shape[0]
+    # distancia L2 de cada sample a todo el train -> índice del vecino más cercano
+    d2 = ((samples[:, None, :] - X_train[None, :, :]) ** 2).sum(axis=2)  # (n, Ntr)
+    nn_idx = d2.argmin(axis=1)
+    nn = X_train[nn_idx]
+    dists = np.sqrt(d2[np.arange(n), nn_idx])
+
+    fig, axes = plt.subplots(2, n, figsize=(n * 1.1, 2 * 1.25))
+    if n == 1:
+        axes = axes.reshape(2, 1)
+    for j in range(n):
+        axes[0, j].imshow(samples[j].reshape(size, size), cmap="Greys", vmin=0, vmax=1,
+                          interpolation="nearest")
+        axes[1, j].imshow(nn[j].reshape(size, size), cmap="Greys", vmin=0, vmax=1,
+                          interpolation="nearest")
+        axes[1, j].set_title(f"d={dists[j]:.2f}", fontsize=7)
+        for r in (0, 1):
+            axes[r, j].set_xticks([]); axes[r, j].set_yticks([])
+    axes[0, 0].set_ylabel("sample", rotation=0, ha="right", va="center", fontsize=10)
+    axes[1, 0].set_ylabel("vecino", rotation=0, ha="right", va="center", fontsize=10)
+    fig.suptitle(f"{title}  (L2 media = {dists.mean():.2f})")
+    fig.tight_layout()
+    _save(fig, path)
+    return fig
+
+
 def project_pca(mu: np.ndarray, k: int = 2):
     """Proyecta `μ` (N, L) a sus `k` componentes principales (PCA desde cero con SVD).
 

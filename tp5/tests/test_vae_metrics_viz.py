@@ -137,3 +137,28 @@ def test_plot_latent_sweep_creates_file(tmp_path):
     p = tmp_path / "latent_sweep.png"
     vae_metrics_viz.plot_latent_sweep(df, path=p)
     assert p.exists() and p.stat().st_size > 0
+
+
+def test_ssim_identical_is_one():
+    rng = np.random.default_rng(7)
+    X = rng.uniform(0, 1, size=(5, DIM))
+    s = vae_metrics_viz.ssim(X, X, SIZE)
+    assert s.shape == (5,)
+    assert np.allclose(s, 1.0, atol=1e-6)
+
+
+def test_ssim_degrades_with_noise():
+    rng = np.random.default_rng(8)
+    X = rng.uniform(0, 1, size=(5, DIM))
+    noisy = np.clip(X + rng.normal(0, 0.3, size=X.shape), 0, 1)
+    # El SSIM del par ruidoso es claramente menor que el del par idéntico (=1).
+    assert vae_metrics_viz.ssim(noisy, X, SIZE).mean() < 0.99
+
+
+def test_plot_sample_neighbors_creates_file(tmp_path):
+    rng = np.random.default_rng(9)
+    samples = rng.uniform(0, 1, size=(4, DIM))
+    train = rng.uniform(0, 1, size=(12, DIM))
+    p = tmp_path / "nn.png"
+    vae_metrics_viz.plot_sample_neighbors(samples, train, SIZE, path=p)
+    assert p.exists() and p.stat().st_size > 0
