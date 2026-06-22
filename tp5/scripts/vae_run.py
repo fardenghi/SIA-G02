@@ -39,6 +39,7 @@ from autoencoder.celeba_data import load_celeba  # noqa: E402
 from autoencoder.checkpoint import load_vae, make_sampler, save_vae  # noqa: E402
 from autoencoder.conv_vae import ConvVAE  # noqa: E402
 from autoencoder.emoji_multi_data import load_multi_emojis  # noqa: E402
+from autoencoder.minecraft_data import load_minecraft  # noqa: E402
 from autoencoder.mnist_data import load_mnist  # noqa: E402
 from autoencoder.vae import VAE  # noqa: E402
 from autoencoder import vae_metrics_viz  # noqa: E402
@@ -67,7 +68,8 @@ def recon_ssim(vae: VAE, data: np.ndarray, size: int) -> float:
 
 # Familia de salida por dataset: UNA carpeta legible por dataset (no una por hiperparámetro).
 # Las variantes de emojis (curated/many/faces/emoji_multi) van todas a `emojis`.
-_DATASET_DIR = {"celeba": "celebA", "fashion": "fashion", "mnist": "mnist"}
+_DATASET_DIR = {"celeba": "celebA", "fashion": "fashion", "mnist": "mnist",
+                "minecraft": "minecraft", "minecraft-old": "minecraft"}
 
 
 def output_dir(dataset: str, tag: str | None = None) -> Path:
@@ -85,13 +87,18 @@ def output_dir(dataset: str, tag: str | None = None) -> Path:
 
 def split_data(args, rng):
     """Devuelve (Xtr, Xval, n_distinct). Sin fuga según `--val-mode` (ver docstring)."""
-    if args.dataset in ("mnist", "fashion", "celeba", "emoji_multi"):
+    if args.dataset in ("mnist", "fashion", "celeba", "emoji_multi", "minecraft", "minecraft-old"):
         # Datasets densos de muestras genuinamente distintas (no copias aumentadas) -> split
         # aleatorio simple, sin riesgo de fuga. n_aug se ignora (el dataset ya es denso).
         if args.dataset == "celeba":
             X_all, _ = load_celeba(n=args.max_n or 3000, size=args.size, seed=args.seed)
         elif args.dataset == "emoji_multi":
             X_all, _ = load_multi_emojis(size=args.size, seed=args.seed)
+        elif args.dataset in ("minecraft", "minecraft-old"):
+            X_all, _ = load_minecraft(size=args.size, color=args.color,
+                                      n=args.max_n, seed=args.seed,
+                                      blocks_only=args.blocks_only,
+                                      classic=(args.dataset == "minecraft-old"))
         else:
             digits = [int(d) for d in args.digits.split(",")] if args.digits else None
             X_all, _ = load_mnist(n=args.max_n, digits=digits, seed=args.seed, kind=args.dataset)
@@ -169,15 +176,20 @@ def fit_stage2_sampler(vae1, X, latent2, epochs, seed, batch_size=None):
 
 def plot_in_recon_samples(vae, X_show, size, rng, sample_fn, title, path, n=12):
     n = min(n, X_show.shape[0])
-    ins = X_show[:n]                                         # entradas: glifos de TRAIN
-    recon = vae.decode(vae.encode(ins)[0])                   # recon determinista (z=μ)
-    samples = sample_fn(n, rng)                              # generación (two-stage)
+    ins = X_show[:n]
+    recon = vae.decode(vae.encode(ins)[0])
+    samples = sample_fn(n, rng)
+    # Detectar si es color (size*size*3) o grises (size*size)
+    color = X_show.shape[1] == size * size * 3
+    def _reshape(vec):
+        return vec.reshape(size, size, 3).clip(0, 1) if color else vec.reshape(size, size)
     rows = [(ins, "in"), (recon, "recon"), (samples, "samples")]
     fig, axes = plt.subplots(3, n, figsize=(n * 1.1, 3 * 1.25))
     for r, (block, name) in enumerate(rows):
         for j in range(n):
-            axes[r, j].imshow(block[j].reshape(size, size), cmap="Greys", vmin=0, vmax=1,
-                              interpolation="nearest")
+            img = _reshape(block[j])
+            kw = {} if color else {"cmap": "Greys", "vmin": 0, "vmax": 1}
+            axes[r, j].imshow(img, interpolation="nearest", **kw)
             axes[r, j].set_xticks([]); axes[r, j].set_yticks([])
         axes[r, 0].set_ylabel(name, rotation=0, ha="right", va="center", fontsize=10)
     fig.suptitle(title)
@@ -221,10 +233,14 @@ def main(argv=None):
     p = argparse.ArgumentParser(description="VAE base con train/val + plots canónicos")
     p.add_argument("--dataset",
                    choices=["curated", "many", "faces", "mnist", "fashion", "celeba",
-                            "emoji_multi"],
+                            "emoji_multi", "minecraft", "minecraft-old"],
                    default="many")
     p.add_argument("--digits", default=None,
                    help="MNIST/Fashion: subconjunto de clases, ej '0,1,8' (None = las 10)")
+    p.add_argument("--color", action="store_true",
+                   help="usa texturas RGB en vez de grises (solo para minecraft)")
+    p.add_argument("--blocks-only", action="store_true",
+                   help="filtra escaleras, vallas, plantas, etc. (solo minecraft)")
     p.add_argument("--val-mode", choices=["disjoint", "poses"], default="disjoint")
     p.add_argument("--size", type=int, default=28)
     p.add_argument("--latent", type=int, default=8)
@@ -284,7 +300,9 @@ def main(argv=None):
         else:
             print("  checkpoint sin run_args: uso los flags de CLI para el split")
 
-    D = args.size * args.size
+    # D con canales: minecraft a color es RGB (3 canales); el resto, escala de grises (1).
+    n_channels = 3 if (args.color and args.dataset in ("minecraft", "minecraft-old")) else 1
+    D = args.size * args.size * n_channels
     hidden = [int(h) for h in args.hidden.split(",")]
     rng = np.random.default_rng(args.seed)
     out = output_dir(args.dataset, args.tag); out.mkdir(parents=True, exist_ok=True)
