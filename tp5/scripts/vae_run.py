@@ -147,6 +147,8 @@ def plot_loss_curves(ep, tr, va, best_epoch, stop_epoch, best_val, title, path):
         ax.axvline(stop_epoch, color="tab:red", ls=":", lw=1.2,
                    label=f"early stop = {stop_epoch} ep")
     ax.scatter([best_epoch], [best_val], color="tab:green", zorder=5)
+    # Eje Y anclado en 0 (menos zoom): la brecha train/val se ve en su escala real, sin exagerar.
+    ax.set_ylim(bottom=0)
     ax.set_xlabel("época"); ax.set_ylabel("recon BCE / px (determinista, z=μ)")
     ax.set_title(title)
     ax.legend(); ax.grid(alpha=0.3)
