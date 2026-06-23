@@ -1,11 +1,18 @@
 """Smoke de la integración CLI (Fase 2.3): dispatch mlp/conv y corrida conv end-to-end."""
 
 import json
+from pathlib import Path
 
-from autoencoder import vae_cli
+import pytest
+
+from autoencoder import emoji_data, vae_cli
 from autoencoder.conv_vae import ConvVAE
 from autoencoder.vae import VAE
 from autoencoder.vae_config import load_vae_config
+
+_HAS_FONT = Path(emoji_data.DEFAULT_FONT).exists()
+_SKIP_NO_FONT = pytest.mark.skipif(
+    not _HAS_FONT, reason=f"falta la fuente de emojis: {emoji_data.DEFAULT_FONT}")
 
 
 def _write(tmp_path, obj):
@@ -35,6 +42,7 @@ def test_build_model_dispatches_mlp(tmp_path):
     assert isinstance(model, VAE)
 
 
+@_SKIP_NO_FONT
 def test_cli_run_conv_smoke(tmp_path):
     # Corrida conv completa con pocas épocas: entrena, exporta métricas y figuras.
     obj = {
