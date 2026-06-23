@@ -239,6 +239,7 @@ def main(argv=None):
     p.add_argument("--size", type=int, default=28)
     p.add_argument("--latent", type=int, default=8)
     p.add_argument("--latent2", type=int, default=2, help="latente de la etapa 2 (two-stage)")
+    p.add_argument("--no-stage2", action="store_true", help="saltea el two-stage (solo etapa 1)")
     p.add_argument("--stage1", choices=["mlp", "conv"], default="mlp",
                    help="modelo de la etapa 1: MLP-VAE o ConvVAE (sesgo espacial)")
     p.add_argument("--hidden", default="256,64",
@@ -366,10 +367,14 @@ def main(argv=None):
           f"val {recon_ssim(vae, Xval, args.size):.4f}   (1 = idéntica)")
 
     # ---- etapa 2 (two-stage): modela los códigos de la etapa 1 para generar ------------- #
-    print(f"\n== ETAPA 2 (two-stage): VAE [{args.latent}, 64, 32] -> {args.latent2}  "
-          f"({args.epochs2} ep) ==")
-    sampler, vae2, cm, cs = fit_stage2_sampler(vae, Xtr, args.latent2, args.epochs2, args.seed,
-                                               batch_size=args.batch)
+    if args.no_stage2:
+        sampler = lambda n, rng: vae.decode(rng.standard_normal((n, args.latent)))
+        vae2, cm, cs = None, None, None
+    else:
+        print(f"\n== ETAPA 2 (two-stage): VAE [{args.latent}, 64, 32] -> {args.latent2}  "
+              f"({args.epochs2} ep) ==")
+        sampler, vae2, cm, cs = fit_stage2_sampler(vae, Xtr, args.latent2, args.epochs2, args.seed,
+                                                   batch_size=args.batch)
 
     # ---- persistir el modelo entrenado (etapa1 + etapa2 + stats) ------------------------ #
     if args.save_model:
@@ -393,10 +398,11 @@ def _emit_plots(vae, es, Xtr, args, rng, sampler, out):
                          f"({args.size}×{args.size}) — early stop @ {stopped}",
                          out / "loss_curves.png")
         print(f"-> {out}/loss_curves.png")
+    stage2_label = f"L2={args.latent2}" if not args.no_stage2 else "prior directo"
     plot_in_recon_samples(
         vae, Xtr, args.size, rng, sampler,
         f"VAE — {args.dataset} latente {args.latent} h[{args.hidden}] "
-        f"({args.size}×{args.size}), recon TRAIN + samples two-stage (L2={args.latent2})",
+        f"({args.size}×{args.size}), recon TRAIN + samples ({stage2_label})",
         out / "in_recon_samples.png")
     print(f"-> {out}/in_recon_samples.png")
 

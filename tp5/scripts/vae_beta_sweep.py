@@ -59,8 +59,19 @@ def main(argv=None) -> int:
                         help="early stop: evaluaciones sin mejora (0=off)")
     parser.add_argument("--eval-every", type=int, default=25,
                         help="cada cuántas épocas evaluar val para el early stopping")
+    parser.add_argument("--from-csv", default=None,
+                        help="carga este CSV y regenera solo el plot (no entrena)")
     parser.add_argument("--out-dir", default="out/vae_beta_sweep")
     args = parser.parse_args(argv)
+
+    if args.from_csv:
+        df = pd.read_csv(args.from_csv)
+        tag = Path(args.from_csv).stem.removeprefix("beta_sweep_")
+        out_dir = Path(args.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        plot_beta_sweep(df, path=out_dir / f"beta_sweep_{tag}.png")
+        print(f"-> {out_dir}/beta_sweep_{tag}.png")
+        return 0
 
     if args.dataset == "celeba":
         X, _ = load_celeba(n=args.max_n or 3000, size=args.size, seed=args.seed)

@@ -283,15 +283,14 @@ def plot_aggregate_posterior(vae: VAE, X: np.ndarray, path=None,
 
 
 def plot_beta_sweep(df, path=None, title="Barrido de β: recon vs KL"):
-    """Recon y KL vs β (escala log) — frontera del trade-off y zona de colapso.
+    """Recon y KL vs β — frontera del trade-off y zona de colapso.
 
     `df` con columnas `beta`, `recon`, `kl` (lo que produce `scripts/vae_beta_sweep.py`).
     """
     beta = np.asarray(df["beta"], dtype=float)
     fig, ax_recon = plt.subplots(figsize=(7, 4.5))
     ax_recon.plot(beta, df["recon"], "o-", color="tab:green", label="reconstrucción")
-    ax_recon.set_xscale("log")
-    ax_recon.set_xlabel("β (escala log)")
+    ax_recon.set_xlabel("β")
     ax_recon.set_ylabel("reconstrucción (nats/muestra)", color="tab:green")
     ax_recon.grid(True, alpha=0.3)
     ax_kl = ax_recon.twinx()
@@ -299,7 +298,7 @@ def plot_beta_sweep(df, path=None, title="Barrido de β: recon vs KL"):
     ax_kl.set_ylabel("KL", color="tab:red")
     ax_kl.set_ylim(bottom=0)
     ax_kl.axhline(0.05, color="tab:gray", ls=":", alpha=0.7)
-    lines = ax_recon.get_lines() + ax_kl.get_lines()
+    lines = ax_recon.get_lines() + [ln for ln in ax_kl.get_lines() if not ln.get_label().startswith("_")]
     ax_recon.legend(lines, [ln.get_label() for ln in lines], loc="center right", fontsize=9)
     ax_recon.set_title(title)
     fig.tight_layout()
