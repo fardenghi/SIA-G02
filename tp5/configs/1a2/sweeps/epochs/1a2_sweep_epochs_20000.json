@@ -1,0 +1,35 @@
+{
+  "name": "1a2_sweep_epochs_20000",
+  "data": {
+    "font_path": "font/font.h",
+    "subset": null
+  },
+  "architecture": {
+    "encoder_layers": [
+      35,
+      20,
+      2
+    ],
+    "activation": "relu",
+    "output_activation": "sigmoid",
+    "init": "normal",
+    "latent_activation": "linear"
+  },
+  "training": {
+    "optimizer": "adam",
+    "loss": "mse",
+    "epochs": 20000,
+    "lr": 0.001,
+    "restarts": 12,
+    "seed": 42,
+    "log_every": 300,
+    "stop_at": null
+  },
+  "denoising": {
+    "enabled": false
+  },
+  "output": {
+    "metrics_csv": "out/1a2/sweeps/epochs/1a2_sweep_epochs_20000/metrics.csv",
+    "plots_dir": "out/1a2/sweeps/epochs/plots"
+  }
+}

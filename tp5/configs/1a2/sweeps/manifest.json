@@ -1,0 +1,464 @@
+{
+  "baseline": {
+    "encoder_layers": [
+      35,
+      20,
+      2
+    ],
+    "activation": "relu",
+    "latent_activation": "linear",
+    "output_activation": "sigmoid",
+    "init": "normal",
+    "optimizer": "adam",
+    "loss": "mse",
+    "epochs": 15000,
+    "lr": 0.001,
+    "restarts": 12,
+    "seed": 42,
+    "log_every": 300,
+    "stop_at": null
+  },
+  "sweeps": [
+    {
+      "dim": "epochs",
+      "param": "epochs",
+      "kind": "numeric",
+      "baseline_value": 15000,
+      "configs": [
+        {
+          "name": "1a2_sweep_epochs_10000",
+          "value": 10000,
+          "label": "10000",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/epochs/1a2_sweep_epochs_10000.json",
+          "metrics_restarts": "out/1a2/sweeps/epochs/1a2_sweep_epochs_10000/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_epochs_15000",
+          "value": 15000,
+          "label": "15000",
+          "is_baseline": true,
+          "config": "configs/1a2/sweeps/epochs/1a2_sweep_epochs_15000.json",
+          "metrics_restarts": "out/1a2/sweeps/epochs/1a2_sweep_epochs_15000/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_epochs_20000",
+          "value": 20000,
+          "label": "20000",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/epochs/1a2_sweep_epochs_20000.json",
+          "metrics_restarts": "out/1a2/sweeps/epochs/1a2_sweep_epochs_20000/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_epochs_25000",
+          "value": 25000,
+          "label": "25000",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/epochs/1a2_sweep_epochs_25000.json",
+          "metrics_restarts": "out/1a2/sweeps/epochs/1a2_sweep_epochs_25000/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_epochs_30000",
+          "value": 30000,
+          "label": "30000",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/epochs/1a2_sweep_epochs_30000.json",
+          "metrics_restarts": "out/1a2/sweeps/epochs/1a2_sweep_epochs_30000/metrics_restarts.csv"
+        }
+      ]
+    },
+    {
+      "dim": "lr",
+      "param": "lr",
+      "kind": "numeric",
+      "baseline_value": 0.001,
+      "configs": [
+        {
+          "name": "1a2_sweep_lr_1e-09",
+          "value": 1e-09,
+          "label": "1e-09",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_1e-09.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_1e-09/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_1e-08",
+          "value": 1e-08,
+          "label": "1e-08",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_1e-08.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_1e-08/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_1e-07",
+          "value": 1e-07,
+          "label": "1e-07",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_1e-07.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_1e-07/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_1e-06",
+          "value": 1e-06,
+          "label": "1e-06",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_1e-06.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_1e-06/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_1e-05",
+          "value": 1e-05,
+          "label": "1e-05",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_1e-05.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_1e-05/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_1e-04",
+          "value": 0.0001,
+          "label": "1e-04",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_1e-04.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_1e-04/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_5e-04",
+          "value": 0.0005,
+          "label": "5e-04",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_5e-04.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_5e-04/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_1e-03",
+          "value": 0.001,
+          "label": "1e-03",
+          "is_baseline": true,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_1e-03.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_1e-03/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_5e-03",
+          "value": 0.005,
+          "label": "5e-03",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_5e-03.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_5e-03/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_1e-02",
+          "value": 0.01,
+          "label": "1e-02",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_1e-02.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_1e-02/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_lr_5e-02",
+          "value": 0.05,
+          "label": "5e-02",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/lr/1a2_sweep_lr_5e-02.json",
+          "metrics_restarts": "out/1a2/sweeps/lr/1a2_sweep_lr_5e-02/metrics_restarts.csv"
+        }
+      ]
+    },
+    {
+      "dim": "optimizer",
+      "param": "optimizer",
+      "kind": "categorical",
+      "baseline_value": "adam",
+      "configs": [
+        {
+          "name": "1a2_sweep_optimizer_adam",
+          "value": "adam",
+          "label": "adam",
+          "is_baseline": true,
+          "config": "configs/1a2/sweeps/optimizer/1a2_sweep_optimizer_adam.json",
+          "metrics_restarts": "out/1a2/sweeps/optimizer/1a2_sweep_optimizer_adam/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_optimizer_lbfgs",
+          "value": "lbfgs",
+          "label": "lbfgs",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/optimizer/1a2_sweep_optimizer_lbfgs.json",
+          "metrics_restarts": "out/1a2/sweeps/optimizer/1a2_sweep_optimizer_lbfgs/metrics_restarts.csv"
+        }
+      ]
+    },
+    {
+      "dim": "loss",
+      "param": "loss",
+      "kind": "categorical",
+      "baseline_value": "mse",
+      "configs": [
+        {
+          "name": "1a2_sweep_loss_mse",
+          "value": "mse",
+          "label": "mse",
+          "is_baseline": true,
+          "config": "configs/1a2/sweeps/loss/1a2_sweep_loss_mse.json",
+          "metrics_restarts": "out/1a2/sweeps/loss/1a2_sweep_loss_mse/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_loss_bce",
+          "value": "bce",
+          "label": "bce",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/loss/1a2_sweep_loss_bce.json",
+          "metrics_restarts": "out/1a2/sweeps/loss/1a2_sweep_loss_bce/metrics_restarts.csv"
+        }
+      ]
+    },
+    {
+      "dim": "activation",
+      "param": "activation",
+      "kind": "categorical",
+      "baseline_value": "relu",
+      "configs": [
+        {
+          "name": "1a2_sweep_activation_relu",
+          "value": "relu",
+          "label": "relu",
+          "is_baseline": true,
+          "config": "configs/1a2/sweeps/activation/1a2_sweep_activation_relu.json",
+          "metrics_restarts": "out/1a2/sweeps/activation/1a2_sweep_activation_relu/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_activation_tanh",
+          "value": "tanh",
+          "label": "tanh",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/activation/1a2_sweep_activation_tanh.json",
+          "metrics_restarts": "out/1a2/sweeps/activation/1a2_sweep_activation_tanh/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_activation_sigmoid",
+          "value": "sigmoid",
+          "label": "sigmoid",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/activation/1a2_sweep_activation_sigmoid.json",
+          "metrics_restarts": "out/1a2/sweeps/activation/1a2_sweep_activation_sigmoid/metrics_restarts.csv"
+        }
+      ]
+    },
+    {
+      "dim": "output_activation",
+      "param": "output_activation",
+      "kind": "categorical",
+      "baseline_value": "sigmoid",
+      "configs": [
+        {
+          "name": "1a2_sweep_output_activation_sigmoid",
+          "value": "sigmoid",
+          "label": "sigmoid",
+          "is_baseline": true,
+          "config": "configs/1a2/sweeps/output_activation/1a2_sweep_output_activation_sigmoid.json",
+          "metrics_restarts": "out/1a2/sweeps/output_activation/1a2_sweep_output_activation_sigmoid/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_output_activation_tanh",
+          "value": "tanh",
+          "label": "tanh",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/output_activation/1a2_sweep_output_activation_tanh.json",
+          "metrics_restarts": "out/1a2/sweeps/output_activation/1a2_sweep_output_activation_tanh/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_output_activation_linear",
+          "value": "linear",
+          "label": "linear",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/output_activation/1a2_sweep_output_activation_linear.json",
+          "metrics_restarts": "out/1a2/sweeps/output_activation/1a2_sweep_output_activation_linear/metrics_restarts.csv"
+        }
+      ]
+    },
+    {
+      "dim": "latent_activation",
+      "param": "latent_activation",
+      "kind": "categorical",
+      "baseline_value": "linear",
+      "configs": [
+        {
+          "name": "1a2_sweep_latent_activation_linear",
+          "value": "linear",
+          "label": "linear",
+          "is_baseline": true,
+          "config": "configs/1a2/sweeps/latent_activation/1a2_sweep_latent_activation_linear.json",
+          "metrics_restarts": "out/1a2/sweeps/latent_activation/1a2_sweep_latent_activation_linear/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_latent_activation_tanh",
+          "value": "tanh",
+          "label": "tanh",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/latent_activation/1a2_sweep_latent_activation_tanh.json",
+          "metrics_restarts": "out/1a2/sweeps/latent_activation/1a2_sweep_latent_activation_tanh/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_latent_activation_sigmoid",
+          "value": "sigmoid",
+          "label": "sigmoid",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/latent_activation/1a2_sweep_latent_activation_sigmoid.json",
+          "metrics_restarts": "out/1a2/sweeps/latent_activation/1a2_sweep_latent_activation_sigmoid/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_latent_activation_relu",
+          "value": "relu",
+          "label": "relu",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/latent_activation/1a2_sweep_latent_activation_relu.json",
+          "metrics_restarts": "out/1a2/sweeps/latent_activation/1a2_sweep_latent_activation_relu/metrics_restarts.csv"
+        }
+      ]
+    },
+    {
+      "dim": "init",
+      "param": "init",
+      "kind": "categorical",
+      "baseline_value": "normal",
+      "configs": [
+        {
+          "name": "1a2_sweep_init_normal",
+          "value": "normal",
+          "label": "normal",
+          "is_baseline": true,
+          "config": "configs/1a2/sweeps/init/1a2_sweep_init_normal.json",
+          "metrics_restarts": "out/1a2/sweeps/init/1a2_sweep_init_normal/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_init_uniform",
+          "value": "uniform",
+          "label": "uniform",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/init/1a2_sweep_init_uniform.json",
+          "metrics_restarts": "out/1a2/sweeps/init/1a2_sweep_init_uniform/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_init_xavier_uniform",
+          "value": "xavier_uniform",
+          "label": "xavier_uniform",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/init/1a2_sweep_init_xavier_uniform.json",
+          "metrics_restarts": "out/1a2/sweeps/init/1a2_sweep_init_xavier_uniform/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_init_xavier_normal",
+          "value": "xavier_normal",
+          "label": "xavier_normal",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/init/1a2_sweep_init_xavier_normal.json",
+          "metrics_restarts": "out/1a2/sweeps/init/1a2_sweep_init_xavier_normal/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_init_he_uniform",
+          "value": "he_uniform",
+          "label": "he_uniform",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/init/1a2_sweep_init_he_uniform.json",
+          "metrics_restarts": "out/1a2/sweeps/init/1a2_sweep_init_he_uniform/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_init_he_normal",
+          "value": "he_normal",
+          "label": "he_normal",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/init/1a2_sweep_init_he_normal.json",
+          "metrics_restarts": "out/1a2/sweeps/init/1a2_sweep_init_he_normal/metrics_restarts.csv"
+        }
+      ]
+    },
+    {
+      "dim": "architecture",
+      "param": "encoder_layers",
+      "kind": "categorical",
+      "baseline_value": [
+        35,
+        20,
+        2
+      ],
+      "configs": [
+        {
+          "name": "1a2_sweep_architecture_35-2",
+          "value": [
+            35,
+            2
+          ],
+          "label": "35-2",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/architecture/1a2_sweep_architecture_35-2.json",
+          "metrics_restarts": "out/1a2/sweeps/architecture/1a2_sweep_architecture_35-2/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_architecture_35-20-2",
+          "value": [
+            35,
+            20,
+            2
+          ],
+          "label": "35-20-2",
+          "is_baseline": true,
+          "config": "configs/1a2/sweeps/architecture/1a2_sweep_architecture_35-20-2.json",
+          "metrics_restarts": "out/1a2/sweeps/architecture/1a2_sweep_architecture_35-20-2/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_architecture_35-16-8-2",
+          "value": [
+            35,
+            16,
+            8,
+            2
+          ],
+          "label": "35-16-8-2",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/architecture/1a2_sweep_architecture_35-16-8-2.json",
+          "metrics_restarts": "out/1a2/sweeps/architecture/1a2_sweep_architecture_35-16-8-2/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_architecture_35-25-15-8-2",
+          "value": [
+            35,
+            25,
+            15,
+            8,
+            2
+          ],
+          "label": "35-25-15-8-2",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/architecture/1a2_sweep_architecture_35-25-15-8-2.json",
+          "metrics_restarts": "out/1a2/sweeps/architecture/1a2_sweep_architecture_35-25-15-8-2/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_architecture_35-30-20-12-6-2",
+          "value": [
+            35,
+            30,
+            20,
+            12,
+            6,
+            2
+          ],
+          "label": "35-30-20-12-6-2",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/architecture/1a2_sweep_architecture_35-30-20-12-6-2.json",
+          "metrics_restarts": "out/1a2/sweeps/architecture/1a2_sweep_architecture_35-30-20-12-6-2/metrics_restarts.csv"
+        },
+        {
+          "name": "1a2_sweep_architecture_35-30-2",
+          "value": [
+            35,
+            30,
+            2
+          ],
+          "label": "35-30-2",
+          "is_baseline": false,
+          "config": "configs/1a2/sweeps/architecture/1a2_sweep_architecture_35-30-2.json",
+          "metrics_restarts": "out/1a2/sweeps/architecture/1a2_sweep_architecture_35-30-2/metrics_restarts.csv"
+        }
+      ]
+    }
+  ]
+}

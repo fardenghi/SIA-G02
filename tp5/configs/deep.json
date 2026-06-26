@@ -1,0 +1,22 @@
+{
+  "name": "deep",
+  "data": { "font_path": "font/font.h", "subset": null },
+  "architecture": {
+    "encoder_layers": [35, 30, 20, 12, 6, 2],
+    "activation": "tanh",
+    "output_activation": "sigmoid",
+    "init": "xavier_normal",
+    "latent_activation": "linear"
+  },
+  "training": {
+    "optimizer": "adam",
+    "loss": "bce",
+    "epochs": 20000,
+    "lr": 1e-3,
+    "restarts": 20,
+    "seed": 42,
+    "log_every": 200
+  },
+  "denoising": { "enabled": false },
+  "output": { "metrics_csv": "out/deep/metrics.csv", "plots_dir": "out/plots" }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "conv",
+  "data": {
+    "size": 28,
+    "subset": null,
+    "augment": { "enabled": true, "n_aug": 8, "max_rot": 12, "max_shift": 2, "max_zoom": 0.1, "seed": 0 }
+  },
+  "architecture": {
+    "kind": "conv",
+    "latent_dim": 2,
+    "conv_channels": [16, 32],
+    "dense_hidden": 64,
+    "activation": "relu",
+    "output_activation": "sigmoid",
+    "init": "he_normal"
+  },
+  "training": {
+    "loss": "bce",
+    "epochs": 2000,
+    "lr": 1e-3,
+    "beta": 1.0,
+    "beta_warmup": 1000,
+    "seed": 0,
+    "log_every": 100
+  },
+  "output": {
+    "metrics_csv": "out/vae_conv/metrics.csv",
+    "plots_dir": "out/plots"
+  }
+}

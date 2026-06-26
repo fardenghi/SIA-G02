@@ -1,0 +1,33 @@
+{
+  "name": "denoising_best",
+  "data": { "font_path": "font/font.h", "subset": null },
+  "architecture": {
+    "encoder_layers": [35, 29, 22, 15, 8, 2],
+    "activation": "leaky_relu",
+    "output_activation": "sigmoid",
+    "init": "xavier_normal",
+    "latent_activation": "linear"
+  },
+  "training": {
+    "optimizer": "adam",
+    "loss": "bce",
+    "epochs": 60000,
+    "lr": 3e-3,
+    "restarts": 10,
+    "seed": 42,
+    "log_every": 500,
+    "stop_at": null,
+    "lr_schedule": "cosine",
+    "lr_min": 0.0
+  },
+  "denoising": {
+    "enabled": true,
+    "noise_type": "salt_pepper",
+    "level": 0.2,
+    "resample_per_epoch": true,
+    "train_level_range": null,
+    "replicas": 5,
+    "sweep_levels": [0.05, 0.1, 0.2, 0.3]
+  },
+  "output": { "metrics_csv": "out/denoising_best/metrics.csv", "plots_dir": "out/plots" }
+}

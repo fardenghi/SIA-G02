@@ -1,0 +1,10 @@
+.opencode
+openspec
+out/
+__pycache__/
+.venv/
+*.egg-info/
+.pytest_cache/
+workspace/
+*.pptx
+data/

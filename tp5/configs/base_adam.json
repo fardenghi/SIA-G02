@@ -1,0 +1,22 @@
+{
+  "name": "base_adam",
+  "data": { "font_path": "font/font.h", "subset": null },
+  "architecture": {
+    "encoder_layers": [35, 25, 15, 8, 2],
+    "activation": "tanh",
+    "output_activation": "sigmoid",
+    "init": "xavier_normal",
+    "latent_activation": "linear"
+  },
+  "training": {
+    "optimizer": "adam",
+    "loss": "bce",
+    "epochs": 20000,
+    "lr": 1e-3,
+    "restarts": 20,
+    "seed": 42,
+    "log_every": 200
+  },
+  "denoising": { "enabled": false },
+  "output": { "metrics_csv": "out/base_adam/metrics.csv", "plots_dir": "out/plots" }
+}

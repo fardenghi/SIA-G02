@@ -8,11 +8,23 @@ on:
 
 jobs:
   pytest:
-    name: pytest (tp4)
+    name: pytest (${{ matrix.module }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: tp1
+            sync: uv sync --dev
+          - module: tp2
+            sync: uv sync --dev
+          - module: tp4
+            sync: uv sync
+          - module: tp5
+            sync: uv sync --extra dev
     defaults:
       run:
-        working-directory: tp4
+        working-directory: ${{ matrix.module }}
 
     steps:
       - name: Checkout
@@ -27,7 +39,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync dependencies
-        run: uv sync --dev
+        run: ${{ matrix.sync }}
 
       - name: Run pytest
         run: uv run pytest -v

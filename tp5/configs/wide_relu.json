@@ -1,0 +1,22 @@
+{
+  "name": "wide_relu",
+  "data": { "font_path": "font/font.h", "subset": null },
+  "architecture": {
+    "encoder_layers": [35, 20, 2],
+    "activation": "relu",
+    "output_activation": "sigmoid",
+    "init": "he_normal",
+    "latent_activation": "linear"
+  },
+  "training": {
+    "optimizer": "adam",
+    "loss": "mse",
+    "epochs": 20000,
+    "lr": 1e-3,
+    "restarts": 20,
+    "seed": 42,
+    "log_every": 200
+  },
+  "denoising": { "enabled": false },
+  "output": { "metrics_csv": "out/wide_relu/metrics.csv", "plots_dir": "out/plots" }
+}
