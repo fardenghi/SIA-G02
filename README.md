@@ -61,6 +61,8 @@ El benchmarking automático (`run_batch.py`) ejecuta **273 corridas** (21 tabler
 
 <p align="right">(<a href="#sia-g02--sistemas-de-inteligencia-artificial">Volver</a>)</p>
 
+---
+
 ### TP2 — Algoritmos Genéticos
 
 El TP2 implementa un motor de **algoritmos genéticos** que aproxima una imagen objetivo mediante una colección de formas geométricas (triángulos o elipses) translúcidas superpuestas, evolucionando generación a generación hacia la imagen más fiel posible.
@@ -91,6 +93,8 @@ El sistema implementa un catálogo completo y configurable de operadores:
 
 <p align="right">(<a href="#sia-g02--sistemas-de-inteligencia-artificial">Volver</a>)</p>
 
+---
+
 ### TP3 — Perceptrón y Redes Multicapa
 
 El TP3 construye toda la matemática de redes neuronales supervisadas desde primitivos NumPy: propagación hacia adelante, retropropagación de gradientes, optimizadores y métricas de clasificación. Se aplica a tres problemas concretos.
@@ -117,6 +121,8 @@ El módulo compartido provee todos los bloques reutilizables:
 **Ejercicio 3 — Generalización Extendida** — Entrena sobre `more_digits.csv` (dataset más difícil) buscando minimizar el error de generalización en `digits_test.csv`. Se aplican técnicas avanzadas: regularización L2, data augmentation afín (rotación + escala), y ensembles heterogéneos con entrenamiento paralelo multiprocesamiento. Se incluyen mecanismos de **Saliency** y **Occlusion** para interpretabilidad visual del modelo.
 
 <p align="right">(<a href="#sia-g02--sistemas-de-inteligencia-artificial">Volver</a>)</p>
+
+---
 
 ### TP4 — Aprendizaje No Supervisado
 
@@ -159,6 +165,8 @@ Se estudian exhaustivamente:
 
 <p align="right">(<a href="#sia-g02--sistemas-de-inteligencia-artificial">Volver</a>)</p>
 
+---
+
 ### TP5 — Autoencoders y VAE
 
 El TP5 lleva la implementación manual al extremo: forward, backprop y gradientes analíticos propios (sin PyTorch, sin TensorFlow), verificados sistemáticamente con **gradient-check numérico** (diferencia relativa < 1e-5).
@@ -194,6 +202,8 @@ El TP profundiza con un estudio empírico completo:
 - **Posterior agregado y GMM** — cuando el latente es alto, muestrear de `N(0,I)` produce manchones porque el posterior real no cubre el prior. Se implementa un GMM (EM desde cero) sobre los µ del dataset como prior alternativo: genera imágenes reconocibles donde `N(0,I)` fallaba, **desacoplando la calidad de generación de β y del tamaño del latente**.
 
 <p align="right">(<a href="#sia-g02--sistemas-de-inteligencia-artificial">Volver</a>)</p>
+
+---
 
 ## Instalación
 
